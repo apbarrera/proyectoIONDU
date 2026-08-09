@@ -1,0 +1,64 @@
+<app-page-header
+  title="Fabricación"
+  subtitle="Convierte insumos en productos terminados a partir de una receta."
+  [breadcrumb]="[{ label: 'Inventario', link: '/inventory/products' }, { label: 'Fabricación' }]"
+/>
+
+<div class="production__layout">
+  <app-card title="Orden de fabricación">
+    <label class="production__label">Producto</label>
+    <select
+      class="production__select"
+      [ngModel]="selectedRecipeId()"
+      (ngModelChange)="selectedRecipeId.set($event)"
+    >
+      <option value="" disabled>Selecciona una receta</option>
+      @for (recipe of recipesService.recipes(); track recipe.id) {
+        <option [value]="recipe.id">{{ recipe.name }}</option>
+      }
+    </select>
+
+    <label class="production__label">Cantidad a producir</label>
+    <input
+      class="production__input"
+      type="number"
+      min="1"
+      [ngModel]="units()"
+      (ngModelChange)="units.set($event)"
+    />
+
+    @if (selectedRecipeId()) {
+      <h4 class="production__subtitle">Materiales necesarios</h4>
+      <table class="production__table">
+        <thead>
+          <tr>
+            <th>Insumo</th>
+            <th>Necesario</th>
+            <th>Stock disponible</th>
+            <th>Stock después</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (req of requirements(); track req.productId) {
+            <tr [class.production__row--short]="!req.sufficient">
+              <td>{{ req.productName }}</td>
+              <td>{{ req.quantityNeeded }} {{ req.unit }}</td>
+              <td>{{ req.stockAvailable }} {{ req.unit }}</td>
+              <td>{{ req.stockAfter }} {{ req.unit }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <p class="production__cost">Costo estimado: <strong>${{ estimatedCost().toFixed(2) }}</strong></p>
+
+      @if (!canProduce()) {
+        <p class="production__warning">⚠️ No hay stock suficiente para fabricar esta cantidad.</p>
+      }
+
+      <app-button [disabled]="!canProduce()" [loading]="submitting()" (clicked)="confirmProduction()">
+        Confirmar fabricación
+      </app-button>
+    }
+  </app-card>
+</div>

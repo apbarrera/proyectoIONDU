@@ -1,0 +1,99 @@
+<app-page-header
+  title="Productos"
+  subtitle="Productos, insumos y productos compuestos de tu inventario."
+  [breadcrumb]="[{ label: 'Inventario', link: '/inventory/products' }, { label: 'Productos' }]"
+>
+  <app-button (clicked)="openCreate()">+ Nuevo producto</app-button>
+</app-page-header>
+
+<div class="products__filters">
+  <button
+    type="button"
+    class="products__filter"
+    [class.products__filter--active]="typeFilter() === 'todos'"
+    (click)="typeFilter.set('todos')"
+  >
+    Todos
+  </button>
+  <button
+    type="button"
+    class="products__filter"
+    [class.products__filter--active]="typeFilter() === 'simple'"
+    (click)="typeFilter.set('simple')"
+  >
+    Simples
+  </button>
+  <button
+    type="button"
+    class="products__filter"
+    [class.products__filter--active]="typeFilter() === 'insumo'"
+    (click)="typeFilter.set('insumo')"
+  >
+    Insumos
+  </button>
+  <button
+    type="button"
+    class="products__filter"
+    [class.products__filter--active]="typeFilter() === 'compuesto'"
+    (click)="typeFilter.set('compuesto')"
+  >
+    Compuestos
+  </button>
+</div>
+
+<app-data-table
+  [columns]="columns"
+  [rows]="filteredProducts()"
+  [clickableRows]="true"
+  emptyTitle="No hay productos en esta categoría."
+  searchPlaceholder="Buscar producto…"
+  (rowClick)="openEdit($event)"
+/>
+
+<app-modal
+  [open]="formOpen()"
+  [title]="editingId() ? 'Editar producto' : 'Nuevo producto'"
+  size="lg"
+  (closed)="close()"
+>
+  <form [formGroup]="form" class="products__form">
+    <app-form-field label="Código (SKU)" required>
+      <input formControlName="sku" />
+    </app-form-field>
+    <app-form-field label="Nombre" required>
+      <input formControlName="name" />
+    </app-form-field>
+    <app-form-field label="Categoría" required>
+      <input formControlName="category" />
+    </app-form-field>
+    <app-form-field label="Tipo" required>
+      <select formControlName="type">
+        <option value="simple">Producto simple</option>
+        <option value="insumo">Insumo</option>
+        <option value="compuesto">Producto compuesto</option>
+      </select>
+    </app-form-field>
+    <app-form-field label="Unidad" required>
+      <input formControlName="unit" />
+    </app-form-field>
+    @if (form.controls.type.value !== 'insumo') {
+      <app-form-field label="Precio de venta">
+        <input type="number" step="0.01" formControlName="salePrice" />
+      </app-form-field>
+    }
+    <app-form-field label="Costo" required>
+      <input type="number" step="0.01" formControlName="cost" />
+    </app-form-field>
+    <app-form-field label="Stock actual" required>
+      <input type="number" step="0.01" formControlName="currentStock" />
+    </app-form-field>
+    <app-form-field label="Stock mínimo" required>
+      <input type="number" step="0.01" formControlName="minStock" />
+    </app-form-field>
+  </form>
+
+  <div modal-footer>
+    <app-button variant="secondary" (clicked)="close()">Cancelar</app-button>
+    <app-button (clicked)="save()">Guardar</app-button>
+  </div>
+</app-modal>

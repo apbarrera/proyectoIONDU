@@ -1,0 +1,50 @@
+<app-page-header
+  title="Registrar gasto"
+  subtitle="Registra un gasto manual de tu negocio."
+  [breadcrumb]="[{ label: 'Gastos', link: '/expenses/history' }, { label: 'Registrar gasto' }]"
+/>
+
+<app-card title="Datos del gasto">
+  <form [formGroup]="form" class="new-expense__form">
+    <app-form-field label="Fecha" required>
+      <input type="date" formControlName="date" />
+    </app-form-field>
+    <app-form-field label="Categoría" required>
+      <select formControlName="category">
+        @for (cat of categories; track cat) {
+          <option [value]="cat">{{ cat }}</option>
+        }
+      </select>
+    </app-form-field>
+    <app-form-field label="Proveedor" required>
+      <input formControlName="providerName" placeholder="Nombre del proveedor" />
+    </app-form-field>
+    <app-form-field label="RUC del proveedor">
+      <input formControlName="providerRuc" />
+    </app-form-field>
+    <app-form-field label="Monto (sin IVA)" required>
+      <input type="number" step="0.01" formControlName="amount" />
+    </app-form-field>
+    <app-form-field label="Método de pago" required>
+      <select formControlName="paymentMethod">
+        <option value="efectivo">Efectivo</option>
+        <option value="tarjeta">Tarjeta</option>
+        <option value="transferencia">Transferencia</option>
+        <option value="cheque">Cheque</option>
+      </select>
+    </app-form-field>
+    <app-form-field label="Descripción" required>
+      <input formControlName="description" />
+    </app-form-field>
+    <app-form-field label="Observación">
+      <textarea formControlName="observation"></textarea>
+    </app-form-field>
+  </form>
+
+  <div class="new-expense__totals">
+    <div><span>IVA</span><span>${{ ivaAmount().toFixed(2) }}</span></div>
+    <div class="new-expense__total"><span>Total</span><span>${{ total().toFixed(2) }}</span></div>
+  </div>
+
+  <app-button (clicked)="save()">Guardar gasto</app-button>
+</app-card>

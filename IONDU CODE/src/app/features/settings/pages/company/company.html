@@ -1,0 +1,49 @@
+<app-page-header
+  title="Empresa"
+  subtitle="Datos generales y de facturación de tu negocio."
+  [breadcrumb]="[{ label: 'Configuración', link: '/settings/company' }, { label: 'Empresa' }]"
+/>
+
+<app-card title="Datos generales">
+  <form [formGroup]="form" class="company__form">
+    <app-form-field label="Razón social" required>
+      <input formControlName="businessName" />
+    </app-form-field>
+    <app-form-field label="Nombre comercial" required>
+      <input formControlName="tradeName" />
+    </app-form-field>
+    <app-form-field label="RUC" required hint="13 dígitos">
+      <input formControlName="ruc" />
+    </app-form-field>
+    <app-form-field label="Actividad económica">
+      <input formControlName="economicActivity" />
+    </app-form-field>
+    <app-form-field label="Dirección">
+      <input formControlName="address" />
+    </app-form-field>
+    <app-form-field label="Teléfono">
+      <input formControlName="phone" />
+    </app-form-field>
+    <app-form-field label="Correo">
+      <input type="email" formControlName="email" />
+    </app-form-field>
+  </form>
+
+  <app-button (clicked)="save()">Guardar cambios</app-button>
+</app-card>
+
+<div class="company__spacer"></div>
+
+<app-card title="Firma electrónica">
+  <p class="company__signature-status">
+    @if (tenant().electronicSignature.configured) {
+      ✅ Firma configurada — {{ tenant().electronicSignature.fileName }} (vence
+      {{ tenant().electronicSignature.expiresAt }})
+    } @else {
+      ⚠️ No hay una firma electrónica configurada.
+    }
+  </p>
+  <p class="company__signature-note">
+    La firma electrónica se utilizará para autorizar la facturación con el SRI cuando se conecte la integración real.
+  </p>
+</app-card>

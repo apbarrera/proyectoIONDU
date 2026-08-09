@@ -1,0 +1,16 @@
+<div class="shell">
+  <app-sidebar [mobileOpen]="mobileNavOpen()" (linkClicked)="closeMobileNav()" />
+
+  @if (mobileNavOpen()) {
+    <div class="shell__backdrop" (click)="closeMobileNav()"></div>
+  }
+
+  <div class="shell__main">
+    <app-header (menuToggled)="toggleMobileNav()" />
+    <main class="shell__content">
+      <router-outlet />
+    </main>
+  </div>
+
+  <app-floating-ai-panel />
+</div>

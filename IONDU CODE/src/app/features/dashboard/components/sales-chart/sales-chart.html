@@ -1,0 +1,14 @@
+@if (series().length === 0) {
+  <p class="sales-chart__empty">No hay ventas en el período seleccionado.</p>
+} @else {
+  <div class="sales-chart">
+    @for (point of series(); track point.date) {
+      <div class="sales-chart__col">
+        <div class="sales-chart__bar-track">
+          <div class="sales-chart__bar" [style.height.%]="barHeight(point)" [title]="'$' + point.income.toFixed(2)"></div>
+        </div>
+        <span class="sales-chart__label">{{ shortDate(point.date) }}</span>
+      </div>
+    }
+  </div>
+}

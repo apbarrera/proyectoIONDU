@@ -1,0 +1,24 @@
+.company__form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 var(--space-4);
+  max-width: 720px;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.company__spacer {
+  height: var(--space-4);
+}
+
+.company__signature-status {
+  font-size: 0.9375rem;
+  margin-bottom: var(--space-2);
+}
+
+.company__signature-note {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}

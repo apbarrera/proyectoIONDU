@@ -1,0 +1,8 @@
+<div class="error-state">
+  <span class="error-state__icon" aria-hidden="true">⚠️</span>
+  <p class="error-state__title">{{ title() }}</p>
+  @if (description()) {
+    <p class="error-state__description">{{ description() }}</p>
+  }
+  <app-button variant="secondary" size="sm" (clicked)="retry.emit()">{{ retryLabel() }}</app-button>
+</div>

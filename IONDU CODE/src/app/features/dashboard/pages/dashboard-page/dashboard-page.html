@@ -1,0 +1,51 @@
+<app-page-header title="Dashboard" subtitle="Vista financiera general de tu negocio." />
+
+<app-period-selector (rangeChange)="onRangeChange($event)" />
+
+<div class="dashboard-page__spacer"></div>
+
+<app-kpi-grid [summary]="summary()" />
+
+<div class="dashboard-page__grid">
+  <app-card title="Ingresos por día">
+    <app-sales-chart [series]="summary().dailySeries" />
+  </app-card>
+
+  <app-card title="Productos de mayor rotación">
+    @if (summary().topProducts.length === 0) {
+      <app-empty-state icon="📦" title="Sin ventas en este período." />
+    } @else {
+      <ol class="dashboard-page__top-products">
+        @for (product of summary().topProducts; track product.productId) {
+          <li>
+            <span>{{ product.name }}</span>
+            <span class="dashboard-page__top-products-meta">{{ product.unitsSold }} und · ${{ product.revenue.toFixed(2) }}</span>
+          </li>
+        }
+      </ol>
+    }
+  </app-card>
+
+  <app-card title="Productos con stock bajo">
+    @if (productsService.lowStockProducts().length === 0) {
+      <app-empty-state icon="✅" title="Todo el inventario está saludable." />
+    } @else {
+      <ul class="dashboard-page__low-stock">
+        @for (product of productsService.lowStockProducts(); track product.id) {
+          <li>
+            <span>{{ product.name }}</span>
+            <span class="dashboard-page__low-stock-meta">{{ product.currentStock }} / {{ product.minStock }} {{ product.unit }}</span>
+          </li>
+        }
+      </ul>
+      <a routerLink="/inventory/alerts" class="dashboard-page__link">Ver todas las alertas →</a>
+    }
+  </app-card>
+
+  <app-card title="Recomendaciones">
+    <p class="dashboard-page__recommendations-text">
+      IONDU analiza tus ventas, gastos e inventario para sugerirte acciones concretas.
+    </p>
+    <a routerLink="/recommendations" class="dashboard-page__link">Ver recomendaciones →</a>
+  </app-card>
+</div>

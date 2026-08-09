@@ -1,0 +1,38 @@
+<aside class="sidebar" [class.sidebar--open]="mobileOpen()">
+  <div class="sidebar__brand">
+    <div class="sidebar__logo" aria-hidden="true">IO</div>
+    <span class="sidebar__brand-name">IONDU</span>
+  </div>
+
+  <nav class="sidebar__nav">
+    @for (item of visibleItems(); track item.link) {
+      <div class="sidebar__group">
+        <a
+          class="sidebar__link"
+          [routerLink]="item.link"
+          routerLinkActive="sidebar__link--active"
+          [routerLinkActiveOptions]="{ exact: false }"
+          (click)="onLinkClick()"
+        >
+          <span class="sidebar__icon" aria-hidden="true">{{ item.icon }}</span>
+          <span>{{ item.label }}</span>
+        </a>
+
+        @if (item.children?.length) {
+          <div class="sidebar__children">
+            @for (child of item.children; track child.link) {
+              <a
+                class="sidebar__child-link"
+                [routerLink]="child.link"
+                routerLinkActive="sidebar__child-link--active"
+                (click)="onLinkClick()"
+              >
+                {{ child.label }}
+              </a>
+            }
+          </div>
+        }
+      </div>
+    }
+  </nav>
+</aside>

@@ -1,0 +1,27 @@
+<app-page-header
+  title="Alertas de stock"
+  subtitle="Productos por debajo del mínimo, agotados o próximos a agotarse."
+  [breadcrumb]="[{ label: 'Inventario', link: '/inventory/products' }, { label: 'Alertas de stock' }]"
+/>
+
+@if (productsService.lowStockProducts().length === 0) {
+  <app-empty-state icon="✅" title="Todo tu inventario está por encima del mínimo." />
+} @else {
+  <div class="alerts__list">
+    @for (product of productsService.lowStockProducts(); track product.id) {
+      <div class="alerts__item">
+        <div>
+          <p class="alerts__name">{{ product.name }}</p>
+          <p class="alerts__stock">
+            Stock: {{ product.currentStock }} {{ product.unit }} · Mínimo: {{ product.minStock }} {{ product.unit }}
+          </p>
+        </div>
+        <app-status-badge
+          [label]="severityLabel(product.currentStock, product.minStock)"
+          [tone]="severity(product.currentStock, product.minStock)"
+        />
+        <a [routerLink]="['/inventory/products']" class="alerts__link">Ver producto →</a>
+      </div>
+    }
+  </div>
+}

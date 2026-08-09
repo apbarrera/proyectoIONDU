@@ -1,0 +1,46 @@
+.sales-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  height: 200px;
+  padding-top: var(--space-4);
+  overflow-x: auto;
+}
+
+.sales-chart__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 32px;
+  flex: 1;
+  height: 100%;
+}
+
+.sales-chart__bar-track {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.sales-chart__bar {
+  width: 100%;
+  background: linear-gradient(180deg, var(--brand-blue), var(--brand-purple));
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  min-height: 4px;
+  transition: height 0.2s ease;
+}
+
+.sales-chart__label {
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.sales-chart__empty {
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  padding: var(--space-6) 0;
+  text-align: center;
+}

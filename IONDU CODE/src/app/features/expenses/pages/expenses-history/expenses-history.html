@@ -1,0 +1,14 @@
+<app-page-header
+  title="Historial de gastos"
+  subtitle="Consulta todos los gastos registrados manualmente o desde correo."
+  [breadcrumb]="[{ label: 'Gastos', link: '/expenses/history' }, { label: 'Historial' }]"
+>
+  <app-button routerLink="/expenses/new">+ Registrar gasto</app-button>
+</app-page-header>
+
+<app-data-table
+  [columns]="columns"
+  [rows]="expensesService.expenses()"
+  emptyTitle="Todavía no se han registrado gastos."
+  searchPlaceholder="Buscar por proveedor, categoría…"
+/>

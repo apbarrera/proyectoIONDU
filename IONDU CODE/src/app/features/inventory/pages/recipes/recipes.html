@@ -1,0 +1,82 @@
+<app-page-header
+  title="Recetas"
+  subtitle="Define los ingredientes y el rendimiento de tus productos compuestos."
+  [breadcrumb]="[{ label: 'Inventario', link: '/inventory/products' }, { label: 'Recetas' }]"
+>
+  <app-button (clicked)="openCreate()">+ Nueva receta</app-button>
+</app-page-header>
+
+@if (recipesService.recipes().length === 0) {
+  <app-empty-state icon="📋" title="Todavía no tienes recetas." description="Crea tu primera receta para poder fabricar productos compuestos." />
+} @else {
+  <div class="recipes__grid">
+    @for (recipe of recipesService.recipes(); track recipe.id) {
+      <app-card [title]="recipe.name">
+        <div card-actions>
+          <button type="button" class="recipes__icon-btn" (click)="openEdit(recipe)" aria-label="Editar">✎</button>
+          <button type="button" class="recipes__icon-btn" (click)="deleteRecipe(recipe)" aria-label="Eliminar">🗑</button>
+        </div>
+        <p class="recipes__description">{{ recipe.description }}</p>
+        <p class="recipes__meta">
+          Producto final: <strong>{{ productName(recipe.productId) }}</strong> · Rendimiento:
+          <strong>{{ recipe.yieldQuantity }}</strong>
+        </p>
+        <ul class="recipes__ingredients">
+          @for (ing of recipe.ingredients; track ing.productId) {
+            <li>{{ productName(ing.productId) }} — {{ ing.quantity }} {{ ing.unit }}</li>
+          }
+        </ul>
+        <p class="recipes__cost">Costo estimado: <strong>${{ estimatedCost(recipe).toFixed(2) }}</strong> / unidad</p>
+      </app-card>
+    }
+  </div>
+}
+
+<app-modal [open]="formOpen()" [title]="editingId() ? 'Editar receta' : 'Nueva receta'" size="lg" (closed)="close()">
+  <form [formGroup]="form" class="recipes__form">
+    <app-form-field label="Nombre de la receta" required>
+      <input formControlName="name" />
+    </app-form-field>
+    <app-form-field label="Producto resultante" required>
+      <select formControlName="productId">
+        <option value="" disabled>Selecciona un producto</option>
+        @for (p of productsService.products(); track p.id) {
+          <option [value]="p.id">{{ p.name }}</option>
+        }
+      </select>
+    </app-form-field>
+    <app-form-field label="Descripción">
+      <textarea formControlName="description"></textarea>
+    </app-form-field>
+    <app-form-field label="Rendimiento (unidades por preparación)" required>
+      <input type="number" formControlName="yieldQuantity" />
+    </app-form-field>
+
+    <h4 class="recipes__form-subtitle">Ingredientes</h4>
+    <div formArrayName="ingredients" class="recipes__ingredient-rows">
+      @for (group of ingredients.controls; track $index; let i = $index) {
+        <div [formGroupName]="i" class="recipes__ingredient-row">
+          <select formControlName="productId">
+            <option value="" disabled>Insumo/producto</option>
+            @for (p of productsService.products(); track p.id) {
+              <option [value]="p.id">{{ p.name }}</option>
+            }
+          </select>
+          <input type="number" step="0.01" formControlName="quantity" placeholder="Cantidad" />
+          <input formControlName="unit" placeholder="Unidad" />
+          <button type="button" class="recipes__icon-btn" (click)="removeIngredient(i)" aria-label="Quitar">✕</button>
+        </div>
+      }
+    </div>
+    <app-button variant="secondary" size="sm" (clicked)="addIngredient()">+ Agregar ingrediente</app-button>
+
+    <app-form-field label="Notas">
+      <textarea formControlName="notes"></textarea>
+    </app-form-field>
+  </form>
+
+  <div modal-footer>
+    <app-button variant="secondary" (clicked)="close()">Cancelar</app-button>
+    <app-button (clicked)="save()">Guardar</app-button>
+  </div>
+</app-modal>

@@ -1,0 +1,12 @@
+<app-page-header
+  title="Historial del agente"
+  subtitle="Todas las interacciones con el Agente IA y su resultado."
+  [breadcrumb]="[{ label: 'Agente IA', link: '/ai' }, { label: 'Historial' }]"
+/>
+
+<app-data-table
+  [columns]="columns"
+  [rows]="aiAgent.interactions()"
+  emptyTitle="Todavía no hay interacciones con el Agente IA."
+  searchPlaceholder="Buscar por instrucción, usuario…"
+/>

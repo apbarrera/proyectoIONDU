@@ -1,0 +1,61 @@
+<app-page-header
+  title="Configuración IA"
+  subtitle="Ajusta el comportamiento del Agente IA. Esta configuración es simulada."
+  [breadcrumb]="[{ label: 'Configuración', link: '/settings/company' }, { label: 'Configuración IA' }]"
+/>
+
+<div class="ai-settings__grid">
+  <app-card title="Instrucciones del agente">
+    <label class="ai-settings__label">Instrucciones generales</label>
+    <textarea
+      class="ai-settings__textarea"
+      [ngModel]="instructions()"
+      (ngModelChange)="instructions.set($event)"
+    ></textarea>
+
+    <label class="ai-settings__checkbox">
+      <input type="checkbox" [ngModel]="askForMoreInfo()" (ngModelChange)="askForMoreInfo.set($event)" />
+      Solicitar información adicional cuando el mensaje sea ambiguo
+    </label>
+
+    <app-button (clicked)="save()">Guardar configuración</app-button>
+
+    <div class="ai-settings__actions-lists">
+      <div>
+        <h4>Acciones permitidas</h4>
+        <ul>
+          @for (action of aiConfig.config().allowedActions; track action) {
+            <li>✅ {{ action }}</li>
+          }
+        </ul>
+      </div>
+      <div>
+        <h4>Acciones prohibidas</h4>
+        <ul>
+          @for (action of aiConfig.config().forbiddenActions; track action) {
+            <li>🚫 {{ action }}</li>
+          }
+        </ul>
+      </div>
+    </div>
+  </app-card>
+
+  @if (auth.isAdmin()) {
+    <app-card title="Consumo de tokens">
+      <p class="ai-settings__token-usage">
+        {{ tokenUsage.used().toLocaleString('es-EC') }} / {{ tokenUsage.limit.toLocaleString('es-EC') }} tokens
+      </p>
+      <div class="ai-settings__meter">
+        <div class="ai-settings__meter-fill" [style.width.%]="tokenUsage.percentUsed()"></div>
+      </div>
+      <p class="ai-settings__percent">{{ tokenUsage.percentUsed() }}% utilizado este mes</p>
+
+      <h4 class="ai-settings__history-title">Historial de consumo</h4>
+      <ul class="ai-settings__history">
+        @for (item of tokenUsage.history; track item.month) {
+          <li><span>{{ item.month }}</span><span>{{ item.used.toLocaleString('es-EC') }}</span></li>
+        }
+      </ul>
+    </app-card>
+  }
+</div>

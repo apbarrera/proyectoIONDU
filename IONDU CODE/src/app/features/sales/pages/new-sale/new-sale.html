@@ -1,0 +1,92 @@
+<app-page-header
+  title="Nueva venta"
+  subtitle="Registra una venta y descuenta el stock automáticamente."
+  [breadcrumb]="[{ label: 'Ventas', link: '/sales/history' }, { label: 'Nueva venta' }]"
+/>
+
+<div class="new-sale__layout">
+  <app-card title="Productos">
+    <div class="new-sale__picker">
+      <select class="new-sale__select" [ngModel]="selectedProductId()" (ngModelChange)="selectedProductId.set($event)">
+        <option value="" disabled>Selecciona un producto</option>
+        @for (p of sellableProducts(); track p.id) {
+          <option [value]="p.id">{{ p.name }} — ${{ p.salePrice }}</option>
+        }
+      </select>
+      <app-button [disabled]="!selectedProductId()" (clicked)="addToCart()">Agregar</app-button>
+    </div>
+
+    @if (cart().length === 0) {
+      <app-empty-state icon="🛒" title="El carrito está vacío." description="Agrega productos para iniciar la venta." />
+    } @else {
+      <table class="new-sale__cart">
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Cantidad</th>
+            <th>Precio</th>
+            <th>Subtotal</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (line of cart(); track line.productId) {
+            <tr>
+              <td>{{ line.productName }}</td>
+              <td>
+                <input
+                  type="number"
+                  min="1"
+                  class="new-sale__qty"
+                  [ngModel]="line.quantity"
+                  (ngModelChange)="updateQuantity(line.productId, $event)"
+                />
+              </td>
+              <td>${{ line.unitPrice.toFixed(2) }}</td>
+              <td>${{ (line.unitPrice * line.quantity).toFixed(2) }}</td>
+              <td>
+                <button type="button" class="new-sale__remove" (click)="removeFromCart(line.productId)" aria-label="Quitar">
+                  ✕
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </app-card>
+
+  <app-card title="Resumen de venta">
+    <label class="new-sale__label">Cliente</label>
+    <input
+      class="new-sale__input"
+      [ngModel]="customerName()"
+      (ngModelChange)="customerName.set($event)"
+      placeholder="Consumidor Final"
+    />
+
+    <label class="new-sale__label">Método de pago</label>
+    <select class="new-sale__input" [ngModel]="paymentMethod()" (ngModelChange)="paymentMethod.set($event)">
+      <option value="efectivo">Efectivo</option>
+      <option value="tarjeta">Tarjeta</option>
+      <option value="transferencia">Transferencia</option>
+    </select>
+
+    <label class="new-sale__label">Observación</label>
+    <textarea
+      class="new-sale__input"
+      [ngModel]="observation()"
+      (ngModelChange)="observation.set($event)"
+    ></textarea>
+
+    <div class="new-sale__totals">
+      <div><span>Subtotal</span><span>${{ subtotal().toFixed(2) }}</span></div>
+      <div><span>IVA ({{ (ivaRate * 100).toFixed(0) }}%)</span><span>${{ ivaAmount().toFixed(2) }}</span></div>
+      <div class="new-sale__total"><span>Total</span><span>${{ total().toFixed(2) }}</span></div>
+    </div>
+
+    <app-button fullWidth [loading]="submitting()" [disabled]="cart().length === 0" (clicked)="confirmSale()">
+      Confirmar venta
+    </app-button>
+  </app-card>
+</div>

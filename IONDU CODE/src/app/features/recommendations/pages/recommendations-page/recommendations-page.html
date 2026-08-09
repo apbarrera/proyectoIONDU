@@ -1,0 +1,29 @@
+<app-page-header
+  title="Recomendaciones"
+  subtitle="Sugerencias basadas en tus ventas, gastos e inventario. No modifican datos automáticamente."
+/>
+
+@if (recommendationsService.recommendations().length === 0) {
+  <app-empty-state icon="✨" title="No hay recomendaciones por ahora." description="IONDU seguirá analizando tu negocio y te avisará cuando detecte algo relevante." />
+} @else {
+  <div class="recommendations__list">
+    @for (rec of recommendationsService.recommendations(); track rec.id) {
+      <div class="recommendations__card">
+        <div class="recommendations__header">
+          <span class="recommendations__category">{{ rec.category }}</span>
+          <app-status-badge [label]="'Prioridad ' + rec.priority" [tone]="priorityTones[rec.priority]" />
+        </div>
+        <h3 class="recommendations__title">{{ rec.title }}</h3>
+        <p class="recommendations__description">{{ rec.description }}</p>
+        <div class="recommendations__data-used">
+          <span>Datos utilizados:</span>
+          <ul>
+            @for (data of rec.dataUsed; track data) {
+              <li>{{ data }}</li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+  </div>
+}

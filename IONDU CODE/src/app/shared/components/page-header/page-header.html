@@ -1,0 +1,23 @@
+<header class="page-header">
+  <div class="page-header__main">
+    @if (breadcrumb().length) {
+      <nav class="page-header__breadcrumb" aria-label="Breadcrumb">
+        @for (crumb of breadcrumb(); track crumb.label; let last = $last) {
+          @if (crumb.link && !last) {
+            <a [routerLink]="crumb.link">{{ crumb.label }}</a>
+            <span class="page-header__sep">/</span>
+          } @else {
+            <span class="page-header__current">{{ crumb.label }}</span>
+          }
+        }
+      </nav>
+    }
+    <h1 class="page-header__title">{{ title() }}</h1>
+    @if (subtitle()) {
+      <p class="page-header__subtitle">{{ subtitle() }}</p>
+    }
+  </div>
+  <div class="page-header__actions">
+    <ng-content />
+  </div>
+</header>

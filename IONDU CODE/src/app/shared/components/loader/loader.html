@@ -1,0 +1,6 @@
+<div class="loader" [class.loader--inline]="inline()">
+  <span class="loader__spinner" [class]="'loader__spinner--' + size()" aria-hidden="true"></span>
+  @if (!inline()) {
+    <span class="loader__label">{{ label() }}</span>
+  }
+</div>

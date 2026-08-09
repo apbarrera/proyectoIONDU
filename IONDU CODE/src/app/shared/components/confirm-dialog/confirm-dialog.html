@@ -1,0 +1,12 @@
+<app-modal [open]="!!service.active()" [title]="service.active()?.title" size="sm" (closed)="resolve(false)">
+  <p>{{ service.active()?.message }}</p>
+
+  <div modal-footer>
+    <app-button variant="secondary" (clicked)="resolve(false)">
+      {{ service.active()?.cancelLabel ?? 'Cancelar' }}
+    </app-button>
+    <app-button [variant]="service.active()?.danger ? 'danger' : 'primary'" (clicked)="resolve(true)">
+      {{ service.active()?.confirmLabel ?? 'Confirmar' }}
+    </app-button>
+  </div>
+</app-modal>

@@ -1,0 +1,30 @@
+<div class="period-selector">
+  <div class="period-selector__options">
+    @for (opt of options; track opt) {
+      <button
+        type="button"
+        class="period-selector__option"
+        [class.period-selector__option--active]="selected() === opt"
+        (click)="select(opt)"
+      >
+        {{ labels[opt] }}
+      </button>
+    }
+  </div>
+
+  @if (selected() === 'personalizado') {
+    <div class="period-selector__custom">
+      <input
+        type="date"
+        [ngModel]="customFrom()"
+        (ngModelChange)="customFrom.set($event); onCustomDateChange()"
+      />
+      <span>—</span>
+      <input
+        type="date"
+        [ngModel]="customTo()"
+        (ngModelChange)="customTo.set($event); onCustomDateChange()"
+      />
+    </div>
+  }
+</div>

@@ -1,0 +1,56 @@
+<app-page-header
+  title="Facturas recibidas"
+  subtitle="IONDU revisa tu correo y detecta facturas de proveedores automáticamente."
+  [breadcrumb]="[{ label: 'Gastos', link: '/expenses/history' }, { label: 'Facturas recibidas' }]"
+/>
+
+@if (pending().length === 0) {
+  <app-empty-state icon="📬" title="No hay facturas nuevas por revisar." description="IONDU seguirá monitoreando tu correo automáticamente." />
+} @else {
+  <div class="email-drafts__list">
+    @for (draft of pending(); track draft.id) {
+      <div class="email-drafts__card">
+        <div class="email-drafts__card-header">
+          <span class="email-drafts__badge">Pendiente de revisión</span>
+          <span class="email-drafts__confidence">{{ (draft.confidence * 100).toFixed(0) }}% de confianza</span>
+        </div>
+        <p class="email-drafts__provider">{{ draft.parsedProviderName }}</p>
+        <p class="email-drafts__meta">RUC: {{ draft.parsedProviderRuc }}</p>
+        <p class="email-drafts__meta">Total: ${{ draft.parsedAmount.toFixed(2) }} · Fecha: {{ draft.parsedDate }}</p>
+        <p class="email-drafts__subject">"{{ draft.subjectRaw }}" — {{ draft.fromAddress }}</p>
+        <div class="email-drafts__actions">
+          <app-button size="sm" (clicked)="open(draft)">Revisar</app-button>
+          <app-button size="sm" variant="ghost" (clicked)="discard(draft)">Descartar</app-button>
+        </div>
+      </div>
+    }
+  </div>
+}
+
+<app-modal [open]="!!reviewing()" title="Confirmar gasto detectado" size="md" (closed)="close()">
+  @if (reviewing()) {
+    <form [formGroup]="form">
+      <app-form-field label="Proveedor" required>
+        <input formControlName="providerName" />
+      </app-form-field>
+      <app-form-field label="RUC" required>
+        <input formControlName="providerRuc" />
+      </app-form-field>
+      <app-form-field label="Monto total" required>
+        <input type="number" step="0.01" formControlName="amount" />
+      </app-form-field>
+      <app-form-field label="Categoría" required>
+        <select formControlName="category">
+          @for (cat of categories; track cat) {
+            <option [value]="cat">{{ cat }}</option>
+          }
+        </select>
+      </app-form-field>
+    </form>
+  }
+
+  <div modal-footer>
+    <app-button variant="secondary" (clicked)="close()">Cancelar</app-button>
+    <app-button (clicked)="confirm()">Confirmar gasto</app-button>
+  </div>
+</app-modal>

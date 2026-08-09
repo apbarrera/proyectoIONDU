@@ -1,0 +1,50 @@
+<div class="login">
+  <div class="login__card">
+    <div class="login__brand">
+      <div class="login__logo" aria-hidden="true">IO</div>
+      <h1 class="login__product">IONDU</h1>
+      <p class="login__tagline">Agente de IA integrado en tu negocio.</p>
+    </div>
+
+    <form [formGroup]="form" (ngSubmit)="submit()" class="login__form">
+      <app-form-field label="Correo electrónico" required>
+        <input type="email" formControlName="email" placeholder="tucorreo@empresa.com" autocomplete="email" />
+      </app-form-field>
+
+      <app-form-field label="Contraseña" required>
+        <input type="password" formControlName="password" placeholder="••••••••" autocomplete="current-password" />
+      </app-form-field>
+
+      @if (errorMessage()) {
+        <p class="login__error">{{ errorMessage() }}</p>
+      }
+
+      <div class="login__row">
+        <label class="login__remember">
+          <input type="checkbox" formControlName="rememberSession" />
+          Recordar sesión
+        </label>
+        <button type="button" class="login__forgot" (click)="openRecovery()">¿Olvidaste tu contraseña?</button>
+      </div>
+
+      <app-button type="submit" [loading]="submitting()" fullWidth>Iniciar sesión</app-button>
+    </form>
+
+    <div class="login__demo">
+      <p><strong>Usuarios demo</strong></p>
+      <p>admin&#64;iondu.demo · operador&#64;iondu.demo</p>
+      <p>Contraseña: iondu2026</p>
+    </div>
+  </div>
+</div>
+
+<app-modal [open]="recoveryOpen()" title="Recuperar contraseña" size="sm" (closed)="closeRecovery()">
+  @if (!recoveryResult()) {
+    <app-form-field label="Correo electrónico">
+      <input type="email" [value]="recoveryEmail()" (input)="recoveryEmail.set($any($event.target).value)" />
+    </app-form-field>
+    <app-button (clicked)="submitRecovery()" fullWidth>Enviar</app-button>
+  } @else {
+    <p>{{ recoveryResult() }}</p>
+  }
+</app-modal>

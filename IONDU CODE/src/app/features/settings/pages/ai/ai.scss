@@ -1,0 +1,105 @@
+.ai-settings__grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: var(--space-4);
+  align-items: start;
+
+  @media (max-width: 1024px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ai-settings__label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-1);
+}
+
+.ai-settings__textarea {
+  width: 100%;
+  min-height: 110px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.ai-settings__checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-4);
+}
+
+.ai-settings__actions-lists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+
+  h4 {
+    font-size: 0.8125rem;
+    margin-bottom: var(--space-2);
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+}
+
+.ai-settings__token-usage {
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+
+.ai-settings__meter {
+  width: 100%;
+  height: 8px;
+  background: var(--color-neutral-bg);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: var(--space-2) 0;
+}
+
+.ai-settings__meter-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--brand-blue), var(--brand-purple));
+}
+
+.ai-settings__percent {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-4);
+}
+
+.ai-settings__history-title {
+  font-size: 0.8125rem;
+  margin-bottom: var(--space-2);
+}
+
+.ai-settings__history {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 0.8125rem;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    color: var(--color-text-secondary);
+  }
+}

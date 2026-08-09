@@ -1,0 +1,36 @@
+<div class="proposal-card">
+  <div class="proposal-card__header">
+    <span class="proposal-card__title">Propuesta de la IA</span>
+    <app-status-badge [label]="resultLabels[interaction().result]" [tone]="resultTones[interaction().result]" />
+  </div>
+
+  @if (interaction().proposal; as proposal) {
+    @if (!editing()) {
+      <p class="proposal-card__summary">{{ proposal.summary }}</p>
+    } @else if (proposal.expense) {
+      <div class="proposal-card__edit-row">
+        <label>Categoría</label>
+        <input [ngModel]="editedCategory()" (ngModelChange)="editedCategory.set($event)" />
+      </div>
+      <div class="proposal-card__edit-row">
+        <label>Monto</label>
+        <input type="number" step="0.01" [ngModel]="editedAmount()" (ngModelChange)="editedAmount.set($event)" />
+      </div>
+    } @else if (proposal.inventory) {
+      <div class="proposal-card__edit-row">
+        <label>Cantidad ({{ proposal.inventory.unit }})</label>
+        <input type="number" step="0.01" [ngModel]="editedQuantity()" (ngModelChange)="editedQuantity.set($event)" />
+      </div>
+    }
+
+    @if (isPending()) {
+      <div class="proposal-card__actions">
+        <app-button size="sm" (clicked)="confirm()">Confirmar</app-button>
+        @if (!editing()) {
+          <app-button size="sm" variant="secondary" (clicked)="startEdit()">Corregir</app-button>
+        }
+        <app-button size="sm" variant="ghost" (clicked)="cancel()">Cancelar</app-button>
+      </div>
+    }
+  }
+</div>

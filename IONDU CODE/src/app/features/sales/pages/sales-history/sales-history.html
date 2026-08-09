@@ -1,0 +1,14 @@
+<app-page-header
+  title="Historial de ventas"
+  subtitle="Consulta, busca y filtra todas las ventas registradas."
+  [breadcrumb]="[{ label: 'Ventas', link: '/sales/history' }, { label: 'Historial' }]"
+>
+  <app-button routerLink="/sales/new">+ Nueva venta</app-button>
+</app-page-header>
+
+<app-data-table
+  [columns]="columns"
+  [rows]="salesService.sales()"
+  emptyTitle="Todavía no se han registrado ventas."
+  searchPlaceholder="Buscar por cliente, folio…"
+/>

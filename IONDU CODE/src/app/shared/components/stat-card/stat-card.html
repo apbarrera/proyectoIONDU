@@ -1,0 +1,12 @@
+<div class="stat-card">
+  <div class="stat-card__top">
+    <span class="stat-card__label">{{ label() }}</span>
+    @if (icon()) {
+      <span class="stat-card__icon" aria-hidden="true">{{ icon() }}</span>
+    }
+  </div>
+  <span class="stat-card__value">{{ value() }}</span>
+  @if (trendLabel()) {
+    <span class="stat-card__trend" [class]="'stat-card__trend--' + trend()">{{ trendLabel() }}</span>
+  }
+</div>

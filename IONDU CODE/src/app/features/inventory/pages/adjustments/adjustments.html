@@ -1,0 +1,57 @@
+<app-page-header
+  title="Ajustes de inventario"
+  subtitle="Corrige manualmente el stock de un producto e indica el motivo."
+  [breadcrumb]="[{ label: 'Inventario', link: '/inventory/products' }, { label: 'Ajustes' }]"
+/>
+
+<app-card title="Nuevo ajuste">
+  <label class="adjustments__label">Producto</label>
+  <select class="adjustments__select" [ngModel]="selectedProductId()" (ngModelChange)="onProductChange($event)">
+    <option value="" disabled>Selecciona un producto</option>
+    @for (p of productsService.products(); track p.id) {
+      <option [value]="p.id">{{ p.name }}</option>
+    }
+  </select>
+
+  @if (selectedProduct(); as product) {
+    <div class="adjustments__row">
+      <div>
+        <label class="adjustments__label">Stock actual</label>
+        <p class="adjustments__current">{{ product.currentStock }} {{ product.unit }}</p>
+      </div>
+      <div>
+        <label class="adjustments__label">Nueva cantidad</label>
+        <input
+          class="adjustments__input"
+          type="number"
+          step="0.01"
+          [ngModel]="newStock()"
+          (ngModelChange)="newStock.set($event)"
+        />
+      </div>
+      <div>
+        <label class="adjustments__label">Diferencia</label>
+        <p class="adjustments__diff" [class.adjustments__diff--negative]="difference() < 0">
+          {{ difference() > 0 ? '+' : '' }}{{ difference() }} {{ product.unit }}
+        </p>
+      </div>
+    </div>
+
+    <label class="adjustments__label">Motivo</label>
+    <textarea
+      class="adjustments__textarea"
+      [ngModel]="reason()"
+      (ngModelChange)="reason.set($event)"
+      placeholder="Ej. Conteo físico, merma, producto dañado…"
+    ></textarea>
+
+    <app-button (clicked)="submit()">Guardar ajuste</app-button>
+  }
+</app-card>
+
+<h3 class="adjustments__history-title">Historial de ajustes</h3>
+<app-data-table
+  [columns]="columns"
+  [rows]="adjustmentsService.adjustments()"
+  emptyTitle="Todavía no se han registrado ajustes."
+/>

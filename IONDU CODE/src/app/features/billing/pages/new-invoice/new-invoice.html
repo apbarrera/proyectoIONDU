@@ -1,0 +1,56 @@
+<app-page-header
+  title="Nueva factura"
+  subtitle="Genera una factura electrónica a partir de una venta registrada."
+  [breadcrumb]="[{ label: 'Facturación', link: '/billing/history' }, { label: 'Nueva factura' }]"
+/>
+
+<div class="new-invoice__layout">
+  <app-card title="Venta a facturar">
+    <label class="new-invoice__label">Selecciona una venta</label>
+    <select class="new-invoice__select" [ngModel]="selectedSaleId()" (ngModelChange)="onSaleChange($event)">
+      <option value="" disabled>Selecciona una venta</option>
+      @for (sale of salesService.sales(); track sale.id) {
+        <option [value]="sale.id">#{{ sale.folio }} — {{ sale.customerName }} — ${{ sale.total.toFixed(2) }}</option>
+      }
+    </select>
+
+    @if (selectedSale(); as sale) {
+      <table class="new-invoice__items">
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Cant.</th>
+            <th>Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of sale.items; track item.productId) {
+            <tr>
+              <td>{{ item.productName }}</td>
+              <td>{{ item.quantity }}</td>
+              <td>${{ item.subtotal.toFixed(2) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </app-card>
+
+  <app-card title="Datos del cliente">
+    <form [formGroup]="form">
+      <app-form-field label="RUC / Cédula" required>
+        <input formControlName="rucOrCedula" />
+      </app-form-field>
+      <app-form-field label="Razón social" required>
+        <input formControlName="razonSocial" />
+      </app-form-field>
+      <app-form-field label="Correo (opcional)">
+        <input type="email" formControlName="email" />
+      </app-form-field>
+    </form>
+
+    <app-button fullWidth [disabled]="!selectedSaleId()" [loading]="submitting()" (clicked)="generateAndEmit()">
+      Generar y emitir factura electrónica
+    </app-button>
+  </app-card>
+</div>

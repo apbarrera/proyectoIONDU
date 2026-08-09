@@ -1,0 +1,38 @@
+<button type="button" class="floating-ai-panel__toggle" (click)="toggle()" aria-label="Abrir Agente IA">
+  {{ open() ? '✕' : '🤖' }}
+</button>
+
+@if (open()) {
+  <div class="floating-ai-panel__panel">
+    <div class="floating-ai-panel__header">
+      <span>Agente IA</span>
+      <a routerLink="/ai" (click)="open.set(false)">Abrir completo →</a>
+    </div>
+
+    <div class="floating-ai-panel__messages">
+      @if (aiAgent.messages().length === 0) {
+        <p class="floating-ai-panel__hint">Cuéntame qué compraste o gastaste y te propondré los cambios.</p>
+      }
+      @for (message of aiAgent.messages(); track message.id) {
+        <div class="floating-ai-panel__row" [class.floating-ai-panel__row--user]="message.role === 'user'">
+          <div class="floating-ai-panel__bubble" [class.floating-ai-panel__bubble--user]="message.role === 'user'">
+            <p>{{ message.content }}</p>
+            @if (message.role === 'assistant' && interactionFor(message.id); as interaction) {
+              <app-proposal-card [interaction]="interaction" />
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="floating-ai-panel__composer">
+      <input
+        [ngModel]="draft()"
+        (ngModelChange)="draft.set($event)"
+        (keydown.enter)="send()"
+        placeholder="Escribe un mensaje…"
+      />
+      <button type="button" [disabled]="!draft().trim()" (click)="send()">➤</button>
+    </div>
+  </div>
+}

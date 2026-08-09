@@ -1,0 +1,26 @@
+<header class="app-header">
+  <button type="button" class="app-header__menu-btn" aria-label="Abrir menú" (click)="menuToggled.emit()">
+    ☰
+  </button>
+
+  <div class="app-header__spacer"></div>
+
+  <div class="app-header__profile">
+    <button type="button" class="app-header__profile-btn" (click)="toggleProfileMenu()">
+      <span class="app-header__avatar">{{ currentUser()?.avatarInitials }}</span>
+      <span class="app-header__profile-info">
+        <span class="app-header__name">{{ currentUser()?.fullName }}</span>
+        <span class="app-header__role">{{ currentUser()?.role === 'admin' ? 'Administrador' : 'Operativo' }}</span>
+      </span>
+    </button>
+
+    @if (profileMenuOpen()) {
+      <div class="app-header__dropdown">
+        <a routerLink="/settings/preferences" class="app-header__dropdown-item" (click)="profileMenuOpen.set(false)">
+          Preferencias
+        </a>
+        <button type="button" class="app-header__dropdown-item" (click)="logout()">Cerrar sesión</button>
+      </div>
+    }
+  </div>
+</header>

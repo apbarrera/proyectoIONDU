@@ -1,0 +1,12 @@
+<app-page-header
+  title="Movimientos de inventario"
+  subtitle="Historial de entradas, salidas, ajustes y fabricación."
+  [breadcrumb]="[{ label: 'Inventario', link: '/inventory/products' }, { label: 'Movimientos' }]"
+/>
+
+<app-data-table
+  [columns]="columns"
+  [rows]="movementsService.movements()"
+  emptyTitle="Todavía no hay movimientos registrados."
+  searchPlaceholder="Buscar movimiento…"
+/>

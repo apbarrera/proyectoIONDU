@@ -1,0 +1,60 @@
+<app-page-header
+  title="Agente IA"
+  subtitle="Escribe, sube una imagen o graba un mensaje de voz para registrar cambios en tu negocio."
+/>
+
+<div class="ai-chat">
+  <div class="ai-chat__messages">
+    @if (aiAgent.messages().length === 0) {
+      <p class="ai-chat__hint">
+        Prueba escribir algo como: <em>"Compré 5 frascos para empaque por $12,50."</em>
+      </p>
+    }
+    @for (message of aiAgent.messages(); track message.id) {
+      <div class="ai-chat__row" [class.ai-chat__row--user]="message.role === 'user'">
+        <div class="ai-chat__bubble" [class.ai-chat__bubble--user]="message.role === 'user'">
+          @if (message.attachments?.length) {
+            <div class="ai-chat__attachments">
+              @for (att of message.attachments; track att.url) {
+                @if (att.type === 'image') {
+                  <img [src]="att.url" [alt]="att.name" class="ai-chat__attachment-img" />
+                }
+              }
+            </div>
+          }
+          <p class="ai-chat__text">{{ message.content }}</p>
+          @if (message.role === 'assistant' && interactionFor(message.id); as interaction) {
+            <app-proposal-card [interaction]="interaction" />
+          }
+        </div>
+      </div>
+    }
+    @if (sending()) {
+      <div class="ai-chat__row">
+        <div class="ai-chat__bubble">
+          <span class="ai-chat__typing">Analizando…</span>
+        </div>
+      </div>
+    }
+  </div>
+
+  <div class="ai-chat__composer">
+    @if (recording()) {
+      <div class="ai-chat__recording">🎙️ Grabando…</div>
+    } @else {
+      <input
+        class="ai-chat__input"
+        [ngModel]="draft()"
+        (ngModelChange)="draft.set($event)"
+        (keydown.enter)="send()"
+        placeholder="Escribe un mensaje…"
+      />
+    }
+    <label class="ai-chat__icon-btn" aria-label="Subir imagen">
+      📷
+      <input type="file" accept="image/*" hidden (change)="uploadImage($event)" />
+    </label>
+    <button type="button" class="ai-chat__icon-btn" aria-label="Grabar voz" (click)="toggleRecording()">🎤</button>
+    <app-button [disabled]="!draft().trim()" [loading]="sending()" (clicked)="send()">Enviar</app-button>
+  </div>
+</div>

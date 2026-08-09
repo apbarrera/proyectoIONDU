@@ -1,0 +1,8 @@
+<app-page-header title="Auditoría" subtitle="Historial de actividad de todos los usuarios en IONDU." />
+
+<app-data-table
+  [columns]="columns"
+  [rows]="auditService.entries()"
+  emptyTitle="Todavía no hay actividad registrada."
+  searchPlaceholder="Buscar por usuario, acción…"
+/>

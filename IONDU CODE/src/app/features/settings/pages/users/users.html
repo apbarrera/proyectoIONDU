@@ -1,0 +1,45 @@
+<app-page-header
+  title="Usuarios"
+  subtitle="Administra quién puede acceder a IONDU y con qué rol."
+  [breadcrumb]="[{ label: 'Configuración', link: '/settings/company' }, { label: 'Usuarios' }]"
+>
+  <app-button (clicked)="openCreate()">+ Nuevo usuario</app-button>
+</app-page-header>
+
+<app-data-table
+  [columns]="columns"
+  [rows]="userDirectory.users()"
+  [clickableRows]="true"
+  emptyTitle="Todavía no hay usuarios registrados."
+  searchPlaceholder="Buscar por nombre o correo…"
+  (rowClick)="openEdit($event)"
+/>
+
+<app-modal [open]="formOpen()" [title]="editingId() ? 'Editar usuario' : 'Nuevo usuario'" size="md" (closed)="close()">
+  <form [formGroup]="form">
+    <app-form-field label="Nombre completo" required>
+      <input formControlName="fullName" />
+    </app-form-field>
+    <app-form-field label="Correo" required>
+      <input type="email" formControlName="email" [readOnly]="!!editingId()" />
+    </app-form-field>
+    <app-form-field label="Rol" required>
+      <select formControlName="role">
+        <option value="admin">Administrador</option>
+        <option value="operator">Usuario operativo</option>
+      </select>
+    </app-form-field>
+  </form>
+
+  <div modal-footer>
+    @if (editingId(); as id) {
+      @if (userDirectory.users().find((u) => u.id === id); as editingUser) {
+        <app-button variant="ghost" (clicked)="toggleActive(editingUser)">
+          {{ editingUser.active ? 'Desactivar' : 'Activar' }}
+        </app-button>
+      }
+    }
+    <app-button variant="secondary" (clicked)="close()">Cancelar</app-button>
+    <app-button (clicked)="save()">Guardar</app-button>
+  </div>
+</app-modal>

@@ -7,7 +7,7 @@ PWA para PyMEs ecuatorianas: facturación electrónica, ventas, gastos, inventar
 | Carpeta / archivo | Contenido |
 |---|---|
 | `frontend/` | Aplicación Angular (PWA) con su `Dockerfile` y configuración de Nginx. |
-| `backend/` | API y worker en Python/FastAPI (pendiente). |
+| `backend/` | API (FastAPI) y worker en Python, una sola imagen Docker. Expone `/api/health`. |
 | `docs/` | Documentación del proyecto (ver abajo). |
 | `docker-compose.yml` | Define los servicios; es el que usa el despliegue. |
 | `docker-compose.override.yml` | Solo desarrollo local: publica `http://localhost:8080`. |

@@ -4,7 +4,15 @@ Para quien administra el servidor (el cliente). La idea es simple: **el sistema 
 
 ## Estado actual
 
-Hoy solo existe el **frontend** (Angular PWA con datos de ejemplo, sin backend). El `docker-compose.yml` levanta ese único servicio, `web`. Cuando exista el backend se agregan `api` y `worker` (ver "Siguientes pasos").
+El `docker-compose.yml` levanta tres servicios:
+
+| Servicio | Qué es | Público |
+|---|---|---|
+| `web` | Angular PWA servida por Nginx. Reenvía `/api/*` a `api`. | Sí (único con dominio) |
+| `api` | FastAPI con `/api/health`. Todavía sin lógica de negocio ni base de datos. | No |
+| `worker` | Proceso periódico (por ahora solo el latido que usa su healthcheck). | No |
+
+El frontend sigue usando datos de ejemplo (*mock*): aún no está conectado a la API.
 
 ## Requisitos del servidor
 
@@ -53,11 +61,11 @@ Plantilla en [`.env.example`](../.env.example). **Nunca** se suben al repositori
 - Reenvío de `/api/*` al contenedor `api` por la red interna (mismo origen: sin CORS).
 - Cabeceras de seguridad y healthcheck en `/healthz`.
 
-## Siguientes pasos (cuando exista el backend)
+## Siguientes pasos
 
-1. Agregar `backend/` con su Dockerfile (una sola imagen para la API y el worker).
-2. Agregar los servicios `api` y `worker` al `docker-compose.yml` y las variables de Supabase, SRI, IA y correo al `.env.example`.
-3. Crear `environment.prod.ts` con `apiUrl: '/api'` y conectar los servicios de Angular (hoy son *mock*).
+1. Agregar al `.env.example` las variables del SRI, IA y correo, cada una en su sprint.
+2. Crear `environment.prod.ts` con `apiUrl: '/api'` y conectar los servicios de Angular (hoy son *mock*).
+3. Esquema de base de datos con migraciones, y Supabase Auth.
 4. Conectar a Supabase por el **Session Pooler** (`*.pooler.supabase.com:5432`): la conexión directa es solo IPv6 y Docker en un VPS sale normalmente por IPv4.
 5. Guardar los `.p12` cifrados (AES-GCM) en la base o en Supabase Storage: así ningún contenedor necesita volúmenes.
 

@@ -25,8 +25,8 @@ export const NAV_ITEMS: NavItem[] = [
     link: '/sales',
     roles: BOTH,
     children: [
-      { label: 'Nueva venta', link: '/sales/new' },
       { label: 'Historial de ventas', link: '/sales/history' },
+      { label: 'Nueva venta', link: '/sales/new' },
     ],
   },
   {
@@ -35,8 +35,8 @@ export const NAV_ITEMS: NavItem[] = [
     link: '/billing',
     roles: BOTH,
     children: [
-      { label: 'Nueva factura', link: '/billing/new' },
       { label: 'Facturas emitidas', link: '/billing/history' },
+      { label: 'Nueva factura', link: '/billing/new' },
     ],
   },
   {
@@ -45,8 +45,8 @@ export const NAV_ITEMS: NavItem[] = [
     link: '/expenses',
     roles: BOTH,
     children: [
-      { label: 'Registrar gasto', link: '/expenses/new' },
       { label: 'Historial', link: '/expenses/history' },
+      { label: 'Registrar gasto', link: '/expenses/new' },
       { label: 'Facturas recibidas', link: '/expenses/email-drafts' },
     ],
   },

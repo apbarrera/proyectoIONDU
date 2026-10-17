@@ -85,3 +85,40 @@ a {
 
 // Breakpoints (mobile-first): use as @media (min-width: $bp-tablet) via CSS custom media is not
 // supported broadly, so components use raw px consistently: 640 / 1024 / 1280.
+
+// Transición entre páginas (View Transitions API, la activa withViewTransitions() del router).
+// Solo el contenido (page) se anima: la página anterior se desvanece rápido y la nueva
+// entra con un leve ascenso. En navegadores sin soporte el cambio es inmediato.
+::view-transition-group(root),
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-old(page) {
+  animation: page-out 120ms ease-in both;
+}
+
+::view-transition-new(page) {
+  animation: page-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes page-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(page),
+  ::view-transition-new(page) {
+    animation: none;
+  }
+}

@@ -22,8 +22,11 @@ export const appConfig: ApplicationConfig = {
       // contexto de apilamiento que deja los modales por debajo de la cabecera.
       onViewTransitionCreated: ({ transition }) => {
         const root = document.documentElement;
+        const done = () => root.classList.remove('is-page-transitioning');
         root.classList.add('is-page-transitioning');
-        transition.finished.finally(() => root.classList.remove('is-page-transitioning'));
+        // Si otra navegación interrumpe esta, la transición se descarta con un error esperado:
+        // se maneja aquí para que no aparezca como promesa rechazada sin capturar.
+        transition.finished.then(done, done);
       },
     })),
     provideHttpClient(withInterceptors([authInterceptor, loadingInterceptor, errorInterceptor])),

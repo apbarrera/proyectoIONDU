@@ -34,9 +34,21 @@
         </thead>
         <tbody>
           @for (row of pagedRows(); track trackBy()(row)) {
-            <tr [class.data-table__row--clickable]="clickableRows()" (click)="onRowClick(row)">
+            <tr
+              [class.data-table__row--clickable]="clickableRows()"
+              [attr.tabindex]="clickableRows() ? 0 : null"
+              (click)="onRowClick(row)"
+              (keydown.enter)="onRowClick(row)"
+              (keydown.space)="onRowClick(row); $event.preventDefault()"
+            >
               @for (col of columns(); track col.key) {
-                <td [style.text-align]="col.align ?? 'left'">{{ col.cell(row) }}</td>
+                <td [style.text-align]="col.align ?? 'left'">
+                  @if (col.badge?.(row); as badge) {
+                    <app-status-badge [label]="badge.label" [tone]="badge.tone" />
+                  } @else {
+                    {{ col.cell(row) }}
+                  }
+                </td>
               }
             </tr>
           }

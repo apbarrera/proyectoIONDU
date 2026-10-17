@@ -1,9 +1,18 @@
 @if (open()) {
   <div class="modal-backdrop" (click)="onBackdropClick()">
-    <div class="modal" [class]="'modal--' + size()" (click)="$event.stopPropagation()">
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      [attr.aria-labelledby]="title() ? titleId : null"
+      [class]="'modal--' + size()"
+      (click)="$event.stopPropagation()"
+      (keydown)="onKeydown($event)"
+    >
       @if (title()) {
         <header class="modal__header">
-          <h2 class="modal__title">{{ title() }}</h2>
+          <h2 class="modal__title" [id]="titleId">{{ title() }}</h2>
           <button type="button" class="modal__close" aria-label="Cerrar" (click)="closed.emit()"><app-icon name="close" [size]="20" /></button>
         </header>
       }

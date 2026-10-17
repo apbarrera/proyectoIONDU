@@ -73,6 +73,17 @@ tbody tr:hover {
 
 .data-table__row--clickable {
   cursor: pointer;
+
+  &:hover {
+    background: var(--color-surface-sunken);
+  }
+
+  // Las filas son accesibles por teclado: foco visible dentro de la propia fila.
+  &:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+    box-shadow: none;
+  }
 }
 
 .data-table__pagination {

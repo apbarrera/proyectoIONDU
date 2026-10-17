@@ -4,18 +4,22 @@ import { PageRequest } from '../../../core/models/pagination.model';
 import { Loader } from '../loader/loader';
 import { EmptyState } from '../empty-state/empty-state';
 import { Icon } from '../icon/icon';
+import { BadgeTone, StatusBadge } from '../status-badge/status-badge';
 
 export interface DataTableColumn<T> {
   key: string;
   header: string;
+  /** Texto de la celda; también se usa para buscar y ordenar. */
   cell: (row: T) => string;
+  /** Si devuelve un valor, la celda se muestra como etiqueta de estado en vez de texto plano. */
+  badge?: (row: T) => { label: string; tone: BadgeTone } | null;
   sortable?: boolean;
   align?: 'left' | 'right' | 'center';
 }
 
 @Component({
   selector: 'app-data-table',
-  imports: [FormsModule, Loader, EmptyState, Icon],
+  imports: [FormsModule, Loader, EmptyState, Icon, StatusBadge],
   templateUrl: './data-table.html',
   styleUrl: './data-table.scss',
 })

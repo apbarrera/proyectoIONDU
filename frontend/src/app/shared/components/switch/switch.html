@@ -1,0 +1,18 @@
+<button
+  type="button"
+  class="switch"
+  role="switch"
+  [attr.aria-checked]="checked()"
+  [disabled]="disabled()"
+  (click)="toggle()"
+>
+  <span class="switch__track" [class.switch__track--on]="checked()" aria-hidden="true">
+    <span class="switch__thumb"></span>
+  </span>
+  <span class="switch__text">
+    <span class="switch__label">{{ label() }}</span>
+    @if (description()) {
+      <span class="switch__description">{{ description() }}</span>
+    }
+  </span>
+</button>

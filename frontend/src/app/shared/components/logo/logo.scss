@@ -1,0 +1,11 @@
+:host {
+  display: inline-flex;
+  flex-shrink: 0;
+  line-height: 0;
+  color: var(--color-text-primary);
+}
+
+svg {
+  width: var(--logo-size, 32px);
+  height: var(--logo-size, 32px);
+}

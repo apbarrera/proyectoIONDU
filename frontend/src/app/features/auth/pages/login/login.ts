@@ -5,11 +5,12 @@ import { AuthService } from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { Button } from '../../../../shared/components/button/button';
 import { FormField } from '../../../../shared/components/form-field/form-field';
+import { Logo } from '../../../../shared/components/logo/logo';
 import { Modal } from '../../../../shared/components/modal/modal';
 
 @Component({
   selector: 'app-login',
-  imports: [ReactiveFormsModule, Button, FormField, Modal],
+  imports: [ReactiveFormsModule, Button, FormField, Modal, Logo],
   templateUrl: './login.html',
   styleUrl: './login.scss',
 })

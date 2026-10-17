@@ -3,6 +3,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
 import { Icon } from '../../../shared/components/icon/icon';
+import { Logo } from '../../../shared/components/logo/logo';
 import { AuthService } from '../../services/auth.service';
 import { StorageService } from '../../services/storage.service';
 import { NAV_ITEMS, NavItem } from './nav-items.const';
@@ -25,7 +26,7 @@ const clampWidth = (value: number): number => Math.min(SIDEBAR_MAX, Math.max(SID
 
 @Component({
   selector: 'app-sidebar',
-  imports: [RouterLink, RouterLinkActive, Icon],
+  imports: [RouterLink, RouterLinkActive, Icon, Logo],
   templateUrl: './sidebar.html',
   styleUrl: './sidebar.scss',
   host: {

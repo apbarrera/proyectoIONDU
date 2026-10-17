@@ -1,9 +1,11 @@
 import { Expense } from '../features/expenses/models/expense.model';
+import { daysAgo } from './seed-dates.util';
+import { EXPENSES_HISTORY_MOCK } from './expenses-history.mock';
 
-export const EXPENSES_MOCK: Expense[] = [
+const BASE_EXPENSES: Expense[] = [
   {
     id: 'exp-001',
-    date: '2026-08-05T10:00:00.000Z',
+    date: daysAgo(4, 10),
     category: 'Insumos',
     providerName: 'Molinos del Valle S.A.',
     providerRuc: '1790012345001',
@@ -17,7 +19,7 @@ export const EXPENSES_MOCK: Expense[] = [
   },
   {
     id: 'exp-002',
-    date: '2026-08-06T16:20:00.000Z',
+    date: daysAgo(3, 16),
     category: 'Servicios',
     providerName: 'CNEL Empresa Eléctrica',
     providerRuc: '1790654321001',
@@ -25,8 +27,10 @@ export const EXPENSES_MOCK: Expense[] = [
     ivaAmount: 0,
     total: 64.2,
     paymentMethod: 'transferencia',
-    description: 'Planilla eléctrica del local, agosto 2026',
+    description: 'Planilla eléctrica del local',
     sourceType: 'manual',
     createdBy: 'María Fernanda Salazar',
   },
 ];
+
+export const EXPENSES_MOCK: Expense[] = [...BASE_EXPENSES, ...EXPENSES_HISTORY_MOCK];

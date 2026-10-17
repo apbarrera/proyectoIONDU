@@ -1,11 +1,13 @@
 import { Sale } from '../features/sales/models/sale.model';
 import { PRODUCT_IDS } from './seed-ids.const';
+import { daysAgo } from './seed-dates.util';
+import { SALES_HISTORY_MOCK } from './sales-history.mock';
 
-export const SALES_MOCK: Sale[] = [
+const BASE_SALES: Sale[] = [
   {
     id: 'sale-001',
     folio: '000123',
-    date: '2026-08-07T15:40:00.000Z',
+    date: daysAgo(3, 15),
     customerName: 'Consumidor Final',
     items: [
       {
@@ -26,7 +28,7 @@ export const SALES_MOCK: Sale[] = [
   {
     id: 'sale-002',
     folio: '000124',
-    date: '2026-08-08T10:15:00.000Z',
+    date: daysAgo(2, 10),
     customerName: 'Cafetería Buen Día',
     items: [
       {
@@ -52,3 +54,5 @@ export const SALES_MOCK: Sale[] = [
     createdBy: 'Juan Carlos Pérez',
   },
 ];
+
+export const SALES_MOCK: Sale[] = [...BASE_SALES, ...SALES_HISTORY_MOCK];

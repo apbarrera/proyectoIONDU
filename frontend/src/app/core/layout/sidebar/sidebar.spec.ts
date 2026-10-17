@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
+import { NavItem } from './nav-items.const';
 import { SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN, Sidebar } from './sidebar';
 
 const key = (name: string) => new KeyboardEvent('keydown', { key: name });
@@ -56,6 +57,20 @@ describe('Sidebar', () => {
     await fixture.whenStable();
 
     const saved = JSON.parse(localStorage.getItem('iondu-sidebar') ?? '{}');
-    expect(saved).toEqual({ collapsed: true, width: SIDEBAR_MAX });
+    expect(saved).toEqual({ collapsed: true, width: SIDEBAR_MAX, open: [] });
+  });
+
+  it('permite dejar varios grupos abiertos a la vez y cerrarlos por separado', () => {
+    const facturacion = { link: '/billing' } as NavItem;
+    const gastos = { link: '/expenses' } as NavItem;
+
+    component.toggleGroup(facturacion);
+    component.toggleGroup(gastos);
+    expect(component.isOpen(facturacion)).toBe(true);
+    expect(component.isOpen(gastos)).toBe(true);
+
+    component.toggleGroup(facturacion);
+    expect(component.isOpen(facturacion)).toBe(false);
+    expect(component.isOpen(gastos)).toBe(true);
   });
 });

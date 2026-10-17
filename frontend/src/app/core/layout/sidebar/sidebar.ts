@@ -17,6 +17,8 @@ const KEY_STEP = 16;
 interface SidebarPrefs {
   collapsed: boolean;
   width: number;
+  /** Enlaces de los grupos que el usuario dejó abiertos. */
+  open?: string[];
 }
 
 const clampWidth = (value: number): number => Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, value));
@@ -44,7 +46,8 @@ export class Sidebar {
   collapsed = signal(this.prefs?.collapsed ?? false);
   width = signal(clampWidth(this.prefs?.width ?? SIDEBAR_DEFAULT));
   resizing = signal(false);
-  openGroup = signal<string | null>(null);
+  /** Los grupos son independientes: se pueden dejar varios abiertos a la vez. */
+  openGroups = signal<string[]>(this.prefs?.open ?? []);
 
   hostWidth = computed(() => (this.collapsed() ? SIDEBAR_COLLAPSED : this.width()));
 
@@ -70,29 +73,34 @@ export class Sidebar {
   });
 
   constructor() {
-    // Acordeón: al navegar se abre únicamente el grupo al que pertenece la ruta actual.
+    // Al navegar se abre el grupo de la ruta actual, sin cerrar los que ya estaban abiertos.
     effect(() => {
       const url = this.currentUrl();
       const group = this.visibleItems().find(
         (item) => item.children?.length && url.startsWith(this.sectionOf(item)),
       );
-      this.openGroup.set(group?.link ?? null);
+      if (group) {
+        this.openGroups.update((open) => (open.includes(group.link) ? open : [...open, group.link]));
+      }
     });
 
     effect(() => {
       this.storage.set<SidebarPrefs>(STORAGE_KEY, {
         collapsed: this.collapsed(),
         width: this.width(),
+        open: this.openGroups(),
       });
     });
   }
 
   isOpen(item: NavItem): boolean {
-    return !this.collapsed() && this.openGroup() === item.link;
+    return !this.collapsed() && this.openGroups().includes(item.link);
   }
 
   toggleGroup(item: NavItem): void {
-    this.openGroup.update((current) => (current === item.link ? null : item.link));
+    this.openGroups.update((open) =>
+      open.includes(item.link) ? open.filter((link) => link !== item.link) : [...open, item.link],
+    );
   }
 
   toggleCollapsed(): void {

@@ -32,6 +32,7 @@ npm start
 ## Documentación
 
 - [`docs/ESTADO.md`](docs/ESTADO.md): qué está hecho, qué falta y los siguientes pasos (empieza aquí).
+- [`docs/DECISIONES.md`](docs/DECISIONES.md): decisiones tomadas y por qué (Docker, VPS con Coolify, Supabase, diseño…).
 - [`docs/REQUISITOS.md`](docs/REQUISITOS.md): requerimientos funcionales y no funcionales (corregidos).
 - [`docs/PRESUPUESTO.md`](docs/PRESUPUESTO.md): presupuesto de infraestructura y servicios (corregido).
 - [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md): guía de despliegue para quien administra el servidor.

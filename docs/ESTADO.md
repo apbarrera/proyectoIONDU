@@ -1,7 +1,7 @@
 # IONDU · Estado del proyecto y siguientes pasos
 
 > Resumen de traspaso. Última actualización: 17 de octubre de 2026 (tras unir Ventas con Facturación y la auditoría de accesibilidad).
-> Documentos relacionados: [`REQUISITOS.md`](REQUISITOS.md) · [`PRESUPUESTO.md`](PRESUPUESTO.md) · [`DESPLIEGUE.md`](DESPLIEGUE.md) · [`CORRECCIONES_PDF.md`](CORRECCIONES_PDF.md)
+> Documentos relacionados: [`DECISIONES.md`](DECISIONES.md) (el porqué de cada decisión) · [`REQUISITOS.md`](REQUISITOS.md) · [`PRESUPUESTO.md`](PRESUPUESTO.md) · [`DESPLIEGUE.md`](DESPLIEGUE.md) · [`CORRECCIONES_PDF.md`](CORRECCIONES_PDF.md)
 
 ## 1. Qué está hecho
 

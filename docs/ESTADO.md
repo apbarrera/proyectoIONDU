@@ -1,6 +1,6 @@
 # IONDU · Estado del proyecto y siguientes pasos
 
-> Resumen de traspaso. Última actualización: 17 de octubre de 2026.
+> Resumen de traspaso. Última actualización: 17 de octubre de 2026 (tras unir Ventas con Facturación y la auditoría de accesibilidad).
 > Documentos relacionados: [`REQUISITOS.md`](REQUISITOS.md) · [`PRESUPUESTO.md`](PRESUPUESTO.md) · [`DESPLIEGUE.md`](DESPLIEGUE.md) · [`CORRECCIONES_PDF.md`](CORRECCIONES_PDF.md)
 
 ## 1. Qué está hecho
@@ -26,7 +26,11 @@
 - **Menú lateral:** retráctil a columna de íconos, redimensionable (arrastrando el borde o con el teclado), con varias secciones abiertas a la vez, recordando su estado. Cada sección muestra primero la pantalla a la que redirige.
 - **Dashboard:** rejilla alineada, tarjetas de igual altura, gráfico de ingresos con ejes y datos de ejemplo relativos a la fecha actual.
 - **Transición entre páginas:** la anterior desaparece al instante y la nueva se desvanece sobre un lienzo vacío.
-- 54 pruebas del frontend.
+- **Ventas y facturación unidas:** un solo módulo. Cada venta nueva lleva el interruptor "Emitir factura electrónica" **activado por defecto**; el historial muestra el estado de la factura (Autorizada, En proceso, Rechazada o Sin factura) con filtros, y el detalle permite emitir o reintentar (corrigiendo la cédula o el RUC). Las rutas antiguas `/billing/*` redirigen a Ventas.
+- **Accesibilidad:** auditadas con Lighthouse 19 pantallas en escritorio, en tema claro y oscuro, y las principales en móvil: **100 en todas**. Incluye etiquetas vinculadas a sus campos, contraste, orden de encabezados, modales con foco atrapado y filas de tabla operables con teclado.
+- **Móvil:** probado a 320, 390 y 768 px sin desborde horizontal. Las tablas se ven como tarjetas, y el menú lateral es un cajón que, cerrado, no recibe foco y se cierra con Escape.
+- **Cierre de sesión:** limpia `localStorage`, `sessionStorage` y la caché del service worker (regla de `CLAUDE.md`).
+- 72 pruebas del frontend.
 
 ### Documentación
 - Requerimientos y presupuesto corregidos en Markdown (el presupuesto baja de $96,93 a $60,93 al mes).
@@ -40,13 +44,12 @@
 2. Correr `/impeccable init` una vez en Claude Code, y decidir si se mantiene el hook que revisa la interfaz al editar.
 3. Reemplazar el logo vectorizado cuando exista el SVG original.
 
-### B. Frontend
-1. **Fase 3:** unir Ventas y Facturación en un solo módulo. Al registrar una venta, un interruptor **"Emitir factura electrónica" va activado por defecto**; el historial muestra el estado de la factura de cada venta. Desaparece el menú Facturación (las rutas `/billing` hoy siguen separadas).
-2. **Fase 4:** revisar visualmente el resto de pantallas (ventas, gastos, inventario, agente IA, configuración, login) y probarlas en móvil.
-3. Auditoría de accesibilidad y pulido final con `impeccable`.
-4. Verificar que al cerrar sesión se limpien `localStorage` y la caché del service worker (regla de `CLAUDE.md`; no se ha comprobado que esté implementada).
-5. Probar la instalación de la PWA y el service worker en Chrome.
-
+### B. Frontend (lo que queda)
+1. Revisión visual, pantalla por pantalla y en móvil, de Gastos, Inventario, Agente IA y Configuración. Se comprobó que no se desbordan y que cumplen accesibilidad, pero falta revisar su aspecto con ojo de diseño.
+2. Pulido con `impeccable` (`/impeccable init` y luego `audit` y `polish`).
+3. Probar la instalación de la PWA y el service worker en Chrome.
+4. Cuando exista el backend: reemplazar los datos *mock* y la emisión simulada de facturas (`BillingAdapterService`) por llamadas reales a `/api/...`.
+5. Validaciones de negocio de la factura (por ejemplo, límites del SRI para consumidor final) se harán en el backend en el Sprint 2.
 ### C. Sprint 1: lo que bloquea el resto
 1. Crear el proyecto en **Supabase** (plan gratis para desarrollo). Pasar `SUPABASE_URL` y la dirección del *Session Pooler* (puerto 5432). **Las contraseñas y las claves no se pegan en el chat ni van al repositorio.**
 2. Esquema multi-tenant con migraciones Alembic (`empresa`, `usuario_empresa`, `rol`, …) y RLS por `id_empresa`.

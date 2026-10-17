@@ -1,5 +1,5 @@
 <div class="error-state">
-  <span class="error-state__icon" aria-hidden="true">⚠️</span>
+  <app-icon class="error-state__icon" name="warning" [size]="36" />
   <p class="error-state__title">{{ title() }}</p>
   @if (description()) {
     <p class="error-state__description">{{ description() }}</p>

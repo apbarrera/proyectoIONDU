@@ -37,10 +37,10 @@
 <app-card title="Firma electrónica">
   <p class="company__signature-status">
     @if (tenant().electronicSignature.configured) {
-      ✅ Firma configurada — {{ tenant().electronicSignature.fileName }} (vence
+      <app-icon name="check-circle" [size]="16" /> Firma configurada — {{ tenant().electronicSignature.fileName }} (vence
       {{ tenant().electronicSignature.expiresAt }})
     } @else {
-      ⚠️ No hay una firma electrónica configurada.
+      <app-icon name="warning" [size]="16" /> No hay una firma electrónica configurada.
     }
   </p>
   <p class="company__signature-note">

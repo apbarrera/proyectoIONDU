@@ -56,7 +56,7 @@
       <p class="billing-detail__key">Clave de acceso: {{ invoice.claveAcceso }}</p>
     }
     @if (invoice.rejectionReason) {
-      <p class="billing-detail__rejection">⚠️ {{ invoice.rejectionReason }}</p>
+      <p class="billing-detail__rejection"><app-icon name="warning" [size]="16" /> {{ invoice.rejectionReason }}</p>
     }
 
     <h4 class="billing-detail__subtitle">Historial de estados</h4>

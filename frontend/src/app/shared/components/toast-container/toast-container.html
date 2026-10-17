@@ -1,10 +1,10 @@
 <div class="toast-container" role="status" aria-live="polite">
   @for (toast of toastService.toasts(); track toast.id) {
     <div class="toast" [class]="'toast--' + toast.type">
-      <span class="toast__icon" aria-hidden="true">{{ iconFor(toast.type) }}</span>
+      <app-icon class="toast__icon" [name]="iconFor(toast.type)" [size]="20" />
       <span class="toast__message">{{ toast.message }}</span>
       <button type="button" class="toast__close" aria-label="Cerrar" (click)="toastService.dismiss(toast.id)">
-        ✕
+        <app-icon name="close" [size]="16" />
       </button>
     </div>
   }

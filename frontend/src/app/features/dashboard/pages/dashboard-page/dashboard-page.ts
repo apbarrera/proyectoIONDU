@@ -9,10 +9,11 @@ import { Card } from '../../../../shared/components/card/card';
 import { EmptyState } from '../../../../shared/components/empty-state/empty-state';
 import { KpiGrid } from '../../components/kpi-grid/kpi-grid';
 import { SalesChart } from '../../components/sales-chart/sales-chart';
+import { Icon } from '../../../../shared/components/icon/icon';
 
 @Component({
   selector: 'app-dashboard-page',
-  imports: [RouterLink, PageHeader, PeriodSelector, Card, EmptyState, KpiGrid, SalesChart],
+  imports: [RouterLink, PageHeader, PeriodSelector, Card, EmptyState, KpiGrid, SalesChart, Icon],
   templateUrl: './dashboard-page.html',
   styleUrl: './dashboard-page.scss',
 })

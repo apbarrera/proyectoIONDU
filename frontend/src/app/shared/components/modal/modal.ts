@@ -1,8 +1,9 @@
 import { Component, HostListener, input, output } from '@angular/core';
+import { Icon } from '../icon/icon';
 
 @Component({
   selector: 'app-modal',
-  imports: [],
+  imports: [Icon],
   templateUrl: './modal.html',
   styleUrl: './modal.scss',
 })

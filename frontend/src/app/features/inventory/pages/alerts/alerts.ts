@@ -4,10 +4,11 @@ import { ProductsService } from '../../services/products.service';
 import { PageHeader } from '../../../../shared/components/page-header/page-header';
 import { EmptyState } from '../../../../shared/components/empty-state/empty-state';
 import { StatusBadge } from '../../../../shared/components/status-badge/status-badge';
+import { Icon } from '../../../../shared/components/icon/icon';
 
 @Component({
   selector: 'app-alerts',
-  imports: [RouterLink, PageHeader, EmptyState, StatusBadge],
+  imports: [RouterLink, PageHeader, EmptyState, StatusBadge, Icon],
   templateUrl: './alerts.html',
   styleUrl: './alerts.scss',
 })

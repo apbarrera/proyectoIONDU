@@ -51,10 +51,10 @@
       />
     }
     <label class="ai-chat__icon-btn" aria-label="Subir imagen">
-      📷
+      <app-icon name="camera" [size]="20" />
       <input type="file" accept="image/*" hidden (change)="uploadImage($event)" />
     </label>
-    <button type="button" class="ai-chat__icon-btn" aria-label="Grabar voz" (click)="toggleRecording()">🎤</button>
+    <button type="button" class="ai-chat__icon-btn" aria-label="Grabar voz" (click)="toggleRecording()"><app-icon name="mic" [size]="20" /></button>
     <app-button [disabled]="!draft().trim()" [loading]="sending()" (clicked)="send()">Enviar</app-button>
   </div>
 </div>

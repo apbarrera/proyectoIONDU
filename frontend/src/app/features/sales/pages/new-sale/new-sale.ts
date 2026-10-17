@@ -10,6 +10,7 @@ import { PageHeader } from '../../../../shared/components/page-header/page-heade
 import { Button } from '../../../../shared/components/button/button';
 import { Card } from '../../../../shared/components/card/card';
 import { EmptyState } from '../../../../shared/components/empty-state/empty-state';
+import { Icon } from '../../../../shared/components/icon/icon';
 
 interface CartLine {
   productId: string;
@@ -21,7 +22,7 @@ interface CartLine {
 
 @Component({
   selector: 'app-new-sale',
-  imports: [FormsModule, PageHeader, Button, Card, EmptyState],
+  imports: [FormsModule, PageHeader, Button, Card, EmptyState, Icon],
   templateUrl: './new-sale.html',
   styleUrl: './new-sale.scss',
 })

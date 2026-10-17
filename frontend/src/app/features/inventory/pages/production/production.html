@@ -53,7 +53,7 @@
       <p class="production__cost">Costo estimado: <strong>${{ estimatedCost().toFixed(2) }}</strong></p>
 
       @if (!canProduce()) {
-        <p class="production__warning">⚠️ No hay stock suficiente para fabricar esta cantidad.</p>
+        <p class="production__warning"><app-icon name="warning" [size]="16" /> No hay stock suficiente para fabricar esta cantidad.</p>
       }
 
       <app-button [disabled]="!canProduce()" [loading]="submitting()" (clicked)="confirmProduction()">

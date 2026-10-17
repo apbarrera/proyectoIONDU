@@ -4,7 +4,7 @@
 />
 
 @if (recommendationsService.recommendations().length === 0) {
-  <app-empty-state icon="✨" title="No hay recomendaciones por ahora." description="IONDU seguirá analizando tu negocio y te avisará cuando detecte algo relevante." />
+  <app-empty-state icon="ai" title="No hay recomendaciones por ahora." description="IONDU seguirá analizando tu negocio y te avisará cuando detecte algo relevante." />
 } @else {
   <div class="recommendations__list">
     @for (rec of recommendationsService.recommendations(); track rec.id) {

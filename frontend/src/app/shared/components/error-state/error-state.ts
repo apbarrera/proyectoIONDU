@@ -1,9 +1,10 @@
 import { Component, input, output } from '@angular/core';
 import { Button } from '../button/button';
+import { Icon } from '../icon/icon';
 
 @Component({
   selector: 'app-error-state',
-  imports: [Button],
+  imports: [Button, Icon],
   templateUrl: './error-state.html',
   styleUrl: './error-state.scss',
 })

@@ -12,7 +12,7 @@
   @if (loading()) {
     <app-loader />
   } @else if (filteredRows().length === 0) {
-    <app-empty-state icon="🔍" [title]="emptyTitle()" />
+    <app-empty-state icon="search" [title]="emptyTitle()" />
   } @else {
     <div class="data-table__scroll">
       <table>
@@ -26,7 +26,7 @@
               >
                 {{ col.header }}
                 @if (col.sortable && sortField() === col.key) {
-                  <span class="data-table__sort-icon">{{ sortDir() === 'asc' ? '▲' : '▼' }}</span>
+                  <span class="data-table__sort-icon"><app-icon [name]="sortDir() === 'asc' ? 'caret-up' : 'caret-down'" [size]="14" /></span>
                 }
               </th>
             }
@@ -46,9 +46,9 @@
 
     @if (totalPages() > 1) {
       <div class="data-table__pagination">
-        <button type="button" [disabled]="page() === 1" (click)="goToPage(page() - 1)">←</button>
+        <button type="button" [disabled]="page() === 1" (click)="goToPage(page() - 1)" aria-label="Página anterior"><app-icon name="caret-left" [size]="16" /></button>
         <span>Página {{ page() }} de {{ totalPages() }}</span>
-        <button type="button" [disabled]="page() === totalPages()" (click)="goToPage(page() + 1)">→</button>
+        <button type="button" [disabled]="page() === totalPages()" (click)="goToPage(page() + 1)" aria-label="Página siguiente"><app-icon name="caret-right" [size]="16" /></button>
       </div>
     }
   }

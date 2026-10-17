@@ -14,7 +14,7 @@
         [class.preferences__option--active]="themeService.preference() === option.value"
         (click)="themeService.setPreference(option.value)"
       >
-        <span class="preferences__icon">{{ option.icon }}</span>
+        <app-icon class="preferences__icon" [name]="option.icon" [size]="20" />
         <span>{{ option.label }}</span>
       </button>
     }

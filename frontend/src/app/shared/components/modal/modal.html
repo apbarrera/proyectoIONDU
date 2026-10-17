@@ -4,7 +4,7 @@
       @if (title()) {
         <header class="modal__header">
           <h2 class="modal__title">{{ title() }}</h2>
-          <button type="button" class="modal__close" aria-label="Cerrar" (click)="closed.emit()">✕</button>
+          <button type="button" class="modal__close" aria-label="Cerrar" (click)="closed.emit()"><app-icon name="close" [size]="20" /></button>
         </header>
       }
       <div class="modal__body">

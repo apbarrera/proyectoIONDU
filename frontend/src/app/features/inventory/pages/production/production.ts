@@ -6,10 +6,11 @@ import { PageHeader } from '../../../../shared/components/page-header/page-heade
 import { Button } from '../../../../shared/components/button/button';
 import { Card } from '../../../../shared/components/card/card';
 import { ToastService } from '../../../../core/services/toast.service';
+import { Icon } from '../../../../shared/components/icon/icon';
 
 @Component({
   selector: 'app-production',
-  imports: [FormsModule, PageHeader, Button, Card],
+  imports: [FormsModule, PageHeader, Button, Card, Icon],
   templateUrl: './production.html',
   styleUrl: './production.scss',
 })

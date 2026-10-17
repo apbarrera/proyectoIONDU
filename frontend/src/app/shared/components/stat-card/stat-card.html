@@ -2,7 +2,7 @@
   <div class="stat-card__top">
     <span class="stat-card__label">{{ label() }}</span>
     @if (icon()) {
-      <span class="stat-card__icon" aria-hidden="true">{{ icon() }}</span>
+      <app-icon class="stat-card__icon" [name]="icon()!" [size]="22" />
     }
   </div>
   <span class="stat-card__value">{{ value() }}</span>

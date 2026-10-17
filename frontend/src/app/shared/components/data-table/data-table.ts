@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { PageRequest } from '../../../core/models/pagination.model';
 import { Loader } from '../loader/loader';
 import { EmptyState } from '../empty-state/empty-state';
+import { Icon } from '../icon/icon';
 
 export interface DataTableColumn<T> {
   key: string;
@@ -14,7 +15,7 @@ export interface DataTableColumn<T> {
 
 @Component({
   selector: 'app-data-table',
-  imports: [FormsModule, Loader, EmptyState],
+  imports: [FormsModule, Loader, EmptyState, Icon],
   templateUrl: './data-table.html',
   styleUrl: './data-table.scss',
 })

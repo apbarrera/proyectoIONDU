@@ -5,7 +5,7 @@
 />
 
 @if (productsService.lowStockProducts().length === 0) {
-  <app-empty-state icon="✅" title="Todo tu inventario está por encima del mínimo." />
+  <app-empty-state icon="check-circle" title="Todo tu inventario está por encima del mínimo." />
 } @else {
   <div class="alerts__list">
     @for (product of productsService.lowStockProducts(); track product.id) {
@@ -20,7 +20,7 @@
           [label]="severityLabel(product.currentStock, product.minStock)"
           [tone]="severity(product.currentStock, product.minStock)"
         />
-        <a [routerLink]="['/inventory/products']" class="alerts__link">Ver producto →</a>
+        <a [routerLink]="['/inventory/products']" class="alerts__link">Ver producto <app-icon name="arrow-right" [size]="16" /></a>
       </div>
     }
   </div>

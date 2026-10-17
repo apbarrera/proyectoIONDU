@@ -6,7 +6,7 @@
   padding: var(--space-4);
   background:
     radial-gradient(circle at top left, rgba(124, 58, 237, 0.14), transparent 45%),
-    radial-gradient(circle at bottom right, rgba(22, 93, 223, 0.16), transparent 45%), var(--color-bg);
+    radial-gradient(circle at bottom right, rgba(106, 63, 217, 0.14), transparent 45%), var(--color-bg);
 }
 
 .login__card {
@@ -29,8 +29,8 @@
   height: 56px;
   margin: 0 auto var(--space-3);
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--brand-blue), var(--brand-purple));
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   font-weight: 800;
   display: flex;
   align-items: center;

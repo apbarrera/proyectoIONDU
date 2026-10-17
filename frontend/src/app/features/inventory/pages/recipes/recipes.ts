@@ -11,10 +11,11 @@ import { FormField } from '../../../../shared/components/form-field/form-field';
 import { EmptyState } from '../../../../shared/components/empty-state/empty-state';
 import { ConfirmDialogService } from '../../../../core/services/confirm-dialog.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { Icon } from '../../../../shared/components/icon/icon';
 
 @Component({
   selector: 'app-recipes',
-  imports: [ReactiveFormsModule, PageHeader, Button, Card, Modal, FormField, EmptyState],
+  imports: [ReactiveFormsModule, PageHeader, Button, Card, Modal, FormField, EmptyState, Icon],
   templateUrl: './recipes.html',
   styleUrl: './recipes.scss',
 })

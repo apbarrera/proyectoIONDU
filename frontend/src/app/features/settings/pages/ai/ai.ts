@@ -7,10 +7,11 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { PageHeader } from '../../../../shared/components/page-header/page-header';
 import { Button } from '../../../../shared/components/button/button';
 import { Card } from '../../../../shared/components/card/card';
+import { Icon } from '../../../../shared/components/icon/icon';
 
 @Component({
   selector: 'app-ai',
-  imports: [FormsModule, PageHeader, Button, Card],
+  imports: [FormsModule, PageHeader, Button, Card, Icon],
   templateUrl: './ai.html',
   styleUrl: './ai.scss',
 })

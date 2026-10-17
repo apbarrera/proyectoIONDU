@@ -5,7 +5,7 @@
 />
 
 @if (pending().length === 0) {
-  <app-empty-state icon="📬" title="No hay facturas nuevas por revisar." description="IONDU seguirá monitoreando tu correo automáticamente." />
+  <app-empty-state icon="mailbox" title="No hay facturas nuevas por revisar." description="IONDU seguirá monitoreando tu correo automáticamente." />
 } @else {
   <div class="email-drafts__list">
     @for (draft of pending(); track draft.id) {

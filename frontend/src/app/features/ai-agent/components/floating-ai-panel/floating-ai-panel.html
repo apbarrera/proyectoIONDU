@@ -1,12 +1,12 @@
 <button type="button" class="floating-ai-panel__toggle" (click)="toggle()" aria-label="Abrir Agente IA">
-  {{ open() ? '✕' : '🤖' }}
+  <app-icon [name]="open() ? 'close' : 'ai'" [size]="24" />
 </button>
 
 @if (open()) {
   <div class="floating-ai-panel__panel">
     <div class="floating-ai-panel__header">
       <span>Agente IA</span>
-      <a routerLink="/ai" (click)="open.set(false)">Abrir completo →</a>
+      <a routerLink="/ai" (click)="open.set(false)">Abrir completo <app-icon name="arrow-right" [size]="16" /></a>
     </div>
 
     <div class="floating-ai-panel__messages">

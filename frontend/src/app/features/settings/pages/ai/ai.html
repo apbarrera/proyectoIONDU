@@ -25,7 +25,7 @@
         <h4>Acciones permitidas</h4>
         <ul>
           @for (action of aiConfig.config().allowedActions; track action) {
-            <li>✅ {{ action }}</li>
+            <li><app-icon name="check-circle" [size]="16" /> {{ action }}</li>
           }
         </ul>
       </div>
@@ -33,7 +33,7 @@
         <h4>Acciones prohibidas</h4>
         <ul>
           @for (action of aiConfig.config().forbiddenActions; track action) {
-            <li>🚫 {{ action }}</li>
+            <li><app-icon name="blocked" [size]="16" /> {{ action }}</li>
           }
         </ul>
       </div>

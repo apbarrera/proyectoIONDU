@@ -8,6 +8,7 @@ import { Button } from '../../../../shared/components/button/button';
 import { DataTable, DataTableColumn } from '../../../../shared/components/data-table/data-table';
 import { StatusBadge, BadgeTone } from '../../../../shared/components/status-badge/status-badge';
 import { Modal } from '../../../../shared/components/modal/modal';
+import { Icon } from '../../../../shared/components/icon/icon';
 
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   borrador: 'Borrador',
@@ -27,7 +28,7 @@ export const INVOICE_STATUS_TONES: Record<InvoiceStatus, BadgeTone> = {
 
 @Component({
   selector: 'app-billing-history',
-  imports: [RouterLink, DatePipe, PageHeader, Button, DataTable, StatusBadge, Modal],
+  imports: [RouterLink, DatePipe, PageHeader, Button, DataTable, StatusBadge, Modal, Icon],
   templateUrl: './billing-history.html',
   styleUrl: './billing-history.scss',
 })

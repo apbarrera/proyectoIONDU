@@ -7,14 +7,14 @@
 </app-page-header>
 
 @if (recipesService.recipes().length === 0) {
-  <app-empty-state icon="📋" title="Todavía no tienes recetas." description="Crea tu primera receta para poder fabricar productos compuestos." />
+  <app-empty-state icon="recipe" title="Todavía no tienes recetas." description="Crea tu primera receta para poder fabricar productos compuestos." />
 } @else {
   <div class="recipes__grid">
     @for (recipe of recipesService.recipes(); track recipe.id) {
       <app-card [title]="recipe.name">
         <div card-actions>
           <button type="button" class="recipes__icon-btn" (click)="openEdit(recipe)" aria-label="Editar">✎</button>
-          <button type="button" class="recipes__icon-btn" (click)="deleteRecipe(recipe)" aria-label="Eliminar">🗑</button>
+          <button type="button" class="recipes__icon-btn" (click)="deleteRecipe(recipe)" aria-label="Eliminar"><app-icon name="trash" [size]="18" /></button>
         </div>
         <p class="recipes__description">{{ recipe.description }}</p>
         <p class="recipes__meta">
@@ -64,7 +64,7 @@
           </select>
           <input type="number" step="0.01" formControlName="quantity" placeholder="Cantidad" />
           <input formControlName="unit" placeholder="Unidad" />
-          <button type="button" class="recipes__icon-btn" (click)="removeIngredient(i)" aria-label="Quitar">✕</button>
+          <button type="button" class="recipes__icon-btn" (click)="removeIngredient(i)" aria-label="Quitar"><app-icon name="close" [size]="18" /></button>
         </div>
       }
     </div>

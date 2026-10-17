@@ -4,10 +4,11 @@ import { AiAgentService } from '../../services/ai-agent.service';
 import { PageHeader } from '../../../../shared/components/page-header/page-header';
 import { Button } from '../../../../shared/components/button/button';
 import { ProposalCard } from '../../components/proposal-card/proposal-card';
+import { Icon } from '../../../../shared/components/icon/icon';
 
 @Component({
   selector: 'app-ai-chat',
-  imports: [FormsModule, PageHeader, Button, ProposalCard],
+  imports: [FormsModule, PageHeader, Button, ProposalCard, Icon],
   templateUrl: './ai-chat.html',
   styleUrl: './ai-chat.scss',
 })

@@ -1,13 +1,13 @@
 <div class="kpi-grid">
-  <app-stat-card label="Ingresos" [value]="'$' + summary().income.toFixed(2)" icon="💰" />
-  <app-stat-card label="Gastos" [value]="'$' + summary().expenses.toFixed(2)" icon="💸" />
+  <app-stat-card label="Ingresos" [value]="'$' + summary().income.toFixed(2)" icon="income" />
+  <app-stat-card label="Gastos" [value]="'$' + summary().expenses.toFixed(2)" icon="expense" />
   <app-stat-card
     label="Utilidad"
     [value]="'$' + summary().profit.toFixed(2)"
-    icon="📈"
+    icon="profit"
     [trend]="summary().profit >= 0 ? 'up' : 'down'"
     [trendLabel]="summary().profit >= 0 ? 'Positiva' : 'Negativa'"
   />
-  <app-stat-card label="Ventas" [value]="summary().salesCount.toString()" icon="🛒" />
-  <app-stat-card label="Ticket promedio" [value]="'$' + summary().averageTicket.toFixed(2)" icon="🎟️" />
+  <app-stat-card label="Ventas" [value]="summary().salesCount.toString()" icon="cart" />
+  <app-stat-card label="Ticket promedio" [value]="'$' + summary().averageTicket.toFixed(2)" icon="ticket" />
 </div>

@@ -8,10 +8,11 @@ import { PageHeader } from '../../../../shared/components/page-header/page-heade
 import { Button } from '../../../../shared/components/button/button';
 import { Card } from '../../../../shared/components/card/card';
 import { FormField } from '../../../../shared/components/form-field/form-field';
+import { Icon } from '../../../../shared/components/icon/icon';
 
 @Component({
   selector: 'app-company',
-  imports: [ReactiveFormsModule, PageHeader, Button, Card, FormField],
+  imports: [ReactiveFormsModule, PageHeader, Button, Card, FormField, Icon],
   templateUrl: './company.html',
   styleUrl: './company.scss',
 })

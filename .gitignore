@@ -1,0 +1,15 @@
+# Secretos: nunca al repositorio
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.pem
+*.key
+
+# Sistema operativo / editores
+.DS_Store
+Thumbs.db
+
+# Paquetes de despliegue generados
+*.zip

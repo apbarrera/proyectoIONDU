@@ -1,0 +1,7 @@
+# Solo para desarrollo local: publica el puerto 8080 para abrir http://localhost:8080
+# Docker Compose carga este archivo automáticamente junto con docker-compose.yml.
+# En Coolify NO se usa (Coolify solo lee docker-compose.yml).
+services:
+  web:
+    ports:
+      - "8080:80"

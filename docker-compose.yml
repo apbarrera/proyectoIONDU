@@ -1,0 +1,34 @@
+# ============================================================
+# IONDU · docker-compose.yml
+# Funciona igual en local (docker compose up --build) y en Coolify
+# (Build Pack: Docker Compose, ruta /docker-compose.yml).
+#
+# Reglas:
+#  - NO usar "ports:" en producción: Docker se salta el firewall del host.
+#    Se usa "expose:"; el proxy inverso (Traefik/Coolify o el del cliente)
+#    enruta por dominio. Para local, ver docker-compose.override.yml.
+#  - Estado actual: solo frontend (la app corre con datos mock).
+#    Cuando exista el backend, se agregan los servicios "api" y "worker"
+#    (ver docs/DESPLIEGUE.md).
+# ============================================================
+
+services:
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        BUILD_CONFIGURATION: ${NG_BUILD_CONFIGURATION:-production}
+        APP_NAME: ${NG_APP_NAME:-iondu-app}
+    restart: unless-stopped
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128M

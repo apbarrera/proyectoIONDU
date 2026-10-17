@@ -1,0 +1,21 @@
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+.git
+.github
+.vscode
+.idea
+.env
+.env.*
+# Nunca meter certificados en la imagen
+*.p12
+*.pfx
+Dockerfile
+.dockerignore

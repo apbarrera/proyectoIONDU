@@ -73,4 +73,29 @@ describe('Sidebar', () => {
     expect(component.isOpen(facturacion)).toBe(false);
     expect(component.isOpen(gastos)).toBe(true);
   });
+
+  it('en móvil el cajón cerrado es inerte: no recibe foco ni lo leen los lectores de pantalla', () => {
+    component.isMobile.set(true);
+    fixture.componentRef.setInput('mobileOpen', false);
+    expect(component.inertWhenClosed()).toBe(true);
+
+    fixture.componentRef.setInput('mobileOpen', true);
+    expect(component.inertWhenClosed()).toBe(false);
+  });
+
+  it('en escritorio el menú nunca es inerte', () => {
+    component.isMobile.set(false);
+    fixture.componentRef.setInput('mobileOpen', false);
+    expect(component.inertWhenClosed()).toBe(false);
+  });
+
+  it('Escape cierra el cajón abierto en móvil', () => {
+    const closed = vi.fn();
+    component.linkClicked.subscribe(closed);
+    component.isMobile.set(true);
+    fixture.componentRef.setInput('mobileOpen', true);
+
+    component.onEscape();
+    expect(closed).toHaveBeenCalledTimes(1);
+  });
 });

@@ -1,4 +1,9 @@
-<aside class="sidebar" [class.sidebar--open]="mobileOpen()" aria-label="Navegación principal">
+<aside
+  class="sidebar"
+  [class.sidebar--open]="mobileOpen()"
+  [attr.inert]="inertWhenClosed() ? '' : null"
+  aria-label="Navegación principal"
+>
   <div class="sidebar__brand">
     <app-logo class="sidebar__logo" [size]="34" />
     <span class="sidebar__brand-name">IONDU</span>

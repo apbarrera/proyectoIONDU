@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import { Component, HostListener, computed, effect, inject, input, output, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
@@ -52,6 +52,12 @@ export class Sidebar {
 
   hostWidth = computed(() => (this.collapsed() ? SIDEBAR_COLLAPSED : this.width()));
 
+  // En tablet y móvil el menú es un cajón fuera de pantalla: mientras está cerrado se marca
+  // como inerte para que no reciba foco con el teclado ni aparezca para lectores de pantalla.
+  #mobileMedia = window.matchMedia('(max-width: 1024px)');
+  isMobile = signal(this.#mobileMedia.matches);
+  inertWhenClosed = computed(() => this.isMobile() && !this.mobileOpen());
+
   readonly min = SIDEBAR_MIN;
   readonly max = SIDEBAR_MAX;
 
@@ -74,6 +80,8 @@ export class Sidebar {
   });
 
   constructor() {
+    this.#mobileMedia.addEventListener('change', (e) => this.isMobile.set(e.matches));
+
     // Al navegar se abre el grupo de la ruta actual, sin cerrar los que ya estaban abiertos.
     effect(() => {
       const url = this.currentUrl();
@@ -110,6 +118,12 @@ export class Sidebar {
 
   onLinkClick(): void {
     this.linkClicked.emit();
+  }
+
+  /** Con el cajón abierto, Escape lo cierra. */
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.isMobile() && this.mobileOpen()) this.linkClicked.emit();
   }
 
   // ---- Redimensionado: arrastrar el borde derecho o usar el teclado ----

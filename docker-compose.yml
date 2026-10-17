@@ -7,12 +7,23 @@
 #  - NO usar "ports:" en producción: Docker se salta el firewall del host.
 #    Se usa "expose:"; el proxy inverso (Traefik/Coolify o el del cliente)
 #    enruta por dominio. Para local, ver docker-compose.override.yml.
-#  - Estado actual: solo frontend (la app corre con datos mock).
-#    Cuando exista el backend, se agregan los servicios "api" y "worker"
-#    (ver docs/DESPLIEGUE.md).
+#  - Solo "web" es público. "api" y "worker" son internos: se ven entre sí
+#    por nombre de servicio (api:8000) y Nginx reenvía /api a "api".
+#  - No se declaran redes propias: Coolify crea una red aislada por stack.
+#  - Contenedores sin estado: archivos y certificados viven en Supabase.
 # ============================================================
 
+x-backend-env: &backend-env
+  APP_ENV: ${APP_ENV:-production}
+  TZ: America/Guayaquil
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  # Supabase: usar el Session Pooler (puerto 5432, IPv4).
+  DATABASE_URL: ${DATABASE_URL:-}
+  SUPABASE_URL: ${SUPABASE_URL:-}
+  SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+
 services:
+  # ---------------- Frontend (público) ----------------
   web:
     build:
       context: ./frontend
@@ -23,6 +34,9 @@ services:
     restart: unless-stopped
     expose:
       - "80"
+    depends_on:
+      api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
       interval: 30s
@@ -32,3 +46,51 @@ services:
       resources:
         limits:
           memory: 128M
+
+  # ---------------- API (interna; se alcanza vía Nginx en /api) ----------------
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: iondu-backend:latest
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 35s
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  # ---------------- Worker (sin puertos, sin dominio) ----------------
+  worker:
+    image: iondu-backend:latest   # misma imagen que la API
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.worker"]
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+    healthcheck:
+      # El worker toca /tmp/worker-heartbeat en cada ciclo; si no se actualiza en 10 min → unhealthy
+      test: ["CMD-SHELL", "find /tmp/worker-heartbeat -mmin -10 | grep -q ."]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    # Tiempo para terminar el trabajo en curso al recibir SIGTERM en un redeploy
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M

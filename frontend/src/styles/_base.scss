@@ -14,7 +14,12 @@ body {
   font-family: var(--font-sans);
   background: var(--color-bg);
   color: var(--color-text-primary);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  // Cifras de igual ancho: las columnas de dinero y cantidades quedan alineadas.
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   transition:
     background-color 0.15s ease,
     color 0.15s ease;
@@ -26,6 +31,38 @@ h3,
 h4,
 p {
   margin: 0;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+// Barras de desplazamiento finas y discretas en toda la app.
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+::selection {
+  background: var(--color-primary-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 button,

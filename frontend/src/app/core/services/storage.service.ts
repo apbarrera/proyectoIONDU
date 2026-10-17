@@ -19,4 +19,10 @@ export class StorageService {
   remove(key: string): void {
     localStorage.removeItem(key);
   }
+
+  /** Borra todo lo guardado en el navegador (localStorage y sessionStorage). */
+  clear(): void {
+    localStorage.clear();
+    sessionStorage.clear();
+  }
 }

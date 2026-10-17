@@ -45,9 +45,25 @@ export class AuthService {
     );
   }
 
+  /**
+   * Cierra la sesión y borra lo que haya quedado en el equipo: las PyMEs comparten computadoras,
+   * así que no deben quedar datos de una empresa para la siguiente persona.
+   */
   logout(): void {
     this.#session.set(null);
-    this.storage.remove(STORAGE_KEY);
+    this.storage.clear();
+    void this.#clearOfflineCaches();
+  }
+
+  /** Vacía la caché del service worker de la PWA (Cache Storage). */
+  async #clearOfflineCaches(): Promise<void> {
+    if (typeof caches === 'undefined') return;
+    try {
+      const names = await caches.keys();
+      await Promise.all(names.map((name) => caches.delete(name)));
+    } catch {
+      // El navegador puede bloquear el acceso a la caché (modo privado); no debe impedir cerrar sesión.
+    }
   }
 
   defaultRouteForCurrentUser(): string {

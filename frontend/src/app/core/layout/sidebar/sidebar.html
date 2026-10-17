@@ -1,38 +1,87 @@
-<aside class="sidebar" [class.sidebar--open]="mobileOpen()">
+<aside class="sidebar" [class.sidebar--open]="mobileOpen()" aria-label="Navegación principal">
   <div class="sidebar__brand">
     <div class="sidebar__logo" aria-hidden="true">IO</div>
     <span class="sidebar__brand-name">IONDU</span>
+    <button
+      type="button"
+      class="sidebar__collapse"
+      [attr.aria-label]="collapsed() ? 'Expandir menú lateral' : 'Contraer menú lateral'"
+      [attr.aria-expanded]="!collapsed()"
+      (click)="toggleCollapsed()"
+    >
+      <app-icon name="sidebar-collapse" [size]="20" />
+    </button>
   </div>
 
-  <nav class="sidebar__nav">
-    @for (item of visibleItems(); track item.link) {
-      <div class="sidebar__group">
-        <a
-          class="sidebar__link"
-          [routerLink]="item.link"
-          routerLinkActive="sidebar__link--active"
-          [routerLinkActiveOptions]="{ exact: false }"
-          (click)="onLinkClick()"
-        >
-          <span class="sidebar__icon" aria-hidden="true">{{ item.icon }}</span>
-          <span>{{ item.label }}</span>
-        </a>
+  <nav class="sidebar__scroll">
+    <ul class="sidebar__nav">
+      @for (item of visibleItems(); track item.link) {
+        <li class="sidebar__group">
+          <div class="sidebar__row">
+            <a
+              class="sidebar__link"
+              [routerLink]="item.link"
+              routerLinkActive="sidebar__link--active"
+              [routerLinkActiveOptions]="{ exact: false }"
+              [attr.data-tip]="collapsed() ? item.label : null"
+              (click)="onLinkClick()"
+            >
+              <app-icon [name]="item.icon" [size]="20" />
+              <span class="sidebar__label">{{ item.label }}</span>
+            </a>
 
-        @if (item.children?.length) {
-          <div class="sidebar__children">
-            @for (child of item.children; track child.link) {
-              <a
-                class="sidebar__child-link"
-                [routerLink]="child.link"
-                routerLinkActive="sidebar__child-link--active"
-                (click)="onLinkClick()"
+            @if (item.children?.length && !collapsed()) {
+              <button
+                type="button"
+                class="sidebar__toggle"
+                [attr.aria-label]="(isOpen(item) ? 'Contraer ' : 'Expandir ') + item.label"
+                [attr.aria-expanded]="isOpen(item)"
+                [attr.aria-controls]="'sub-' + item.link"
+                [class.sidebar__toggle--open]="isOpen(item)"
+                (click)="toggleGroup(item)"
               >
-                {{ child.label }}
-              </a>
+                <app-icon name="caret-down" [size]="16" />
+              </button>
             }
           </div>
-        }
-      </div>
-    }
+
+          @if (item.children?.length && isOpen(item)) {
+            <ul class="sidebar__children" [id]="'sub-' + item.link">
+              @for (child of item.children; track child.link) {
+                <li>
+                  <a
+                    class="sidebar__child-link"
+                    [routerLink]="child.link"
+                    routerLinkActive="sidebar__child-link--active"
+                    (click)="onLinkClick()"
+                  >
+                    {{ child.label }}
+                  </a>
+                </li>
+              }
+            </ul>
+          }
+        </li>
+      }
+    </ul>
   </nav>
+
+  @if (!collapsed()) {
+    <div
+      class="sidebar__resizer"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Ajustar ancho del menú"
+      tabindex="0"
+      [attr.aria-valuenow]="width()"
+      [attr.aria-valuemin]="min"
+      [attr.aria-valuemax]="max"
+      (pointerdown)="onResizeStart($event)"
+      (pointermove)="onResizeMove($event)"
+      (pointerup)="onResizeEnd()"
+      (pointercancel)="onResizeEnd()"
+      (keydown)="onResizeKey($event)"
+      (dblclick)="resetWidth()"
+    ></div>
+  }
 </aside>

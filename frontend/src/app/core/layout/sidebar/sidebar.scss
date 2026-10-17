@@ -1,31 +1,44 @@
+:host {
+  display: block;
+  flex-shrink: 0;
+  position: relative;
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:host(.is-resizing) {
+  transition: none;
+  user-select: none;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;
-  width: var(--sidebar-width);
-  flex-shrink: 0;
+  width: 100%;
   height: 100dvh;
   position: sticky;
   top: 0;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
-  overflow-y: auto;
 }
 
+// ---------- Marca ----------
 .sidebar__brand {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-5) var(--space-5) var(--space-4);
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  min-height: var(--header-height);
 }
 
 .sidebar__logo {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, var(--brand-blue), var(--brand-purple));
-  color: #fff;
-  font-weight: 800;
-  font-size: 0.75rem;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -33,59 +46,159 @@
 }
 
 .sidebar__brand-name {
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  font-weight: 700;
+  font-size: 1.0625rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar__collapse {
+  margin-left: auto;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: var(--color-surface-sunken);
+    color: var(--color-text-primary);
+  }
+}
+
+// ---------- Navegación ----------
+// El área con scroll solo muestra su barra al pasar el mouse, y es fina.
+.sidebar__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 var(--space-3) var(--space-5);
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+
+  &:hover {
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+}
+
+.sidebar__nav,
+.sidebar__children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .sidebar__nav {
   display: flex;
   flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar__row {
+  display: flex;
+  align-items: center;
   gap: var(--space-1);
-  padding: 0 var(--space-3) var(--space-5);
 }
 
 .sidebar__link {
+  flex: 1;
+  min-width: 0;
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  height: 42px;
+  padding: 0 var(--space-3);
   border-radius: var(--radius-md);
   color: var(--color-text-secondary);
   text-decoration: none;
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 
   &:hover {
-    background: var(--color-bg);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-primary);
   }
 
   &--active {
-    background: var(--color-primary);
-    color: #fff;
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+    font-weight: 600;
+
+    &:hover {
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+    }
   }
 }
 
-.sidebar__icon {
-  font-size: 1rem;
+.sidebar__toggle {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+
+  app-icon {
+    transition: transform 0.2s ease;
+  }
+
+  &:hover {
+    background: var(--color-surface-sunken);
+    color: var(--color-text-primary);
+  }
+
+  &--open app-icon {
+    transform: rotate(180deg);
+  }
 }
 
 .sidebar__children {
   display: flex;
   flex-direction: column;
-  margin: var(--space-1) 0 var(--space-2) calc(var(--space-3) + 24px);
-  border-left: 1px solid var(--color-border);
+  gap: 1px;
+  margin: var(--space-1) 0 var(--space-2) 22px;
   padding-left: var(--space-3);
+  border-left: 1px solid var(--color-border);
 }
 
 .sidebar__child-link {
-  padding: var(--space-1) var(--space-2);
+  display: block;
+  padding: 7px var(--space-3);
   font-size: 0.8125rem;
   color: var(--color-text-muted);
   text-decoration: none;
   border-radius: var(--radius-sm);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 
   &:hover {
     color: var(--color-text-primary);
+    background: var(--color-surface-sunken);
   }
 
   &--active {
@@ -94,17 +207,141 @@
   }
 }
 
+// ---------- Borde para redimensionar ----------
+.sidebar__resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 2;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 2px;
+    background: var(--color-primary);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  &:hover::after,
+  &:focus-visible::after {
+    opacity: 0.55;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+}
+
+:host(.is-resizing) .sidebar__resizer::after {
+  opacity: 1;
+}
+
+// ---------- Escritorio: modo columna de íconos ----------
+@media (min-width: 1025px) {
+  :host(.is-collapsed) {
+    .sidebar__brand {
+      flex-direction: column;
+      gap: var(--space-2);
+      padding: var(--space-4) 0 var(--space-3);
+    }
+
+    .sidebar__brand-name {
+      display: none;
+    }
+
+    .sidebar__collapse {
+      margin-left: 0;
+    }
+
+    // Con pocos íconos no hace falta scroll, y así los tooltips no quedan recortados.
+    .sidebar__scroll {
+      overflow: visible;
+      padding: 0 var(--space-3);
+    }
+
+    .sidebar__link {
+      justify-content: center;
+      width: 100%;
+      height: 44px;
+      padding: 0;
+    }
+
+    // La etiqueta sigue en el DOM para lectores de pantalla, oculta visualmente.
+    .sidebar__label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .sidebar__link[data-tip]::after {
+      // "/ ''" lo declara decorativo: el nombre accesible ya viene de la etiqueta oculta.
+      content: attr(data-tip) / '';
+      position: absolute;
+      left: calc(100% + var(--space-2));
+      top: 50%;
+      transform: translateY(-50%);
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      background: var(--color-text-primary);
+      color: var(--color-bg);
+      font-size: 0.75rem;
+      font-weight: 500;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.12s ease;
+      z-index: 5;
+    }
+
+    .sidebar__link[data-tip]:hover::after,
+    .sidebar__link[data-tip]:focus-visible::after {
+      opacity: 1;
+    }
+  }
+}
+
+// ---------- Tablet y móvil: panel lateral deslizante ----------
 @media (max-width: 1024px) {
+  :host {
+    width: 0 !important;
+  }
+
   .sidebar {
     position: fixed;
     inset: 0 auto 0 0;
+    width: min(86vw, 320px);
     z-index: 1500;
     transform: translateX(-100%);
-    transition: transform 0.2s ease;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: var(--shadow-lg);
   }
 
   .sidebar--open {
     transform: translateX(0);
+  }
+
+  .sidebar__collapse,
+  .sidebar__resizer {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host,
+  .sidebar {
+    transition: none;
   }
 }

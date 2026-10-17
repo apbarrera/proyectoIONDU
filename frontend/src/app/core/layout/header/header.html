@@ -1,25 +1,46 @@
 <header class="app-header">
-  <button type="button" class="app-header__menu-btn" aria-label="Abrir menú" (click)="menuToggled.emit()">
-    ☰
+  <button type="button" class="app-header__icon-btn app-header__menu-btn" aria-label="Abrir menú" (click)="menuToggled.emit()">
+    <app-icon name="menu" [size]="22" />
   </button>
 
   <div class="app-header__spacer"></div>
 
+  <button
+    type="button"
+    class="app-header__icon-btn"
+    [attr.aria-label]="nextThemeLabel()"
+    [attr.title]="themeMeta().label"
+    (click)="cycleTheme()"
+  >
+    <app-icon [name]="themeMeta().icon" [size]="20" />
+  </button>
+
   <div class="app-header__profile">
-    <button type="button" class="app-header__profile-btn" (click)="toggleProfileMenu()">
+    <button
+      type="button"
+      class="app-header__profile-btn"
+      aria-haspopup="menu"
+      [attr.aria-expanded]="profileMenuOpen()"
+      (click)="toggleProfileMenu()"
+    >
       <span class="app-header__avatar">{{ currentUser()?.avatarInitials }}</span>
       <span class="app-header__profile-info">
         <span class="app-header__name">{{ currentUser()?.fullName }}</span>
         <span class="app-header__role">{{ currentUser()?.role === 'admin' ? 'Administrador' : 'Operativo' }}</span>
       </span>
+      <app-icon class="app-header__chevron" name="caret-down" [size]="14" />
     </button>
 
     @if (profileMenuOpen()) {
-      <div class="app-header__dropdown">
-        <a routerLink="/settings/preferences" class="app-header__dropdown-item" (click)="profileMenuOpen.set(false)">
+      <div class="app-header__dropdown" role="menu">
+        <a routerLink="/settings/preferences" class="app-header__dropdown-item" role="menuitem" (click)="profileMenuOpen.set(false)">
+          <app-icon name="settings" [size]="18" />
           Preferencias
         </a>
-        <button type="button" class="app-header__dropdown-item" (click)="logout()">Cerrar sesión</button>
+        <button type="button" class="app-header__dropdown-item" role="menuitem" (click)="logout()">
+          <app-icon name="logout" [size]="18" />
+          Cerrar sesión
+        </button>
       </div>
     }
   </div>

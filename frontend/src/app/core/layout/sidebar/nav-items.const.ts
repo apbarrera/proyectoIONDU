@@ -1,3 +1,4 @@
+import { IconName } from '../../../shared/icons/icons.generated';
 import { UserRole } from '../../models/user.model';
 
 export interface NavChild {
@@ -8,7 +9,7 @@ export interface NavChild {
 
 export interface NavItem {
   label: string;
-  icon: string;
+  icon: IconName;
   link: string;
   roles: UserRole[];
   children?: NavChild[];
@@ -17,10 +18,10 @@ export interface NavItem {
 const BOTH: UserRole[] = ['admin', 'operator'];
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard', icon: '📊', link: '/dashboard', roles: ['admin'] },
+  { label: 'Dashboard', icon: 'dashboard', link: '/dashboard', roles: ['admin'] },
   {
     label: 'Ventas',
-    icon: '🛒',
+    icon: 'sales',
     link: '/sales',
     roles: BOTH,
     children: [
@@ -30,7 +31,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     label: 'Facturación',
-    icon: '🧾',
+    icon: 'sales',
     link: '/billing',
     roles: BOTH,
     children: [
@@ -40,7 +41,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     label: 'Gastos',
-    icon: '💸',
+    icon: 'expenses',
     link: '/expenses',
     roles: BOTH,
     children: [
@@ -51,7 +52,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     label: 'Inventario',
-    icon: '📦',
+    icon: 'inventory',
     link: '/inventory/products',
     roles: BOTH,
     children: [
@@ -63,11 +64,11 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'Alertas de stock', link: '/inventory/alerts' },
     ],
   },
-  { label: 'Agente IA', icon: '🤖', link: '/ai', roles: BOTH },
-  { label: 'Recomendaciones', icon: '💡', link: '/recommendations', roles: BOTH },
+  { label: 'Agente IA', icon: 'ai', link: '/ai', roles: BOTH },
+  { label: 'Recomendaciones', icon: 'recommendations', link: '/recommendations', roles: BOTH },
   {
     label: 'Configuración',
-    icon: '⚙️',
+    icon: 'settings',
     link: '/settings/company',
     roles: BOTH,
     children: [
@@ -77,5 +78,5 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'Preferencias', link: '/settings/preferences' },
     ],
   },
-  { label: 'Auditoría', icon: '🕘', link: '/audit', roles: ['admin'] },
+  { label: 'Auditoría', icon: 'audit', link: '/audit', roles: ['admin'] },
 ];

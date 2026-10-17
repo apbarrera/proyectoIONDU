@@ -1,8 +1,6 @@
-<app-page-header title="Dashboard" subtitle="Vista financiera general de tu negocio." />
-
-<app-period-selector (rangeChange)="onRangeChange($event)" />
-
-<div class="dashboard-page__spacer"></div>
+<app-page-header title="Dashboard" subtitle="Vista financiera general de tu negocio.">
+  <app-period-selector (rangeChange)="onRangeChange($event)" />
+</app-page-header>
 
 <app-kpi-grid [summary]="summary()" />
 
@@ -15,11 +13,11 @@
     @if (summary().topProducts.length === 0) {
       <app-empty-state icon="inventory" title="Sin ventas en este período." />
     } @else {
-      <ol class="dashboard-page__top-products">
+      <ol class="dashboard-page__list dashboard-page__list--ranked">
         @for (product of summary().topProducts; track product.productId) {
           <li>
-            <span>{{ product.name }}</span>
-            <span class="dashboard-page__top-products-meta">{{ product.unitsSold }} und · ${{ product.revenue.toFixed(2) }}</span>
+            <span class="dashboard-page__list-name">{{ product.name }}</span>
+            <span class="dashboard-page__list-meta">{{ product.unitsSold }} und · ${{ product.revenue.toFixed(2) }}</span>
           </li>
         }
       </ol>
@@ -30,11 +28,11 @@
     @if (productsService.lowStockProducts().length === 0) {
       <app-empty-state icon="check-circle" title="Todo el inventario está saludable." />
     } @else {
-      <ul class="dashboard-page__low-stock">
+      <ul class="dashboard-page__list">
         @for (product of productsService.lowStockProducts(); track product.id) {
           <li>
-            <span>{{ product.name }}</span>
-            <span class="dashboard-page__low-stock-meta">{{ product.currentStock }} / {{ product.minStock }} {{ product.unit }}</span>
+            <span class="dashboard-page__list-name">{{ product.name }}</span>
+            <span class="dashboard-page__list-meta dashboard-page__list-meta--warn">{{ product.currentStock }} / {{ product.minStock }} {{ product.unit }}</span>
           </li>
         }
       </ul>

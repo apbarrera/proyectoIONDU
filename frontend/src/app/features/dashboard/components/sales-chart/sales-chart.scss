@@ -1,46 +1,128 @@
+// El eje y las líneas guía comparten el mismo inset vertical (8px arriba, 24px abajo para
+// las fechas), así cada valor del eje queda exactamente sobre su línea.
 .sales-chart {
-  display: flex;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-3);
-  height: 200px;
-  padding-top: var(--space-4);
-  overflow-x: auto;
+  height: 100%;
+  min-height: 280px;
+}
+
+.sales-chart__axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px 0 24px;
+  text-align: right;
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+
+  span {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    height: 0;
+    white-space: nowrap;
+  }
+}
+
+.sales-chart__plot {
+  position: relative;
+}
+
+.sales-chart__grid {
+  position: absolute;
+  inset: 8px 0 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.sales-chart__line {
+  height: 1px;
+  background: var(--color-border);
+
+  &:last-child {
+    background: var(--color-border-strong);
+  }
+}
+
+.sales-chart__bars {
+  position: absolute;
+  inset: 8px 0 0;
+  display: flex;
+  gap: 6px;
 }
 
 .sales-chart__col {
+  position: relative;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 32px;
-  flex: 1;
-  height: 100%;
 }
 
 .sales-chart__bar-track {
   flex: 1;
-  width: 100%;
   display: flex;
   align-items: flex-end;
+  justify-content: center;
 }
 
 .sales-chart__bar {
-  width: 100%;
+  width: 70%;
+  max-width: 28px;
   background: var(--color-primary);
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  min-height: 4px;
-  transition: height 0.2s ease;
+  opacity: 0.85;
+  transition:
+    opacity 0.15s ease,
+    height 0.2s ease;
+}
+
+.sales-chart__col:hover .sales-chart__bar {
+  opacity: 1;
 }
 
 .sales-chart__label {
+  height: 24px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
   font-size: 0.6875rem;
   color: var(--color-text-muted);
   white-space: nowrap;
 }
 
+// El valor del día aparece al pasar el mouse.
+.sales-chart__value {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-text-primary);
+  color: var(--color-bg);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  z-index: 1;
+}
+
+.sales-chart__col:hover .sales-chart__value {
+  opacity: 1;
+}
+
 .sales-chart__empty {
+  position: absolute;
+  inset: 8px 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--color-text-secondary);
   font-size: 0.875rem;
-  padding: var(--space-6) 0;
-  text-align: center;
 }

@@ -1,14 +1,31 @@
-@if (series().length === 0) {
-  <p class="sales-chart__empty">No hay ventas en el período seleccionado.</p>
-} @else {
-  <div class="sales-chart">
-    @for (point of series(); track point.date) {
-      <div class="sales-chart__col">
-        <div class="sales-chart__bar-track">
-          <div class="sales-chart__bar" [style.height.%]="barHeight(point)" [title]="'$' + point.income.toFixed(2)"></div>
-        </div>
-        <span class="sales-chart__label">{{ shortDate(point.date) }}</span>
+<div class="sales-chart" role="img" [attr.aria-label]="series().length ? summaryLabel() : 'Sin ventas en el período seleccionado'">
+  <div class="sales-chart__axis" aria-hidden="true">
+    @for (tick of ticks(); track tick) {
+      <span>{{ money(tick) }}</span>
+    }
+  </div>
+
+  <div class="sales-chart__plot">
+    <div class="sales-chart__grid" aria-hidden="true">
+      @for (tick of ticks(); track tick) {
+        <div class="sales-chart__line"></div>
+      }
+    </div>
+
+    @if (series().length === 0) {
+      <p class="sales-chart__empty">No hay ventas en el período seleccionado.</p>
+    } @else {
+      <div class="sales-chart__bars">
+        @for (point of series(); track point.date; let i = $index) {
+          <div class="sales-chart__col">
+            <span class="sales-chart__value">{{ money(point.income) }}</span>
+            <div class="sales-chart__bar-track">
+              <div class="sales-chart__bar" [style.height.%]="barHeight(point)"></div>
+            </div>
+            <span class="sales-chart__label">{{ showLabel(i) ? shortDate(point.date) : '' }}</span>
+          </div>
+        }
       </div>
     }
   </div>
-}
+</div>

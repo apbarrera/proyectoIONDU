@@ -1,8 +1,21 @@
+// El host ocupa toda la celda de la rejilla, así las tarjetas de una misma fila miden igual.
+:host {
+  display: block;
+}
+
 .card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+}
+
+.card__body {
+  flex: 1;
+  min-height: 0;
 }
 
 .card--padded .card__body {

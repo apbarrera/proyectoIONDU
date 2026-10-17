@@ -1,6 +1,44 @@
+// La rejilla responde al ancho real disponible (con el menú abierto o contraído),
+// no al de la ventana: así las 5 tarjetas nunca quedan en filas desiguales.
+:host {
+  display: block;
+  container-type: inline-size;
+  margin-bottom: var(--space-4);
+}
+
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
-  margin-bottom: var(--space-5);
+
+  > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+// 3 tarjetas arriba y 2 abajo, repartiendo todo el ancho.
+@container (min-width: 640px) {
+  .kpi-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+
+    > * {
+      grid-column: span 2;
+    }
+
+    > :nth-child(n + 4) {
+      grid-column: span 3;
+    }
+  }
+}
+
+// Las 5 en una sola fila.
+@container (min-width: 1040px) {
+  .kpi-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+
+    > *,
+    > :nth-child(n + 4) {
+      grid-column: span 1;
+    }
+  }
 }

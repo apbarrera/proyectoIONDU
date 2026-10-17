@@ -41,6 +41,14 @@ h4 {
   text-wrap: balance;
 }
 
+// Los niveles de encabezado siguen el orden del documento (h1 > h2 > h3), no su tamaño visual:
+// cada componente define el suyo con su clase.
+h2,
+h3,
+h4 {
+  font-size: 1rem;
+}
+
 p {
   text-wrap: pretty;
 }

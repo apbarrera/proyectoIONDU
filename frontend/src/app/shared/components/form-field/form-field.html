@@ -1,16 +1,16 @@
 <div class="form-field" [class.form-field--invalid]="!!error()">
   @if (label()) {
-    <label class="form-field__label">
+    <label class="form-field__label" [attr.for]="labelFor()">
       {{ label() }}
       @if (required()) {
-        <span class="form-field__required">*</span>
+        <span class="form-field__required" aria-hidden="true">*</span>
       }
     </label>
   }
   <ng-content />
   @if (error()) {
-    <p class="form-field__error">{{ error() }}</p>
+    <p class="form-field__error" [id]="messageId" role="alert">{{ error() }}</p>
   } @else if (hint()) {
-    <p class="form-field__hint">{{ hint() }}</p>
+    <p class="form-field__hint" [id]="messageId">{{ hint() }}</p>
   }
 </div>

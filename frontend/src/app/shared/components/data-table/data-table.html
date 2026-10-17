@@ -15,11 +15,12 @@
     <app-empty-state icon="search" [title]="emptyTitle()" />
   } @else {
     <div class="data-table__scroll">
-      <table>
-        <thead>
-          <tr>
+      <table role="table">
+        <thead role="rowgroup">
+          <tr role="row">
             @for (col of columns(); track col.key) {
               <th
+                role="columnheader"
                 [class.data-table__th--sortable]="col.sortable"
                 [style.text-align]="col.align ?? 'left'"
                 (click)="toggleSort(col)"
@@ -32,9 +33,10 @@
             }
           </tr>
         </thead>
-        <tbody>
+        <tbody role="rowgroup">
           @for (row of pagedRows(); track trackBy()(row)) {
             <tr
+              role="row"
               [class.data-table__row--clickable]="clickableRows()"
               [attr.tabindex]="clickableRows() ? 0 : null"
               (click)="onRowClick(row)"
@@ -42,7 +44,7 @@
               (keydown.space)="onRowClick(row); $event.preventDefault()"
             >
               @for (col of columns(); track col.key) {
-                <td [style.text-align]="col.align ?? 'left'">
+                <td role="cell" [attr.data-label]="col.header" [style.text-align]="col.align ?? 'left'">
                   @if (col.badge?.(row); as badge) {
                     <app-status-badge [label]="badge.label" [tone]="badge.tone" />
                   } @else {

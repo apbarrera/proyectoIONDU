@@ -6,8 +6,9 @@
 
 <div class="ai-settings__grid">
   <app-card title="Instrucciones del agente">
-    <label class="ai-settings__label">Instrucciones generales</label>
+    <label class="ai-settings__label" for="ai-instructions">Instrucciones generales</label>
     <textarea
+      id="ai-instructions"
       class="ai-settings__textarea"
       [ngModel]="instructions()"
       (ngModelChange)="instructions.set($event)"
@@ -22,7 +23,7 @@
 
     <div class="ai-settings__actions-lists">
       <div>
-        <h4>Acciones permitidas</h4>
+        <h3>Acciones permitidas</h3>
         <ul>
           @for (action of aiConfig.config().allowedActions; track action) {
             <li><app-icon name="check-circle" [size]="16" /> {{ action }}</li>
@@ -30,7 +31,7 @@
         </ul>
       </div>
       <div>
-        <h4>Acciones prohibidas</h4>
+        <h3>Acciones prohibidas</h3>
         <ul>
           @for (action of aiConfig.config().forbiddenActions; track action) {
             <li><app-icon name="blocked" [size]="16" /> {{ action }}</li>
@@ -50,7 +51,7 @@
       </div>
       <p class="ai-settings__percent">{{ tokenUsage.percentUsed() }}% utilizado este mes</p>
 
-      <h4 class="ai-settings__history-title">Historial de consumo</h4>
+      <h3 class="ai-settings__history-title">Historial de consumo</h3>
       <ul class="ai-settings__history">
         @for (item of tokenUsage.history; track item.month) {
           <li><span>{{ item.month }}</span><span>{{ item.used.toLocaleString('es-EC') }}</span></li>

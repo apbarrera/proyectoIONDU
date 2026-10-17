@@ -52,7 +52,7 @@
       <input type="number" formControlName="yieldQuantity" />
     </app-form-field>
 
-    <h4 class="recipes__form-subtitle">Ingredientes</h4>
+    <h3 class="recipes__form-subtitle">Ingredientes</h3>
     <div formArrayName="ingredients" class="recipes__ingredient-rows">
       @for (group of ingredients.controls; track $index; let i = $index) {
         <div [formGroupName]="i" class="recipes__ingredient-row">

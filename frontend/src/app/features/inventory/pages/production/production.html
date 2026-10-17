@@ -6,8 +6,9 @@
 
 <div class="production__layout">
   <app-card title="Orden de fabricación">
-    <label class="production__label">Producto</label>
+    <label class="production__label" for="prod-recipe">Producto</label>
     <select
+      id="prod-recipe"
       class="production__select"
       [ngModel]="selectedRecipeId()"
       (ngModelChange)="selectedRecipeId.set($event)"
@@ -18,8 +19,9 @@
       }
     </select>
 
-    <label class="production__label">Cantidad a producir</label>
+    <label class="production__label" for="prod-units">Cantidad a producir</label>
     <input
+      id="prod-units"
       class="production__input"
       type="number"
       min="1"
@@ -28,7 +30,7 @@
     />
 
     @if (selectedRecipeId()) {
-      <h4 class="production__subtitle">Materiales necesarios</h4>
+      <h3 class="production__subtitle">Materiales necesarios</h3>
       <table class="production__table">
         <thead>
           <tr>

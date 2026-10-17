@@ -5,8 +5,8 @@
 />
 
 <app-card title="Nuevo ajuste">
-  <label class="adjustments__label">Producto</label>
-  <select class="adjustments__select" [ngModel]="selectedProductId()" (ngModelChange)="onProductChange($event)">
+  <label class="adjustments__label" for="adj-product">Producto</label>
+  <select id="adj-product" class="adjustments__select" [ngModel]="selectedProductId()" (ngModelChange)="onProductChange($event)">
     <option value="" disabled>Selecciona un producto</option>
     @for (p of productsService.products(); track p.id) {
       <option [value]="p.id">{{ p.name }}</option>
@@ -20,8 +20,9 @@
         <p class="adjustments__current">{{ product.currentStock }} {{ product.unit }}</p>
       </div>
       <div>
-        <label class="adjustments__label">Nueva cantidad</label>
+        <label class="adjustments__label" for="adj-stock">Nueva cantidad</label>
         <input
+          id="adj-stock"
           class="adjustments__input"
           type="number"
           step="0.01"
@@ -37,8 +38,9 @@
       </div>
     </div>
 
-    <label class="adjustments__label">Motivo</label>
+    <label class="adjustments__label" for="adj-reason">Motivo</label>
     <textarea
+      id="adj-reason"
       class="adjustments__textarea"
       [ngModel]="reason()"
       (ngModelChange)="reason.set($event)"

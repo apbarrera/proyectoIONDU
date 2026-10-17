@@ -1,4 +1,4 @@
-<div class="login">
+<main class="login">
   <div class="login__card">
     <div class="login__brand">
       <app-logo class="login__logo" [size]="56" />
@@ -36,7 +36,7 @@
       <p>Contraseña: iondu2026</p>
     </div>
   </div>
-</div>
+</main>
 
 <app-modal [open]="recoveryOpen()" title="Recuperar contraseña" size="sm" (closed)="closeRecovery()">
   @if (!recoveryResult()) {

@@ -54,6 +54,10 @@ p {
 }
 
 // Barras de desplazamiento finas y discretas en toda la app.
+html {
+  accent-color: var(--color-primary);
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-strong) transparent;

@@ -17,7 +17,15 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
-    provideRouter(routes, withComponentInputBinding(), withViewTransitions()),
+    provideRouter(routes, withComponentInputBinding(), withViewTransitions({
+      // El nombre de la transición solo existe mientras dura: de forma permanente crearía un
+      // contexto de apilamiento que deja los modales por debajo de la cabecera.
+      onViewTransitionCreated: ({ transition }) => {
+        const root = document.documentElement;
+        root.classList.add('is-page-transitioning');
+        transition.finished.finally(() => root.classList.remove('is-page-transitioning'));
+      },
+    })),
     provideHttpClient(withInterceptors([authInterceptor, loadingInterceptor, errorInterceptor])),
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),

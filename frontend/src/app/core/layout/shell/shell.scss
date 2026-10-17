@@ -11,8 +11,6 @@
 }
 
 .shell__content {
-  // Nombre de la transición entre páginas: solo el contenido se anima, no el menú ni la cabecera.
-  view-transition-name: page;
   flex: 1;
   padding: var(--space-5);
 }

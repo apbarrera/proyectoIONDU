@@ -30,16 +30,6 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
-    label: 'Facturación',
-    icon: 'sales',
-    link: '/billing',
-    roles: BOTH,
-    children: [
-      { label: 'Facturas emitidas', link: '/billing/history' },
-      { label: 'Nueva factura', link: '/billing/new' },
-    ],
-  },
-  {
     label: 'Gastos',
     icon: 'expenses',
     link: '/expenses',

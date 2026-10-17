@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable, map, switchMap, tap } from 'rxjs';
 import { Invoice, InvoiceCustomer, InvoiceStatus } from '../models/invoice.model';
-import { SaleLineItem } from '../../sales/models/sale.model';
+import { Sale, SaleLineItem } from '../../sales/models/sale.model';
 import { INVOICES_MOCK } from '../../../mocks/billing.mock';
 import { simulateRequest } from '../../../core/services/mock-http.util';
 import { generateId } from '../../../core/utils/id.util';
@@ -58,6 +58,26 @@ export class BillingService {
 
     this.#invoices.update((list) => [invoice, ...list]);
     return simulateRequest(invoice);
+  }
+
+  /** Factura vinculada a una venta, si la tiene. */
+  getInvoiceForSale(saleId: string): Invoice | undefined {
+    return this.#invoices().find((i) => i.saleId === saleId);
+  }
+
+  /** Crea la factura de una venta y la envía a autorización. Se usa al vender y al emitir después. */
+  invoiceSale(sale: Sale, customer: InvoiceCustomer): Observable<Invoice> {
+    return this.createDraft({ saleId: sale.id, customer, items: sale.items }).pipe(
+      switchMap((draft) => this.emit(draft.id)),
+    );
+  }
+
+  /** Reintenta una factura rechazada, opcionalmente corrigiendo antes los datos del cliente. */
+  retry(invoiceId: string, customer?: InvoiceCustomer): Observable<Invoice> {
+    if (customer) {
+      this.#invoices.update((list) => list.map((inv) => (inv.id === invoiceId ? { ...inv, customer } : inv)));
+    }
+    return this.emit(invoiceId);
   }
 
   /** Walks a draft invoice through borrador → procesando → pendiente → autorizada/rechazada. */

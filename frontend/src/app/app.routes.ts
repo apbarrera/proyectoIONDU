@@ -26,10 +26,8 @@ export const routes: Routes = [
         path: 'sales',
         loadChildren: () => import('./features/sales/sales.routes').then((m) => m.SALES_ROUTES),
       },
-      {
-        path: 'billing',
-        loadChildren: () => import('./features/billing/billing.routes').then((m) => m.BILLING_ROUTES),
-      },
+      // Facturación se integró en Ventas: los enlaces antiguos llevan al historial de ventas.
+      { path: 'billing', redirectTo: 'sales/history', pathMatch: 'prefix' },
       {
         path: 'expenses',
         loadChildren: () => import('./features/expenses/expenses.routes').then((m) => m.EXPENSES_ROUTES),

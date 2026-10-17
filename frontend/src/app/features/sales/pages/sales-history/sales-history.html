@@ -1,14 +1,117 @@
 <app-page-header
   title="Historial de ventas"
-  subtitle="Consulta, busca y filtra todas las ventas registradas."
+  subtitle="Consulta cada venta y el estado de su factura electrónica."
   [breadcrumb]="[{ label: 'Ventas', link: '/sales/history' }, { label: 'Historial' }]"
 >
-  <app-button routerLink="/sales/new">+ Nueva venta</app-button>
+  <app-button routerLink="/sales/new"><app-icon name="plus" [size]="18" /> Nueva venta</app-button>
 </app-page-header>
+
+<div class="sales-history__filters" role="group" aria-label="Filtrar por estado de factura">
+  @for (option of filters; track option.value) {
+    <button
+      type="button"
+      class="sales-history__filter"
+      [class.sales-history__filter--active]="filter() === option.value"
+      [attr.aria-pressed]="filter() === option.value"
+      (click)="filter.set(option.value)"
+    >
+      {{ option.label }}
+      <span class="sales-history__count">{{ counts()[option.value] }}</span>
+    </button>
+  }
+</div>
 
 <app-data-table
   [columns]="columns"
-  [rows]="salesService.sales()"
-  emptyTitle="Todavía no se han registrado ventas."
+  [rows]="visibleRows()"
+  [trackBy]="trackById"
+  [clickableRows]="true"
+  emptyTitle="No hay ventas con este filtro."
   searchPlaceholder="Buscar por cliente, folio…"
+  (rowClick)="open($event)"
 />
+
+<app-modal [open]="!!selected()" title="Detalle de venta" size="lg" (closed)="close()">
+  @if (selected(); as sale) {
+    <div class="sale-detail__header">
+      <div>
+        <p class="sale-detail__folio">Venta #{{ sale.folio }}</p>
+        <p class="sale-detail__meta">{{ formatDate(sale.date) }} · {{ sale.customerName }} · {{ paymentLabels[sale.paymentMethod] }}</p>
+      </div>
+      @if (sale.invoice; as invoice) {
+        <app-status-badge [label]="statusLabels[invoice.status]" [tone]="statusTones[invoice.status]" />
+      } @else {
+        <app-status-badge label="Sin factura" tone="neutral" />
+      }
+    </div>
+
+    <div class="sale-detail__scroll">
+      <table class="sale-detail__items">
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Cant.</th>
+            <th>P. unit.</th>
+            <th>Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of sale.items; track item.productId) {
+            <tr>
+              <td>{{ item.productName }}</td>
+              <td>{{ item.quantity }}</td>
+              <td>${{ item.unitPrice.toFixed(2) }}</td>
+              <td>${{ item.subtotal.toFixed(2) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sale-detail__totals">
+      <div><span>Subtotal</span><span>${{ sale.subtotal.toFixed(2) }}</span></div>
+      <div><span>IVA</span><span>${{ sale.ivaAmount.toFixed(2) }}</span></div>
+      <div class="sale-detail__total"><span>Total</span><span>${{ sale.total.toFixed(2) }}</span></div>
+    </div>
+
+    <h4 class="sale-detail__subtitle">Factura electrónica</h4>
+
+    @if (sale.invoice; as invoice) {
+      <p class="sale-detail__invoice-number">{{ invoice.numero }}</p>
+      <p class="sale-detail__customer">{{ invoice.customer.razonSocial }} · {{ invoice.customer.rucOrCedula }}</p>
+      @if (invoice.claveAcceso) {
+        <p class="sale-detail__key">Clave de acceso: {{ invoice.claveAcceso }}</p>
+      }
+      @if (invoice.rejectionReason && invoice.status === 'rechazada') {
+        <p class="sale-detail__rejection" role="alert"><app-icon name="warning" [size]="16" /> {{ invoice.rejectionReason }}</p>
+      }
+
+      <ul class="sale-detail__history">
+        @for (event of invoice.statusHistory; track event.timestamp) {
+          <li>{{ statusLabels[event.status] }} — {{ formatDate(event.timestamp) }}</li>
+        }
+      </ul>
+
+      @if (invoice.status === 'rechazada') {
+        <div class="sale-detail__action">
+          <label class="sale-detail__label" for="retry-id">Corrige la cédula o el RUC antes de reintentar</label>
+          <input id="retry-id" class="sale-detail__input" inputmode="numeric" [ngModel]="idDraft()" (ngModelChange)="idDraft.set($event)" [attr.aria-invalid]="!!idError()" />
+          @if (idError()) {
+            <p class="sale-detail__error" role="alert">{{ idError() }}</p>
+          }
+          <app-button [loading]="busy()" [disabled]="!!idError()" (clicked)="retryInvoice(sale)">Reintentar emisión</app-button>
+        </div>
+      }
+    } @else {
+      <p class="sale-detail__hint">Esta venta se registró sin factura electrónica. Puedes emitirla ahora.</p>
+      <div class="sale-detail__action">
+        <label class="sale-detail__label" for="issue-id">Cédula o RUC del cliente</label>
+        <input id="issue-id" class="sale-detail__input" inputmode="numeric" [ngModel]="idDraft()" (ngModelChange)="idDraft.set($event)" [attr.aria-invalid]="!!idError()" />
+        @if (idError()) {
+          <p class="sale-detail__error" role="alert">{{ idError() }}</p>
+        }
+        <app-button [loading]="busy()" [disabled]="!!idError()" (clicked)="issueInvoice(sale)">Emitir factura electrónica</app-button>
+      </div>
+    }
+  }
+</app-modal>

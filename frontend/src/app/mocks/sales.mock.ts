@@ -55,4 +55,10 @@ const BASE_SALES: Sale[] = [
   },
 ];
 
-export const SALES_MOCK: Sale[] = [...BASE_SALES, ...SALES_HISTORY_MOCK];
+const FIRST_FOLIO = 101;
+
+/** Cronológicas, con folios consecutivos (el más antiguo primero) y listadas de la más reciente a la más antigua. */
+export const SALES_MOCK: Sale[] = [...BASE_SALES, ...SALES_HISTORY_MOCK]
+  .sort((a, b) => a.date.localeCompare(b.date))
+  .map((sale, index) => ({ ...sale, folio: String(FIRST_FOLIO + index).padStart(6, '0') }))
+  .reverse();

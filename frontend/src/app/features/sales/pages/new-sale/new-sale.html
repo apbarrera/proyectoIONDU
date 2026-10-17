@@ -1,13 +1,13 @@
 <app-page-header
   title="Nueva venta"
-  subtitle="Registra una venta y descuenta el stock automáticamente."
+  subtitle="Registra una venta, descuenta el stock y emite la factura electrónica."
   [breadcrumb]="[{ label: 'Ventas', link: '/sales/history' }, { label: 'Nueva venta' }]"
 />
 
 <div class="new-sale__layout">
   <app-card title="Productos">
     <div class="new-sale__picker">
-      <select class="new-sale__select" [ngModel]="selectedProductId()" (ngModelChange)="selectedProductId.set($event)">
+      <select class="new-sale__select" aria-label="Producto" [ngModel]="selectedProductId()" (ngModelChange)="selectedProductId.set($event)">
         <option value="" disabled>Selecciona un producto</option>
         @for (p of sellableProducts(); track p.id) {
           <option [value]="p.id">{{ p.name }} — ${{ p.salePrice }}</option>
@@ -19,65 +19,112 @@
     @if (cart().length === 0) {
       <app-empty-state icon="cart" title="El carrito está vacío." description="Agrega productos para iniciar la venta." />
     } @else {
-      <table class="new-sale__cart">
-        <thead>
-          <tr>
-            <th>Producto</th>
-            <th>Cantidad</th>
-            <th>Precio</th>
-            <th>Subtotal</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (line of cart(); track line.productId) {
+      <div class="new-sale__table-scroll">
+        <table class="new-sale__cart">
+          <thead>
             <tr>
-              <td>{{ line.productName }}</td>
-              <td>
-                <input
-                  type="number"
-                  min="1"
-                  class="new-sale__qty"
-                  [ngModel]="line.quantity"
-                  (ngModelChange)="updateQuantity(line.productId, $event)"
-                />
-              </td>
-              <td>${{ line.unitPrice.toFixed(2) }}</td>
-              <td>${{ (line.unitPrice * line.quantity).toFixed(2) }}</td>
-              <td>
-                <button type="button" class="new-sale__remove" (click)="removeFromCart(line.productId)" aria-label="Quitar">
-      <app-icon name="close" [size]="18" />
-                </button>
-              </td>
+              <th>Producto</th>
+              <th>Cantidad</th>
+              <th>Precio</th>
+              <th>Subtotal</th>
+              <th><span class="sr-only">Quitar</span></th>
             </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @for (line of cart(); track line.productId) {
+              <tr>
+                <td>{{ line.productName }}</td>
+                <td>
+                  <input
+                    type="number"
+                    min="1"
+                    class="new-sale__qty"
+                    [attr.aria-label]="'Cantidad de ' + line.productName"
+                    [ngModel]="line.quantity"
+                    (ngModelChange)="updateQuantity(line.productId, $event)"
+                  />
+                </td>
+                <td>${{ line.unitPrice.toFixed(2) }}</td>
+                <td>${{ (line.unitPrice * line.quantity).toFixed(2) }}</td>
+                <td>
+                  <button type="button" class="new-sale__remove" (click)="removeFromCart(line.productId)" [attr.aria-label]="'Quitar ' + line.productName">
+                    <app-icon name="close" [size]="18" />
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     }
   </app-card>
 
   <app-card title="Resumen de venta">
-    <label class="new-sale__label">Cliente</label>
+    <label class="new-sale__label" for="sale-customer">Cliente</label>
     <input
+      id="sale-customer"
       class="new-sale__input"
       [ngModel]="customerName()"
       (ngModelChange)="customerName.set($event)"
       placeholder="Consumidor Final"
     />
 
-    <label class="new-sale__label">Método de pago</label>
-    <select class="new-sale__input" [ngModel]="paymentMethod()" (ngModelChange)="paymentMethod.set($event)">
+    <label class="new-sale__label" for="sale-payment">Método de pago</label>
+    <select id="sale-payment" class="new-sale__input" [ngModel]="paymentMethod()" (ngModelChange)="paymentMethod.set($event)">
       <option value="efectivo">Efectivo</option>
       <option value="tarjeta">Tarjeta</option>
       <option value="transferencia">Transferencia</option>
     </select>
 
-    <label class="new-sale__label">Observación</label>
+    <label class="new-sale__label" for="sale-observation">Observación</label>
     <textarea
+      id="sale-observation"
       class="new-sale__input"
       [ngModel]="observation()"
       (ngModelChange)="observation.set($event)"
     ></textarea>
+
+    <div class="new-sale__invoice">
+      <app-switch
+        [(checked)]="emitInvoice"
+        label="Emitir factura electrónica"
+        description="Se envía al SRI automáticamente al confirmar la venta."
+      />
+
+      @if (emitInvoice()) {
+        <div class="new-sale__invoice-fields">
+          <label class="new-sale__label" for="sale-ruc">Cédula o RUC del cliente</label>
+          <input
+            id="sale-ruc"
+            class="new-sale__input new-sale__input--tight"
+            inputmode="numeric"
+            [class.new-sale__input--error]="idError()"
+            [attr.aria-invalid]="!!idError()"
+            [attr.aria-describedby]="idError() ? 'sale-ruc-error' : null"
+            [ngModel]="rucOrCedula()"
+            (ngModelChange)="rucOrCedula.set($event)"
+          />
+          @if (idError()) {
+            <p id="sale-ruc-error" class="new-sale__error" role="alert">{{ idError() }}</p>
+          }
+
+          <label class="new-sale__label" for="sale-email">Correo para enviar la factura (opcional)</label>
+          <input
+            id="sale-email"
+            type="email"
+            class="new-sale__input new-sale__input--tight"
+            [class.new-sale__input--error]="emailError()"
+            [attr.aria-invalid]="!!emailError()"
+            [attr.aria-describedby]="emailError() ? 'sale-email-error' : null"
+            [ngModel]="email()"
+            (ngModelChange)="email.set($event)"
+          />
+          @if (emailError()) {
+            <p id="sale-email-error" class="new-sale__error" role="alert">{{ emailError() }}</p>
+          }
+        </div>
+      }
+    </div>
 
     <div class="new-sale__totals">
       <div><span>Subtotal</span><span>${{ subtotal().toFixed(2) }}</span></div>
@@ -85,8 +132,8 @@
       <div class="new-sale__total"><span>Total</span><span>${{ total().toFixed(2) }}</span></div>
     </div>
 
-    <app-button fullWidth [loading]="submitting()" [disabled]="cart().length === 0" (clicked)="confirmSale()">
-      Confirmar venta
+    <app-button fullWidth [loading]="submitting()" [disabled]="!canConfirm()" (clicked)="confirmSale()">
+      {{ emitInvoice() ? 'Confirmar venta y emitir factura' : 'Confirmar venta' }}
     </app-button>
   </app-card>
 </div>

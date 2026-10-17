@@ -109,3 +109,40 @@ textarea.new-sale__input {
     color: var(--color-text-primary);
   }
 }
+
+.new-sale__table-scroll {
+  overflow-x: auto;
+}
+
+.new-sale__input--tight {
+  margin-bottom: var(--space-2);
+}
+
+.new-sale__input--error {
+  border-color: var(--color-danger);
+}
+
+.new-sale__error {
+  margin-bottom: var(--space-3);
+  font-size: 0.8125rem;
+  color: var(--color-danger);
+}
+
+// Datos de facturación: un bloque hundido que agrupa el interruptor y sus campos.
+.new-sale__invoice {
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+
+.new-sale__invoice-fields {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+
+  .new-sale__input {
+    background: var(--color-surface);
+  }
+}

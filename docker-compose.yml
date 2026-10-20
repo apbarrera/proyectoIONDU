@@ -73,7 +73,9 @@ services:
 
   # ---------------- Worker (sin puertos, sin dominio) ----------------
   worker:
-    image: iondu-backend:latest   # misma imagen que la API
+    # Mismo Dockerfile que la API; la caché reutiliza todas sus capas.
+    # Sin "image:" propio: si dos servicios con "build" comparten nombre de
+    # imagen, la construcción en paralelo falla con "already exists".
     build:
       context: ./backend
       dockerfile: Dockerfile

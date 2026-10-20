@@ -11,5 +11,16 @@
 .DS_Store
 Thumbs.db
 
+# Python (entorno virtual y archivos generados)
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
 # Paquetes de despliegue generados
 *.zip

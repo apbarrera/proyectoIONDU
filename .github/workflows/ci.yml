@@ -41,4 +41,6 @@ jobs:
     needs: [frontend, backend]
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose build
+      # Solo el archivo de producción (el que lee Coolify); el override es para
+      # desarrollo local y exige variables (.env) que el CI no tiene.
+      - run: docker compose -f docker-compose.yml build

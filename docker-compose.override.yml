@@ -1,7 +1,53 @@
 # Solo para desarrollo local: publica el puerto 8080 para abrir http://localhost:8080
 # Docker Compose carga este archivo automáticamente junto con docker-compose.yml.
 # En Coolify NO se usa (Coolify solo lee docker-compose.yml).
+#
+# También agrega un PostgreSQL local ("db") para desarrollar sin depender de
+# Supabase. Si DATABASE_URL está definida en .env (por ejemplo, la de Supabase),
+# la API y el worker usan esa; si está vacía, usan este PostgreSQL local.
+
+x-local-db-url: &local-db-url
+  DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://iondu:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env (ver .env.example)}@db:5432/iondu}
+
 services:
   web:
     ports:
       - "8080:80"
+
+  api:
+    environment:
+      <<: *local-db-url
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    environment:
+      <<: *local-db-url
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Misma versión mayor de PostgreSQL que Supabase.
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: iondu
+      POSTGRES_USER: iondu
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env (ver .env.example)}
+      TZ: America/Guayaquil
+    # 15432 en el host para no chocar con PostgreSQL instalados en Windows (5432-5434).
+    # Solo 127.0.0.1: accesible desde esta computadora, no desde la red.
+    ports:
+      - "127.0.0.1:15432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iondu -d iondu"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  db-data:

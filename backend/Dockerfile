@@ -26,6 +26,8 @@ COPY requirements-dev.txt .
 RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements-dev.txt
 WORKDIR /src
 COPY app ./app
+COPY alembic.ini ./
+COPY alembic ./alembic
 COPY tests ./tests
 RUN python -m pytest -q
 
@@ -48,6 +50,9 @@ RUN groupadd --system --gid 10001 app \
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY --chown=app:app app ./app
+# Migraciones: docker compose exec api alembic upgrade head
+COPY --chown=app:app alembic.ini ./
+COPY --chown=app:app alembic ./alembic
 
 USER app
 EXPOSE 8000

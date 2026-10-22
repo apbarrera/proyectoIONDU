@@ -47,9 +47,13 @@
 - **Por qué:** sin CORS, cookies más simples y una PWA más estable.
 
 ### 1.6 Imagen única para la API y el worker
-- **Decisión:** una sola imagen; el worker solo cambia el comando (`python -m app.worker`).
+- **Decisión:** un solo `Dockerfile` (`backend/`); el worker solo cambia el comando (`python -m app.worker`).
 - **Por qué:** una compilación, las mismas dependencias y menos mantenimiento.
-- La compilación incluye un *target* `test` que ejecuta `pytest`: si una prueba falla, falla la construcción.
+- La compilación incluye un *target* `test` que ejecuta Ruff y `pytest`: si algo falla, falla la construcción.
+- **Cambio (21/10/2026):** el `worker` ya no declara `image: iondu-backend:latest`. Como `api` y `worker` tenían
+  `build:` y el mismo nombre de imagen, al construirse en paralelo a veces fallaba con `image ... already exists`
+  (pasaba en unas máquinas sí y en otras no). Ahora cada servicio construye su imagen desde el mismo `Dockerfile`;
+  la caché de Docker reutiliza todas las capas, así que no tarda el doble ni ocupa el doble.
 
 ### 1.7 Nginx y la PWA
 - `ngsw-worker.js`, `ngsw.json` e `index.html` se sirven **sin caché** (si se cachean, los usuarios quedan atascados
@@ -57,9 +61,24 @@
 - El service worker exige HTTPS, que cubre Traefik. `/api/**` se excluye de la navegación del service worker.
 
 ### 1.8 Integración continua
-- **GitHub Actions** en cada push y pull request: pruebas y build del frontend, pruebas del backend (en Docker)
-  y construcción de las imágenes. Opcional a futuro: construir las imágenes en Actions y publicarlas en GHCR para
-  que el VPS solo las descargue.
+- **GitHub Actions** en cada push y pull request: pruebas y build del frontend, revisión con Ruff y pruebas del
+  backend (en Docker) y construcción de las imágenes. Opcional a futuro: construir las imágenes en Actions y
+  publicarlas en GHCR para que el VPS solo las descargue.
+- **Las imágenes se construyen con `docker compose -f docker-compose.yml build`** (21/10/2026), sin el override.
+  **Por qué:** el CI debe comprobar lo mismo que despliega Coolify, y el override (solo local) exige variables del
+  `.env` que el CI no tiene; al principio eso dejó el CI en rojo.
+
+### 1.9 PostgreSQL local para desarrollo
+- **Decisión (20/10/2026):** `docker-compose.override.yml` agrega un servicio `db` con PostgreSQL 17 (la misma
+  versión mayor que Supabase). Si `DATABASE_URL` está vacía en el `.env`, la API y el worker usan esta base; si
+  tiene la dirección de Supabase, usan Supabase.
+- **Por qué:** cada uno desarrolla y prueba sin depender de Supabase (que todavía no existe) ni de internet, y como
+  Supabase es PostgreSQL, lo que funciona aquí funciona allá cambiando una variable.
+- Se publica solo en `127.0.0.1:15432` (no se ve desde la red). Se eligió 15432 porque en la máquina de desarrollo
+  ya había PostgreSQL instalados en 5432, 5433 y 5434.
+- La contraseña no está en el repositorio: se lee de `POSTGRES_PASSWORD` en el `.env`, que es obligatoria.
+- Usa un volumen (`db-data`) para no perder los datos al apagar el contenedor. Es la única excepción a la decisión
+  1.4, y solo en local: Coolify no lee el override.
 
 ## 2. Backend y datos
 
@@ -120,6 +139,36 @@
 - La IA nunca crea ni altera ingresos; estos solo entran por facturación electrónica o venta manual.
 - Toda acción de la IA sobre inventario o gastos requiere confirmación explícita del usuario.
 - El dashboard financiero es exclusivo del rol Administrador.
+
+### 2.10 Acceso a datos: SQLAlchemy 2 sincrónico + psycopg 3
+- **Decisión (20/10/2026):** SQLAlchemy en modo sincrónico (no `async`), con el driver psycopg 3.
+- **Por qué:** es más simple de escribir, leer y depurar. FastAPI ejecuta los endpoints normales (`def`) en un
+  grupo de hilos, lo que alcanza para los 100 usuarios concurrentes de RNF-04.
+- Una sola conexión compartida (`app/db/session.py`) con pool de 5 (+5 extra) por proceso: el Session Pooler de
+  Supabase limita las conexiones y la API corre con 2 procesos de uvicorn. Cada conexión usa la zona horaria de
+  Ecuador y se rinde a los 5 s si la base no responde.
+- `/api/health` responde siempre 200 si el proceso vive (lo usa el healthcheck de Docker) e informa aparte el estado
+  de la base (`database: ok | error | not_configured`). Así, una caída de Supabase no hace que Docker dé por muerta la API.
+
+### 2.11 Migraciones con Alembic
+- **Decisión (21/10/2026):** los cambios a la base se hacen con **migraciones de Alembic** (`backend/alembic/versions/`),
+  no volviendo a exportar `schema.sql`. Cada uno actualiza su base con `alembic upgrade head`; Supabase, igual.
+- **Por qué:** se aplica solo lo nuevo, sin borrar datos, y se sabe en qué versión está cada base (`alembic current`).
+  En producción, con datos reales, es la única forma segura.
+- La primera migración será el esquema de `database/schema.sql` una vez corregido (ver `ESTADO.md`, sección 2.F).
+- `env.py` lee la dirección de `DATABASE_URL` (nunca de `alembic.ini`) y **nunca propone borrar una tabla que no tenga
+  modelo**: el `--autogenerate` solo crea o modifica; un `DROP TABLE` se escribe a mano.
+- Los modelos heredan de `Base` (`app/db/base.py`), que fija los nombres de las restricciones con el mismo estilo de
+  PostgreSQL (`producto_id_empresa_fkey`, `empresa_ruc_key`); sin eso, Alembic no puede modificarlas después.
+- Las migraciones se crean en local y se aplican desde el contenedor (`docker compose exec api alembic upgrade head`).
+  Una prueba falla si la cadena se parte en dos (dos migraciones creadas en paralelo); se arregla con
+  `alembic merge heads`.
+
+### 2.12 Contrato de la API con los nombres del frontend
+- **Decisión (21/10/2026, propuesta):** el JSON de la API usa los nombres que ya usa el frontend (`sku`, `name`,
+  `salePrice`…), y el backend los traduce a las columnas en español de la base. Se documentará en `docs/API.md`.
+- **Por qué:** los servicios del frontend ya están hechos para cambiar `simulateRequest(...)` por llamadas reales
+  sin tocar los componentes; así ese cambio es mínimo.
 
 ## 3. Producto
 
@@ -202,12 +251,32 @@
 - `impeccable` instala un hook que revisa los archivos de interfaz al editarlos y envía telemetría anónima
   (se desactiva con `DO_NOT_TRACK=1`). Necesita `/impeccable init` una vez.
 
+### 5.4 Revisión de código del backend con Ruff
+- **Decisión (21/10/2026):** Ruff revisa (`ruff check`) y formatea (`ruff format`) el código Python; la configuración
+  está en `backend/pyproject.toml`. El CI falla si el código no pasa.
+- **Por qué:** detecta errores comunes antes de ejecutar (imports o variables sin usar, código simplificable) y deja
+  un solo estilo sin importar quién escribe. Se agregó con el backend chico, para no tener que corregir cientos de
+  archivos después.
+- Reglas: estilo PEP 8 (`E`, `W`), errores (`F`), orden de imports (`I`), errores sutiles (`B`), sintaxis moderna
+  (`UP`), simplificaciones (`SIM`) y nombres (`N`). Línea máxima de 100 caracteres.
+- La plantilla de migraciones se modernizó para que cumpla las reglas, y Alembic formatea cada migración nueva con
+  Ruff al crearla.
+
+### 5.5 Entorno de desarrollo del backend
+- Python 3.12 (la misma versión que la imagen Docker) con un entorno virtual en `backend/.venv`, que no se sube al
+  repositorio. Permite autocompletado en el editor y correr las pruebas en segundos sin construir Docker.
+- Docker sigue siendo la referencia: el CI prueba dentro de la imagen.
+
 ## 6. Trampas técnicas conocidas
 
 | Situación | Qué pasa | Qué hacer |
 |---|---|---|
 | Saltos de línea | Varios archivos del frontend usan CRLF (Windows); los reemplazos de texto automáticos fallan sin avisar | Normalizar a `\n` antes de reemplazar y restaurar CRLF; o agregar un `.gitattributes` |
-| Pruebas del backend | No hay Python instalado en la máquina de desarrollo | `docker build --target test backend` |
+| Pruebas del backend | Hace falta Python 3.12 para correrlas sin Docker | `docker build --target test backend`, o el entorno virtual `backend/.venv` (ver 5.5) |
+| `docker compose up` falla pidiendo `POSTGRES_PASSWORD` | El override exige la contraseña de la base local | Agregar `POSTGRES_PASSWORD=<cualquier valor>` al `.env` |
+| `Ports are not available` al levantar `db` | Otro PostgreSQL (o programa) ya usa el puerto | La base local usa 15432; si también está ocupado, cambiarlo en `docker-compose.override.yml` |
+| Ruff quiere mover `from alembic import ...` | La carpeta `backend/alembic/` le hace creer que es código propio | Ya resuelto con `known-third-party = ["alembic"]` en `pyproject.toml` |
+| Falla `test_migraciones_forman_una_sola_cadena` | Dos migraciones creadas en paralelo dejaron dos "heads" | `alembic merge heads -m "unir migraciones"` |
 | Agregar un ícono | Los íconos son un registro generado | Añadirlo en `frontend/scripts/generate-icons.mjs` y correr `npm run icons` |
 | Contenedor en `localhost:8080` | Usa la imagen de la última construcción | `docker compose up -d --build` |
 | Modal tapado por la cabecera | Un `view-transition-name` permanente crea un contexto de apilamiento | Mantenerlo solo durante la transición (ya implementado en `app.config.ts`) |
@@ -222,3 +291,8 @@
 - **Imágenes en GHCR** construidas por GitHub Actions, en lugar de compilar Angular en el VPS (recomendado si el
   servidor del cliente es pequeño).
 - **Redis/Celery** para el worker, solo si el volumen lo justifica.
+- **Tipos de producto:** `simple / insumo / compuesto` (frontend) o `venta / insumo / ambos` (RF-4.1); la tabla
+  `producto` hoy usa `VENTA` por defecto. Hay que elegir uno y usarlo en los tres lados.
+- **Recetas y Producción:** el frontend tiene esas pantallas, pero no están en `REQUISITOS.md` ni tienen tablas.
+  Confirmar con el cliente si entran en el MVP.
+- **Quién crea y administra el proyecto de Supabase** del equipo.

@@ -77,7 +77,11 @@
 | Levantar todo con Docker | `docker compose up -d --build` y abrir http://localhost:8080 |
 | Desarrollar el frontend | `cd frontend && npm start` (http://localhost:4200) |
 | Pruebas del frontend | `cd frontend && npx ng test --no-watch` |
-| Pruebas del backend | `docker build --target test backend` (no hace falta Python local) |
+| Pruebas del backend | `docker build --target test backend` (no hace falta Python local), o `cd backend && .venv\Scripts\python -m pytest` con el entorno virtual |
+| Aplicar las migraciones de la base | `docker compose exec api alembic upgrade head` |
+| Ver en qué migración está la base | `docker compose exec api alembic current` |
+| Crear una migración nueva | `cd backend && alembic revision -m "descripcion"` y completar `upgrade()` y `downgrade()` en `backend/alembic/versions/`; luego `docker compose up -d --build api` y aplicarla |
+| Base de datos local | PostgreSQL en `localhost:15432`, usuario y base `iondu`, contraseña `POSTGRES_PASSWORD` del `.env` |
 | Agregar un ícono | añadirlo en `frontend/scripts/generate-icons.mjs` y correr `npm run icons` |
 
 Usuarios de prueba del frontend: `admin@iondu.demo` y `operador@iondu.demo`, contraseña `iondu2026`.

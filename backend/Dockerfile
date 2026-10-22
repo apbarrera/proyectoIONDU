@@ -21,14 +21,16 @@ COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
 
 # ---------- Etapa de pruebas: docker build --target test . ----------
+# Primero la revisión de código (Ruff) y luego las pruebas; si algo falla, falla el build.
 FROM builder AS test
 COPY requirements-dev.txt .
 RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements-dev.txt
 WORKDIR /src
+COPY pyproject.toml alembic.ini ./
 COPY app ./app
-COPY alembic.ini ./
 COPY alembic ./alembic
 COPY tests ./tests
+RUN ruff check . && ruff format --check .
 RUN python -m pytest -q
 
 # ---------- Etapa 2: runtime ----------

@@ -78,6 +78,7 @@
 | Desarrollar el frontend | `cd frontend && npm start` (http://localhost:4200) |
 | Pruebas del frontend | `cd frontend && npx ng test --no-watch` |
 | Pruebas del backend | `docker build --target test backend` (no hace falta Python local), o `cd backend && .venv\Scripts\python -m pytest` con el entorno virtual |
+| Revisar y formatear el backend (Ruff) | `cd backend && .venv\Scripts\ruff check --fix . && .venv\Scripts\ruff format .` (el CI falla si no pasa) |
 | Aplicar las migraciones de la base | `docker compose exec api alembic upgrade head` |
 | Ver en qué migración está la base | `docker compose exec api alembic current` |
 | Crear una migración nueva | `cd backend && alembic revision -m "descripcion"` y completar `upgrade()` y `downgrade()` en `backend/alembic/versions/`; luego `docker compose up -d --build api` y aplicarla |

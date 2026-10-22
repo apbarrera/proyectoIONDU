@@ -3,6 +3,7 @@
 Todo modelo hereda de `Base`; así queda registrado en `Base.metadata`, que es
 lo que Alembic compara contra la base de datos para generar migraciones.
 """
+
 from sqlalchemy import MetaData
 from sqlalchemy.orm import DeclarativeBase
 

@@ -5,6 +5,7 @@
 - `get_db()` es la dependencia de FastAPI que entrega una sesión por petición
   y la cierra al terminar, pase lo que pase.
 """
+
 from collections.abc import Iterator
 from functools import lru_cache
 

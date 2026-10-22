@@ -3,6 +3,7 @@
 La dirección de la base sale de DATABASE_URL (la misma configuración que usa
 la API), nunca de alembic.ini.
 """
+
 from logging.config import fileConfig
 
 from alembic import context
@@ -29,9 +30,7 @@ def _database_url() -> str:
 def include_object(obj, name, type_, reflected, compare_to) -> bool:
     # Una tabla que existe en la base pero no tiene modelo NO se propone borrar:
     # el autogenerate solo crea o modifica; un DROP TABLE se escribe a mano.
-    if type_ == "table" and reflected and compare_to is None:
-        return False
-    return True
+    return not (type_ == "table" and reflected and compare_to is None)
 
 
 def run_migrations_offline() -> None:

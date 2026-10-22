@@ -3,6 +3,7 @@
 Por ahora solo mantiene el latido (heartbeat) que usa el healthcheck de Docker.
 Maneja SIGTERM/SIGINT para terminar el ciclo en curso antes de salir.
 """
+
 import logging
 import signal
 import threading

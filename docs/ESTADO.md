@@ -1,6 +1,6 @@
 # IONDU · Estado del proyecto y siguientes pasos
 
-> Resumen de traspaso. Última actualización: 21 de octubre de 2026 (backend conectado a PostgreSQL, migraciones con Alembic y revisión de código con Ruff).
+> Resumen de traspaso. Última actualización: 25 de octubre de 2026 (primer módulo del backend: categorías y productos, con contrato en `API.md`).
 > Documentos relacionados: [`DECISIONES.md`](DECISIONES.md) (el porqué de cada decisión) · [`REQUISITOS.md`](REQUISITOS.md) · [`PRESUPUESTO.md`](PRESUPUESTO.md) · [`DESPLIEGUE.md`](DESPLIEGUE.md) · [`CORRECCIONES_PDF.md`](CORRECCIONES_PDF.md)
 
 ## 1. Qué está hecho
@@ -14,7 +14,15 @@
 - Corregido: `api` y `worker` compartían nombre de imagen y la construcción fallaba a veces con `image ... already exists`.
 - `CLAUDE.md` con las reglas del proyecto y el formato obligatorio de commits.
 
-### Backend (base lista, sin módulos de negocio)
+### Backend: primer módulo (categorías y productos)
+- Endpoints según [`API.md`](API.md): `GET/POST /api/product-categories` y `GET/POST /api/products`, `GET/PATCH /api/products/{id}`, con páginas, búsqueda y filtros (`categoryId`, `type`, `lowStock`).
+- Capas: `models/` (empresa, categoría y producto, idénticos a `schema.sql`, comprobado con `alembic check`) → `repositories/` (cada repositorio recibe la empresa y todas sus consultas la filtran) → `services/` (reglas: categoría de la misma empresa, código único por empresa, el stock no se edita) → `schemas/` (validación y nombres del contrato) → `api/`.
+- **Errores con formato único** (`app/core/errors.py`): `{"error": {"code", "message", "details"}}`, con mensajes de validación en español por campo.
+- **Empresa provisional** (`app/api/deps.py`): solo con `APP_ENV=development` se toma del encabezado `X-Empresa-Id`; en cualquier otro entorno responde 401. Con Supabase Auth solo cambia esa función.
+- Pendiente de la base: desactivar productos (falta la columna `activo`) y la restricción `UNIQUE` del código (hoy lo valida el servicio).
+- 22 pruebas, incluido el aislamiento entre empresas. Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
+
+### Backend (base)
 - FastAPI con `/api/health`, hora en `America/Guayaquil`, configuración solo por variables de entorno y documentación `/api/docs` únicamente fuera de producción.
 - **Conexión a PostgreSQL** con SQLAlchemy 2.1 + psycopg 3 (`app/db/session.py`): una conexión compartida con pool pequeño, zona horaria de Ecuador y *timeout* de 5 s. Los endpoints piden la sesión con `Depends(get_db)`.
 - `/api/health` informa también el estado de la base: `"database": "ok" | "error" | "not_configured"` (siempre responde 200 si el proceso vive).
@@ -23,8 +31,7 @@
 - **Ruff** revisa y formatea el código (`backend/pyproject.toml`); las migraciones nuevas se formatean solas.
 - Estructura por capas acordada (patrón Repositorio del PDF): `api/` (endpoints) → `schemas/` (datos de entrada y salida) → `services/` (reglas de negocio) → `repositories/` (consultas, siempre por `id_empresa`) → `models/` (tablas). Las carpetas se crean cuando se necesitan.
 - Worker con latido (`/tmp/worker-heartbeat`) y apagado limpio ante SIGTERM.
-- 7 pruebas.
-- **Todavía sin endpoints de negocio ni login**: el frontend sigue con datos de ejemplo.
+- **Todavía sin login**: el frontend sigue con datos de ejemplo hasta conectar sus servicios a `/api/...`.
 
 ### Base de datos
 - `database/schema.sql`: esquema inicial con 17 tablas (exportado con `pg_dump` desde PostgreSQL 18). Se probó cargarlo en PostgreSQL 17 sin errores.
@@ -105,7 +112,7 @@ Después de corregirlo, el esquema pasa a ser **la primera migración de Alembic
 
 **Por decidir en equipo:** los valores del tipo de producto, y si Recetas y Producción entran en el MVP (si entran, hay que agregarlas a los requisitos y crear sus tablas).
 
-**Contrato de la API:** se escribirá en `docs/API.md`, empezando por productos. El JSON usará los nombres que ya usa el frontend (`sku`, `name`, `salePrice`…) y el backend los traduce a las columnas de la base. Así, en el frontend basta con cambiar `simulateRequest(...)` por llamadas reales en cada servicio.
+**Contrato de la API:** en [`API.md`](API.md), empezando por productos (ya implementados en el backend). El JSON usará los nombres que ya usa el frontend (`sku`, `name`, `salePrice`…) y el backend los traduce a las columnas de la base. Así, en el frontend basta con cambiar `simulateRequest(...)` por llamadas reales en cada servicio.
 
 ## 3. Cómo trabajar en el proyecto
 
@@ -119,7 +126,9 @@ Después de corregirlo, el esquema pasa a ser **la primera migración de Alembic
 | Aplicar las migraciones de la base | `docker compose exec api alembic upgrade head` |
 | Ver en qué migración está la base | `docker compose exec api alembic current` |
 | Crear una migración nueva | `cd backend && alembic revision -m "descripcion"` y completar `upgrade()` y `downgrade()` en `backend/alembic/versions/`; luego `docker compose up -d --build api` y aplicarla |
-| Base de datos local | PostgreSQL en `localhost:15432`, usuario y base `iondu`, contraseña `POSTGRES_PASSWORD` del `.env` |
+| Base de datos local | PostgreSQL en `127.0.0.1:15432`, usuario y base `iondu`, contraseña `POSTGRES_PASSWORD` del `.env` |
+| Probar la API a mano | Con `APP_ENV=development` en el `.env`: abrir http://localhost:8080/api/docs y enviar el encabezado `X-Empresa-Id` (la empresa debe existir en la tabla `empresa`) |
+| Pruebas del backend con base de datos | Una vez: `docker compose exec db createdb -U iondu iondu_test`. Luego, desde `backend/`, definir `TEST_DATABASE_URL=postgresql+psycopg://iondu:<POSTGRES_PASSWORD>@127.0.0.1:15432/iondu_test` y correr `pytest` (sin la variable, esas pruebas se saltan) |
 | Agregar un ícono | añadirlo en `frontend/scripts/generate-icons.mjs` y correr `npm run icons` |
 
 Usuarios de prueba del frontend: `admin@iondu.demo` y `operador@iondu.demo`, contraseña `iondu2026`.

@@ -59,6 +59,9 @@
 - `ngsw-worker.js`, `ngsw.json` e `index.html` se sirven **sin caché** (si se cachean, los usuarios quedan atascados
   en versiones viejas). Los archivos con hash llevan caché de un año (`immutable`).
 - El service worker exige HTTPS, que cubre Traefik. `/api/**` se excluye de la navegación del service worker.
+- **Cambio (25/10/2026):** el proxy usa `location ^~ /api/`. Sin el `^~`, Nginx daba prioridad a la regla de
+  estáticos por extensión (`.json`, `.png`, …) y rutas como `/api/openapi.json` respondían 404 desde el frontend
+  (y lo mismo habría pasado con cualquier endpoint futuro que termine en esas extensiones).
 
 ### 1.8 Integración continua
 - **GitHub Actions** en cada push y pull request: pruebas y build del frontend, revisión con Ruff y pruebas del
@@ -165,10 +168,35 @@
   `alembic merge heads`.
 
 ### 2.12 Contrato de la API con los nombres del frontend
-- **Decisión (21/10/2026, propuesta):** el JSON de la API usa los nombres que ya usa el frontend (`sku`, `name`,
-  `salePrice`…), y el backend los traduce a las columnas en español de la base. Se documentará en `docs/API.md`.
+- **Decisión (25/10/2026):** las rutas y el JSON de la API están en inglés con los nombres que ya usa el frontend
+  (`/api/products`, `sku`, `salePrice`…), y el backend los traduce a las columnas en español de la base. El contrato
+  vive en [`API.md`](API.md) y se actualiza **antes** de programar un endpoint.
 - **Por qué:** los servicios del frontend ya están hechos para cambiar `simulateRequest(...)` por llamadas reales
   sin tocar los componentes; así ese cambio es mínimo.
+- Un recurso de otra empresa responde `404` (no `403`): no se revela que existe.
+- No hay `DELETE` de productos: con ventas o movimientos asociados, borrar rompería el historial; se desactivan.
+
+### 2.13 Errores con un formato único
+- **Decisión (25/10/2026):** todo error responde `{"error": {"code", "message", "details"}}` (`app/core/errors.py`).
+  `code` es fijo para el programa, `message` está en español para mostrarlo y `details` lista los campos inválidos.
+- **Por qué:** el frontend maneja todos los errores igual, sin casos especiales por endpoint.
+- Los servicios lanzan `NotFoundError`, `ConflictError`, etc., y un manejador los convierte en la respuesta. Los
+  errores inesperados responden `500` sin detalles internos (quedan en los registros del servidor); si la base no
+  responde, `503`.
+
+### 2.14 Empresa de la petición: provisional por encabezado
+- **Decisión (25/10/2026):** mientras no exista el login, la dependencia `get_empresa_id` (`app/api/deps.py`) toma la
+  empresa del encabezado `X-Empresa-Id`, **solo con `APP_ENV=development`**; en cualquier otro entorno responde 401.
+- **Por qué:** permite construir y probar los módulos con el aislamiento por empresa real, sin esperar a Supabase, y
+  es imposible que quede abierto en el servidor. Con Supabase Auth solo cambia el interior de esa función.
+- Los repositorios reciben la empresa al crearse (`ProductoRepository(db, empresa_id)`) y todas sus consultas la
+  filtran: no existe un método que consulte sin empresa.
+
+### 2.15 El stock no se edita en el producto
+- **Decisión (25/10/2026):** `currentStock` se fija al crear el producto; después solo cambia por ventas, compras y
+  ajustes de inventario. `PATCH /api/products/{id}` lo rechaza.
+- **Por qué:** cada cambio de stock debe quedar en el historial de movimientos (RF-4.3, RF-4.7); si se pudiera
+  editar libremente, el historial no cuadraría con el stock.
 
 ## 3. Producto
 
@@ -267,6 +295,14 @@
   repositorio. Permite autocompletado en el editor y correr las pruebas en segundos sin construir Docker.
 - Docker sigue siendo la referencia: el CI prueba dentro de la imagen.
 
+### 5.6 Pruebas con base de datos
+- **Decisión (25/10/2026):** las pruebas que necesitan PostgreSQL usan `TEST_DATABASE_URL`, en una base aparte cuyo
+  nombre **debe terminar en `_test`** (las pruebas borran y crean sus tablas; con otro nombre se niegan a correr).
+- Cada prueba corre dentro de una transacción que se deshace al terminar (los `commit()` del código se vuelven
+  *savepoints*): las pruebas no se afectan entre sí y no dejan datos.
+- Sin la variable, esas pruebas se saltan (por ejemplo, al construir la imagen). En el CI, el trabajo del backend
+  levanta un PostgreSQL temporal y corre todas.
+
 ## 6. Trampas técnicas conocidas
 
 | Situación | Qué pasa | Qué hacer |
@@ -276,6 +312,9 @@
 | `docker compose up` falla pidiendo `POSTGRES_PASSWORD` | El override exige la contraseña de la base local | Agregar `POSTGRES_PASSWORD=<cualquier valor>` al `.env` |
 | `Ports are not available` al levantar `db` | Otro PostgreSQL (o programa) ya usa el puerto | La base local usa 15432; si también está ocupado, cambiarlo en `docker-compose.override.yml` |
 | Ruff quiere mover `from alembic import ...` | La carpeta `backend/alembic/` le hace creer que es código propio | Ya resuelto con `known-third-party = ["alembic"]` en `pyproject.toml` |
+| Conectar desde Windows a `localhost:15432` se queda colgado | `localhost` intenta primero IPv6 (`::1`) y el contenedor solo escucha en `127.0.0.1` | Usar `127.0.0.1` en las direcciones de conexión |
+| Tildes rotas al probar con `curl` en Windows | La terminal no envía el texto en UTF-8 y la API responde `400 BAD_REQUEST` | Enviar el JSON desde un archivo UTF-8 (`--data-binary @archivo.json`) o probar en `/api/docs` |
+| `/api/docs` sigue mostrando un error viejo | El navegador guardó en caché una respuesta anterior | Recargar sin caché o abrir en una ventana privada |
 | Falla `test_migraciones_forman_una_sola_cadena` | Dos migraciones creadas en paralelo dejaron dos "heads" | `alembic merge heads -m "unir migraciones"` |
 | Agregar un ícono | Los íconos son un registro generado | Añadirlo en `frontend/scripts/generate-icons.mjs` y correr `npm run icons` |
 | Contenedor en `localhost:8080` | Usa la imagen de la última construcción | `docker compose up -d --build` |

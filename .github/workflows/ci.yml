@@ -28,12 +28,30 @@ jobs:
       - run: npx ng build
 
   backend:
-    name: Backend (pruebas en Docker)
+    name: Backend (revisión y pruebas en Docker)
     runs-on: ubuntu-latest
+    # PostgreSQL temporal para las pruebas con base de datos (sin contraseña: solo vive en el CI).
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: iondu
+          POSTGRES_DB: iondu_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U iondu -d iondu_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
     steps:
       - uses: actions/checkout@v4
-      # El target "test" ejecuta pytest al construir: si una prueba falla, falla el build.
-      - run: docker build --target test backend
+      # El target "test" ejecuta Ruff y pytest al construir (sin base, esas pruebas se saltan).
+      - run: docker build --target test -t iondu-backend-test backend
+      # Todas las pruebas, ahora contra el PostgreSQL del servicio.
+      - run: >-
+          docker run --rm --network host
+          -e TEST_DATABASE_URL=postgresql+psycopg://iondu@127.0.0.1:5432/iondu_test
+          iondu-backend-test python -m pytest -q
 
   imagenes:
     name: Imágenes Docker (build completo)

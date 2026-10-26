@@ -20,15 +20,16 @@
 - **Errores con formato único** (`app/core/errors.py`): `{"error": {"code", "message", "details"}}`, con mensajes de validación en español por campo.
 - **Empresa provisional** (`app/api/deps.py`): solo con `APP_ENV=development` se toma del encabezado `X-Empresa-Id`; en cualquier otro entorno responde 401. Con Supabase Auth solo cambia esa función.
 - Pendiente de la base: desactivar productos (falta la columna `activo`) y la restricción `UNIQUE` del código (hoy lo valida el servicio).
-- Pruebas del módulo incluido el aislamiento entre empresas (61 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
+- Pruebas del módulo incluido el aislamiento entre empresas (72 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
 
 ### Backend: base de la facturación del SRI (adelanto del Sprint 2)
 - `app/sri/identificacion.py`: valida cédula, RUC (persona natural, sociedad y entidad pública), pasaporte,
   consumidor final e identificación del exterior, con mensajes en español (criterio en `DECISIONES.md` 2.16).
 - `app/sri/clave_acceso.py`: genera y valida la clave de acceso de 49 dígitos (`DECISIONES.md` 2.17).
-- Lógica pura, sin base de datos ni red; 39 pruebas.
-- Falta para facturar: totales e IVA, XML de la factura, firma XAdES-BES (requiere el `.p12`), envío y
-  autorización en el SRI, y el RIDE (PDF).
+- `app/sri/totales.py`: totales e IVA por tarifa con redondeo comercial (`DECISIONES.md` 2.18).
+- Lógica pura, sin base de datos ni red; 50 pruebas.
+- Falta para facturar: XML de la factura y su validación con el esquema del SRI, firma XAdES-BES (requiere el
+  `.p12`), envío y autorización en el SRI, y el RIDE (PDF).
 
 ### Backend (base)
 - FastAPI con `/api/health`, hora en `America/Guayaquil`, configuración solo por variables de entorno y documentación `/api/docs` únicamente fuera de producción.
@@ -65,6 +66,33 @@
 - Lista exacta de cambios pendientes en el PDF original.
 
 ## 2. Qué falta, por orden
+
+### Progreso del backend (estimado, 25/10/2026)
+
+| Módulo (requisitos) | Avance | Hecho | Falta |
+|---|---|---|---|
+| Infraestructura | 90 % | Docker, base local, migraciones, CI, errores, Ruff | Desplegar en el VPS |
+| 1. Usuarios, roles y empresa | 5 % | Empresa provisional por encabezado | Login con Supabase, roles, configuración de la empresa, usuarios |
+| 2. Facturación y ventas | 25 % | Cédula/RUC, clave de acceso, totales e IVA | XML, firma, envío al SRI, RIDE, clientes, ventas |
+| 3. Gastos | 0 % | — | Gastos, proveedores, correo (IMAP) |
+| 4. Productos e inventario | 55 % | Categorías y productos | Desactivar, movimientos, ajustes, alertas |
+| 5. Dashboard | 0 % | — | Indicadores (necesita ventas y gastos) |
+| 6. Agente IA | 0 % | — | Todo (Sprint 4) |
+| 7. Recomendaciones | 0 % | — | Todo (Sprint 5) |
+
+### Qué necesita el backend de cada uno
+
+| # | Quién | Qué | Desbloquea en el backend | Urgencia |
+|---|---|---|---|---|
+| 1 | Ariana | Corregir el esquema (2.F) | Primera migración real; ventas, gastos y movimientos (dependen de `usuario`) | Alta |
+| 2 | Equipo | Crear el proyecto de Supabase y pasar URL y claves por un canal seguro | Login real: validar el token y tomar la empresa del usuario | Alta |
+| 3 | Equipo | Decidir el tipo de producto y si Recetas/Producción entran en el MVP | Cerrar productos; tablas de recetas si entran | Media |
+| 4 | Denisse | Conectar `ProductsService` a `/api/products` (`API.md`, sección 5) | Primera pantalla con datos reales | Media |
+| 5 | Denisse | Consumidor final con 13 nueves (2.F) | Evitar facturas rechazadas | Baja |
+| 6 | Denisse | Login de Angular con Supabase Auth | Enviar el token al backend | Después del #2 |
+| 7 | Cliente | Certificado `.p12`, RUC del emisor, VPS y dominio | Firmar y probar en el SRI de pruebas; desplegar | Pedirlo ya |
+
+Sin depender de nadie, el backend sigue con: XML de la factura → validación con el esquema del SRI → RIDE (PDF).
 
 ### A. Cosas rápidas
 1. Confirmar que el CI de GitHub (pestaña **Actions**) esté en verde tras el último push.

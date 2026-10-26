@@ -216,6 +216,19 @@
 - La fecha de emisión es la del calendario de Ecuador (`America/Guayaquil`), no la del servidor (UTC): una factura
   emitida a las 23:00 en Ecuador ya sería del día siguiente en UTC.
 
+### 2.18 Totales e IVA de la factura
+- **Decisión (25/10/2026):** `app/sri/totales.py` calcula los totales con `Decimal` (nunca `float`) y redondeo
+  comercial `ROUND_HALF_UP` a 2 decimales (`2.665 → 2.67`; el redondeo por defecto de `Decimal` daría `2.66`).
+- Por línea: `subtotal = cantidad × precio unitario − descuento`, redondeado. Cantidad y precio admiten hasta 6
+  decimales (ficha técnica del SRI).
+- **El IVA de cada tarifa se calcula sobre la suma de sus bases**, no sumando el IVA redondeado de cada línea.
+  **Por qué:** con muchas líneas los centavos redondeados se acumulan (tres líneas de 0,10 darían 0,06 de IVA en
+  vez de 0,05).
+- Tarifas con su código del SRI: 15 % (`4`, general desde abril de 2024), 5 % (`5`), 0 % (`0`), no objeto (`6`) y
+  exento (`7`).
+- **Pendiente de confirmar** en el ambiente de pruebas del SRI (requiere el `.p12`): la tolerancia con que el SRI
+  compara el IVA de las líneas contra el total por tarifa.
+
 ## 3. Producto
 
 ### 3.1 Ventas y Facturación son un solo módulo

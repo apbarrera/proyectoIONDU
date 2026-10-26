@@ -1,18 +1,14 @@
 """XML de la factura validado contra el esquema oficial del SRI (factura_V2.1.0.xsd)."""
 
 from dataclasses import replace
-from datetime import date
 from decimal import Decimal as D  # noqa: N817 (alias corto: hay muchos montos)
 
 import pytest
 from lxml import etree
 
-from app.sri.clave_acceso import Ambiente
 from app.sri.factura_xml import (
     Comprador,
     DetalleFactura,
-    Emisor,
-    Factura,
     FormaPago,
     Pago,
     generar_factura_xml,
@@ -20,37 +16,7 @@ from app.sri.factura_xml import (
 )
 from app.sri.identificacion import TipoIdentificacion
 from app.sri.totales import Linea, TarifaIva
-
-EMISOR = Emisor(
-    ruc="1790010937001",
-    razon_social="CAFETERÍA DEMO S.A.",
-    dir_matriz="Av. Amazonas N12-34, Quito",
-    nombre_comercial="Café Demo",
-    contribuyente_rimpe=True,
-)
-DETALLES = [
-    DetalleFactura("CAF-250", "Café molido 250 g", Linea(D("2"), D("4.50"), TarifaIva.IVA_15)),
-    DetalleFactura("AZU-1K", "Azúcar 1 kg", Linea(D("3"), D("1.10"), TarifaIva.IVA_0)),
-    DetalleFactura(
-        "SRV-01",
-        "Servicio de entrega",
-        Linea(D("1"), D("10.00"), TarifaIva.IVA_15, descuento=D("1.00")),
-    ),
-]
-FACTURA = Factura(
-    emisor=EMISOR,
-    comprador=Comprador(
-        TipoIdentificacion.CEDULA, "1710000009", "Juan Pérez", correo="juan@example.com"
-    ),
-    establecimiento="001",
-    punto_emision="001",
-    secuencial=123,
-    ambiente=Ambiente.PRUEBAS,
-    detalles=DETALLES,
-    pagos=[Pago(FormaPago.SIN_SISTEMA_FINANCIERO, D("24.00"))],
-    fecha_emision=date(2026, 10, 25),
-    codigo_numerico="12345678",
-)
+from tests.datos_sri import CLAVE_FACTURA, FACTURA
 
 
 def _texto(xml: bytes, ruta: str) -> list[str]:
@@ -62,7 +28,7 @@ def test_factura_completa_es_valida_y_tiene_los_valores_esperados():
     xml = generada.xml
 
     assert validar_factura_xml(xml) == []
-    assert generada.clave_acceso == "2510202601179001093700110010010000001231234567816"
+    assert generada.clave_acceso == CLAVE_FACTURA
     assert _texto(xml, "/factura/infoTributaria/claveAcceso") == [generada.clave_acceso]
     assert _texto(xml, "/factura/infoTributaria/secuencial") == ["000000123"]
     assert _texto(xml, "/factura/infoFactura/fechaEmision") == ["25/10/2026"]

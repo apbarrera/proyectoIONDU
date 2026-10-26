@@ -20,7 +20,15 @@
 - **Errores con formato único** (`app/core/errors.py`): `{"error": {"code", "message", "details"}}`, con mensajes de validación en español por campo.
 - **Empresa provisional** (`app/api/deps.py`): solo con `APP_ENV=development` se toma del encabezado `X-Empresa-Id`; en cualquier otro entorno responde 401. Con Supabase Auth solo cambia esa función.
 - Pendiente de la base: desactivar productos (falta la columna `activo`) y la restricción `UNIQUE` del código (hoy lo valida el servicio).
-- 22 pruebas, incluido el aislamiento entre empresas. Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
+- Pruebas del módulo incluido el aislamiento entre empresas (61 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
+
+### Backend: base de la facturación del SRI (adelanto del Sprint 2)
+- `app/sri/identificacion.py`: valida cédula, RUC (persona natural, sociedad y entidad pública), pasaporte,
+  consumidor final e identificación del exterior, con mensajes en español (criterio en `DECISIONES.md` 2.16).
+- `app/sri/clave_acceso.py`: genera y valida la clave de acceso de 49 dígitos (`DECISIONES.md` 2.17).
+- Lógica pura, sin base de datos ni red; 39 pruebas.
+- Falta para facturar: totales e IVA, XML de la factura, firma XAdES-BES (requiere el `.p12`), envío y
+  autorización en el SRI, y el RIDE (PDF).
 
 ### Backend (base)
 - FastAPI con `/api/health`, hora en `America/Guayaquil`, configuración solo por variables de entorno y documentación `/api/docs` únicamente fuera de producción.
@@ -109,6 +117,10 @@ Después de corregirlo, el esquema pasa a ser **la primera migración de Alembic
 | `active` | no existe | desactivar productos (RF-4.1) |
 | no existe | `aplica_iva` | necesario para facturar |
 | pantallas de Recetas y Producción | sin tablas | no aparecen en `REQUISITOS.md` |
+
+**Frontend: consumidor final.** `new-sale.ts` y `sales-history.ts` usan `FINAL_CONSUMER_ID = '9999999999'`
+(10 nueves); el SRI exige `9999999999999` (13 nueves) con el tipo de identificación `07`. Con 10, la factura sería
+rechazada.
 
 **Por decidir en equipo:** los valores del tipo de producto, y si Recetas y Producción entran en el MVP (si entran, hay que agregarlas a los requisitos y crear sus tablas).
 

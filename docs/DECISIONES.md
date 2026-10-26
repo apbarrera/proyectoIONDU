@@ -198,6 +198,24 @@
 - **Por qué:** cada cambio de stock debe quedar en el historial de movimientos (RF-4.3, RF-4.7); si se pudiera
   editar libremente, el historial no cuadraría con el stock.
 
+### 2.16 Validación de la identificación del comprador (SRI)
+- **Decisión (25/10/2026):** `app/sri/identificacion.py` valida según el tipo del SRI: `04` RUC, `05` cédula,
+  `06` pasaporte, `07` consumidor final (solo `9999999999999`, 13 nueves) y `08` identificación del exterior.
+- La **cédula** y el **RUC de persona natural** se validan de forma estricta (provincia, tercer dígito y dígito
+  verificador módulo 10).
+- En el **RUC de sociedades** (tercer dígito 9) y **entidades públicas** (6) se valida estricta la estructura (largo,
+  provincia, tipo y establecimiento), pero si el dígito verificador módulo 11 no cuadra **se acepta con una
+  advertencia**.
+- **Por qué:** se ha reportado que el SRI emitió RUC de sociedades que no cumplen el algoritmo clásico; rechazarlos
+  impediría facturarle a un cliente real. La advertencia permite pedir que confirme el número.
+
+### 2.17 Clave de acceso de los comprobantes
+- **Decisión (25/10/2026):** `app/sri/clave_acceso.py` arma la clave de 49 dígitos (fecha, tipo, RUC, ambiente,
+  serie, secuencial, código numérico, tipo de emisión y dígito verificador módulo 11) y la valida al leerla.
+- El código numérico de 8 dígitos se genera con `secrets` (al azar y no predecible), salvo que se indique uno.
+- La fecha de emisión es la del calendario de Ecuador (`America/Guayaquil`), no la del servidor (UTC): una factura
+  emitida a las 23:00 en Ecuador ya sería del día siguiente en UTC.
+
 ## 3. Producto
 
 ### 3.1 Ventas y Facturación son un solo módulo

@@ -109,6 +109,17 @@ def test_validacion_devuelve_el_campo_y_un_mensaje_en_espanol(client, empresas, 
     assert {"field": "sku", "message": "Debe tener al menos 1 caracteres."} in error["details"]
 
 
+def test_el_codigo_admite_como_maximo_25_caracteres(client, empresas, categoria_a):
+    # Límite de codigoPrincipal en el XML de la factura del SRI.
+    a, _ = empresas
+    assert _crear_producto(client, a, categoria_a, sku="X" * 25).status_code == 201
+    response = _crear_producto(client, a, categoria_a, sku="Y" * 26)
+    assert response.status_code == 422
+    assert response.json()["error"]["details"] == [
+        {"field": "sku", "message": "Debe tener como máximo 25 caracteres."}
+    ]
+
+
 def test_editar_no_permite_cambiar_el_stock(client, empresas, categoria_a):
     a, _ = empresas
     producto = _crear_producto(client, a, categoria_a).json()

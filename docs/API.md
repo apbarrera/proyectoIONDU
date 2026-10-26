@@ -79,7 +79,7 @@ Todo error responde con la misma forma, para que el frontend lo muestre sin caso
 | Campo | Tipo | Columna en la base | Notas |
 |---|---|---|---|
 | `id` | number | `id_producto` | Solo lectura |
-| `sku` | string (1–50) | `codigo_principal` | Obligatorio; código interno del producto |
+| `sku` | string (1–25) | `codigo_principal` | Obligatorio; código interno del producto. Máximo 25 porque es el límite de `codigoPrincipal` en el XML de la factura del SRI |
 | `name` | string (1–150) | `nombre` | Obligatorio |
 | `description` | string \| null | `descripcion` | Opcional |
 | `categoryId` | number | `id_categoria_producto` | Obligatorio; debe ser una categoría de la misma empresa |

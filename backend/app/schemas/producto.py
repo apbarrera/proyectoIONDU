@@ -24,8 +24,13 @@ class Category(ApiModel):
 
 
 # ---------- Productos ----------
+# El XML de la factura del SRI admite máximo 25 caracteres en codigoPrincipal
+# (la columna de la base admite 50, pero un código más largo no se podría facturar).
+SKU_MAX = 25
+
+
 class ProductCreate(ApiInput):
-    sku: text_field(50)
+    sku: text_field(SKU_MAX)
     name: text_field(150)
     description: str | None = None
     category_id: int = Field(gt=0)
@@ -42,7 +47,7 @@ class ProductUpdate(ApiInput):
     """Solo los campos enviados se modifican. No incluye current_stock: el stock cambia
     por ventas, compras y ajustes, nunca editando el producto."""
 
-    sku: text_field(50) | None = None
+    sku: text_field(SKU_MAX) | None = None
     name: text_field(150) | None = None
     description: str | None = None
     category_id: int | None = Field(default=None, gt=0)

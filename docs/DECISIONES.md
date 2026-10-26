@@ -245,7 +245,19 @@
   transferencia `20`.
 - **Consecuencia:** el `sku` de los productos se limitó a 25 caracteres en la API (`codigoPrincipal` del XML admite
   25; la columna de la base, 50).
-- Falta: firma XAdES-BES con el `.p12`, envío y autorización en el SRI, y el RIDE (PDF).
+- Falta: firma XAdES-BES con el `.p12`, y envío y autorización en el SRI.
+
+### 2.20 RIDE (PDF de la factura)
+- **Decisión (25/10/2026):** `app/sri/ride.py` genera el RIDE con **ReportLab** **leyendo el XML de la factura**, no
+  desde los datos originales.
+- **Por qué leer el XML:** el PDF muestra exactamente lo que se envió al SRI; no puede haber diferencias entre ambos.
+- **Por qué ReportLab:** no necesita librerías del sistema y trae el código de barras Code 128 (el de la clave de
+  acceso). Se descartó WeasyPrint (HTML → PDF) porque exige Pango/Cairo en la imagen Docker.
+- Todo texto que viene del usuario se **escapa** antes de dibujarse: ReportLab interpreta etiquetas tipo HTML y un
+  nombre como `Pérez & Hijos <S.A.>` rompería el PDF o permitiría inyectar formato.
+- Sin autorización del SRI, el RIDE dice "PENDIENTE DE AUTORIZACIÓN"; con ella, muestra el número (en el esquema
+  *offline* es la misma clave de acceso) y la fecha y hora de autorización.
+- Devuelve los bytes del PDF; se guardará en Supabase Storage (los contenedores no guardan archivos, decisión 1.4).
 
 ## 3. Producto
 

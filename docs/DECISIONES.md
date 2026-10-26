@@ -259,6 +259,23 @@
   *offline* es la misma clave de acceso) y la fecha y hora de autorización.
 - Devuelve los bytes del PDF; se guardará en Supabase Storage (los contenedores no guardan archivos, decisión 1.4).
 
+### 2.21 Cliente de los servicios web del SRI
+- **Decisión (25/10/2026):** `app/sri/servicios_web.py` habla con los servicios SOAP del esquema offline:
+  **recepción** (`validarComprobante`, el XML firmado en base64) y **autorización** (`autorizacionComprobante`,
+  con la clave de acceso). Servidores: `celcer.sri.gob.ec` (pruebas) y `cel.sri.gob.ec` (producción).
+- Sin librería SOAP (`zeep`): son dos operaciones con mensajes fijos; se arman y leen con `lxml`. El HTTP usa
+  `httpx2` (la misma que ya usa FastAPI para las pruebas), que pasó a ser dependencia de producción.
+- Tiempo de espera de 10 s para conectar y 30 s para responder. Si el SRI no responde, responde con error 5xx o con
+  algo inesperado, se lanza `SriNoDisponibleError`: el worker reintentará más tarde (decisión 2.6).
+- El mensaje **43** ("clave de acceso registrada") en una recepción DEVUELTA significa que el SRI ya tenía el
+  comprobante (un envío anterior que se cortó): se pasa directo a consultar la autorización.
+- Si hay varias autorizaciones para una clave (intentos anteriores), vale la AUTORIZADA. Sin ninguna, el estado es
+  EN PROCESO.
+- **Seguridad:** las respuestas se leen con `no_network=True` y `resolve_entities=False` para bloquear ataques XXE;
+  hay una prueba que lo comprueba.
+- **Pendiente:** las respuestas de las pruebas son simuladas según la ficha técnica; hay que confirmarlas contra el
+  ambiente de pruebas real cuando exista el `.p12`.
+
 ## 3. Producto
 
 ### 3.1 Ventas y Facturación son un solo módulo

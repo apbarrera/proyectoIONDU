@@ -229,6 +229,24 @@
 - **Pendiente de confirmar** en el ambiente de pruebas del SRI (requiere el `.p12`): la tolerancia con que el SRI
   compara el IVA de las líneas contra el total por tarifa.
 
+### 2.19 XML de la factura y esquema oficial del SRI
+- **Esquema:** `backend/app/sri/xsd/factura_V2.1.0.xsd`, copiado sin cambios del archivo oficial
+  "XML y XSD Factura.zip" (sección Facturación Electrónica de sri.gob.ec, descargado el 25/10/2026; 24 515 bytes,
+  SHA-256 del ZIP `ba1ff0c4…26fec03`, del XSD `5f2c37bc…bd4eace`). Es la versión más reciente del comprobante.
+- El esquema importa `xmldsig-core-schema.xsd` (firma XML del W3C), que no viene en el ZIP. Se usa un **reemplazo
+  mínimo** que acepta `ds:Signature` con cualquier contenido. **Por qué:** permite validar facturas sin firmar sin
+  descargar el esquema del W3C, que a su vez pide otros archivos por internet. La validación nunca accede a la red
+  (`no_network=True`). No valida el contenido de la firma.
+- `app/sri/factura_xml.py` genera el XML con `lxml` en el orden exacto del esquema, a partir de las piezas ya hechas
+  (identificación, clave de acceso y totales), y exige que los pagos sumen exactamente el total.
+- **Siempre valida el resultado contra el esquema** antes de devolverlo: nunca sale un XML que el SRI rechace por
+  estructura.
+- Formas de pago del frontend → SRI: efectivo `01`, tarjeta de débito `16`, tarjeta de crédito `19`,
+  transferencia `20`.
+- **Consecuencia:** el `sku` de los productos se limitó a 25 caracteres en la API (`codigoPrincipal` del XML admite
+  25; la columna de la base, 50).
+- Falta: firma XAdES-BES con el `.p12`, envío y autorización en el SRI, y el RIDE (PDF).
+
 ## 3. Producto
 
 ### 3.1 Ventas y Facturación son un solo módulo

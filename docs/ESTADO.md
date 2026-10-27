@@ -20,7 +20,7 @@
 - **Errores con formato único** (`app/core/errors.py`): `{"error": {"code", "message", "details"}}`, con mensajes de validación en español por campo.
 - **Empresa provisional** (`app/api/deps.py`): solo con `APP_ENV=development` se toma del encabezado `X-Empresa-Id`; en cualquier otro entorno responde 401. Con Supabase Auth solo cambia esa función.
 - Pendiente de la base: desactivar productos (falta la columna `activo`) y la restricción `UNIQUE` del código (hoy lo valida el servicio).
-- Pruebas del módulo incluido el aislamiento entre empresas (102 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
+- Pruebas del módulo incluido el aislamiento entre empresas (110 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
 
 ### Backend: base de la facturación del SRI (adelanto del Sprint 2)
 - `app/sri/identificacion.py`: valida cédula, RUC (persona natural, sociedad y entidad pública), pasaporte,
@@ -31,8 +31,9 @@
   (`app/sri/xsd/`), sin firmar (`DECISIONES.md` 2.19).
 - `app/sri/ride.py`: RIDE en PDF con el código de barras de la clave de acceso, generado a partir del XML (`DECISIONES.md` 2.20).
 - `app/sri/servicios_web.py`: cliente de recepción y autorización del SRI, probado con respuestas simuladas (`DECISIONES.md` 2.21).
-- Sin base de datos; 79 pruebas (ninguna se conecta al SRI).
-- Falta para facturar: firma XAdES-BES y la prueba real contra el SRI de pruebas (ambas requieren el `.p12`), y el flujo de emisión con reintentos en el worker.
+- `app/sri/emision.py` y `app/sri/firma.py`: flujo de emisión completo con la firma como pieza intercambiable (`DECISIONES.md` 2.22).
+- Sin base de datos; 87 pruebas (ninguna se conecta al SRI).
+- Falta para facturar: firma XAdES-BES y la prueba real contra el SRI de pruebas (ambas requieren el `.p12`); guardar ventas y facturas en la base y los reintentos en el worker (requieren el esquema corregido).
 
 ### Backend (base)
 - FastAPI con `/api/health`, hora en `America/Guayaquil`, configuración solo por variables de entorno y documentación `/api/docs` únicamente fuera de producción.
@@ -76,7 +77,7 @@
 |---|---|---|---|
 | Infraestructura | 90 % | Docker, base local, migraciones, CI, errores, Ruff | Desplegar en el VPS |
 | 1. Usuarios, roles y empresa | 5 % | Empresa provisional por encabezado | Login con Supabase, roles, configuración de la empresa, usuarios |
-| 2. Facturación y ventas | 45 % | Cédula/RUC, clave de acceso, totales e IVA, XML validado con el esquema del SRI, RIDE (PDF), cliente del SRI | Firma, prueba real con el SRI, flujo de emisión, clientes, ventas |
+| 2. Facturación y ventas | 50 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión | Firma y prueba real (`.p12`); clientes, ventas y reintentos (esquema) |
 | 3. Gastos | 0 % | — | Gastos, proveedores, correo (IMAP) |
 | 4. Productos e inventario | 55 % | Categorías y productos | Desactivar, movimientos, ajustes, alertas |
 | 5. Dashboard | 0 % | — | Indicadores (necesita ventas y gastos) |
@@ -95,7 +96,7 @@
 | 6 | Denisse | Login de Angular con Supabase Auth | Enviar el token al backend | Después del #2 |
 | 7 | Cliente | Certificado `.p12`, RUC del emisor, VPS y dominio | Firmar y probar en el SRI de pruebas; desplegar | Pedirlo ya |
 
-Sin depender de nadie, el backend puede seguir con: el flujo de emisión (generar, firmar, enviar, autorizar y RIDE) con la firma como pieza intercambiable, para conectar la real cuando llegue el `.p12`.
+La facturación ya no puede avanzar mucho más sin el `.p12` del cliente y el esquema corregido de Ariana.
 
 ### A. Cosas rápidas
 1. Confirmar que el CI de GitHub (pestaña **Actions**) esté en verde tras el último push.

@@ -276,6 +276,20 @@
 - **Pendiente:** las respuestas de las pruebas son simuladas según la ficha técnica; hay que confirmarlas contra el
   ambiente de pruebas real cuando exista el `.p12`.
 
+### 2.22 Flujo de emisión y firma intercambiable
+- **Decisión (27/10/2026):** `app/sri/emision.py` (`ServicioEmision`) une las piezas: generar XML → firmar →
+  enviar → consultar autorización → RIDE. El cliente del SRI, el firmador y la pausa se **reciben desde fuera**
+  (inyección de dependencias): el mismo código corre en producción y en las pruebas.
+- Resultados y su estado en el frontend: `autorizada` (con el RIDE), `rechazada` (DEVUELTA o NO AUTORIZADO, con los
+  motivos del SRI), `por_enviar` y `por_autorizar` (ambos se muestran como "procesando").
+- Tres entradas para que el worker retome una factura a medio camino: `emitir()` (desde cero), `enviar()` (las
+  que quedaron por enviar; es seguro repetirlo gracias al mensaje 43) y `consultar()` (las que quedaron por autorizar).
+- Espera 3 s entre el envío y la consulta, y consulta hasta 3 veces; si no hay respuesta, queda `por_autorizar` y
+  el usuario no se queda esperando.
+- **Firma:** `app/sri/firma.py` define `Firmador` (`firmar(xml) -> xml firmado`). Mientras no exista el `.p12`, solo
+  hay `FirmadorSinFirma`, que **no firma** y **se niega a procesar comprobantes del ambiente de producción**.
+  La firma XAdES-BES real se agregará como otro `Firmador`, sin tocar el flujo.
+
 ## 3. Producto
 
 ### 3.1 Ventas y Facturación son un solo módulo
@@ -393,6 +407,7 @@
 | Conectar desde Windows a `localhost:15432` se queda colgado | `localhost` intenta primero IPv6 (`::1`) y el contenedor solo escucha en `127.0.0.1` | Usar `127.0.0.1` en las direcciones de conexión |
 | Tildes rotas al probar con `curl` en Windows | La terminal no envía el texto en UTF-8 y la API responde `400 BAD_REQUEST` | Enviar el JSON desde un archivo UTF-8 (`--data-binary @archivo.json`) o probar en `/api/docs` |
 | `/api/docs` sigue mostrando un error viejo | El navegador guardó en caché una respuesta anterior | Recargar sin caché o abrir en una ventana privada |
+| Docker no responde (`error during connect` o error 500) después de suspender la computadora | El motor de Docker Desktop quedó trabado aunque el programa siga abierto | `docker desktop restart` |
 | Falla `test_migraciones_forman_una_sola_cadena` | Dos migraciones creadas en paralelo dejaron dos "heads" | `alembic merge heads -m "unir migraciones"` |
 | Agregar un ícono | Los íconos son un registro generado | Añadirlo en `frontend/scripts/generate-icons.mjs` y correr `npm run icons` |
 | Contenedor en `localhost:8080` | Usa la imagen de la última construcción | `docker compose up -d --build` |

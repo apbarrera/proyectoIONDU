@@ -16,6 +16,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.engine import make_url  # noqa: E402
+from sqlalchemy.exc import OperationalError  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.db.base import Base  # noqa: E402
@@ -32,7 +33,14 @@ def engine():
         pytest.skip("Define TEST_DATABASE_URL para las pruebas con base de datos")
     if not (make_url(TEST_DATABASE_URL).database or "").endswith("_test"):
         pytest.fail("TEST_DATABASE_URL debe apuntar a una base cuyo nombre termine en _test")
-    eng = create_engine(TEST_DATABASE_URL)
+    eng = create_engine(TEST_DATABASE_URL, connect_args={"connect_timeout": 5})
+    try:
+        eng.connect().close()
+    except OperationalError:
+        pytest.exit(
+            "No se pudo conectar a TEST_DATABASE_URL. ¿Está encendido Docker con el servicio db?",
+            returncode=1,
+        )
     Base.metadata.drop_all(eng)
     Base.metadata.create_all(eng)
     yield eng

@@ -133,6 +133,15 @@
   Debe respaldarse además en un gestor de contraseñas.
 - Hay que alertar antes de que un certificado venza: cuando pasa, el cliente deja de poder facturar.
 - Las credenciales IMAP son por empresa y también van cifradas en la base, no en el `.env`.
+- **Implementado (27/10/2026):** `app/core/cifrado.py` con AES-256-GCM (`cryptography`). Lo guardado tiene el
+  formato `[versión][nonce de 12 bytes][cifrado + etiqueta]`:
+  - nonce aleatorio nuevo en cada cifrado (reusarlo con la misma llave rompe GCM);
+  - un **contexto** amarrado al dato (por ejemplo `empresa:7:p12` y `empresa:7:p12_clave`): un valor copiado a otra
+    empresa u otro campo no se descifra;
+  - GCM detecta cualquier alteración; el byte de versión permite cambiar de llave o algoritmo en el futuro.
+  - La llave se genera con `python -m app.core.cifrado`; cómo cuidarla está en `DESPLIEGUE.md`.
+- `app/sri/certificado.py` abre el `.p12` en memoria, valida la contraseña y exige llave RSA (la usa la firma del
+  SRI), y da el titular y la fecha de vencimiento: `por_vencer()` (30 días o menos, RNF-25) y `vencido()`.
 
 ### 2.6 Worker simple, sin Redis ni Celery (por ahora)
 - **Decisión:** un ciclo con una cola en PostgreSQL (`SELECT … FOR UPDATE SKIP LOCKED`), una sola instancia.

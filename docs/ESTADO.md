@@ -31,7 +31,7 @@
 - **Errores con formato único** (`app/core/errors.py`): `{"error": {"code", "message", "details"}}`, con mensajes de validación en español por campo.
 - **Empresa provisional** (`app/api/deps.py`): solo con `APP_ENV=development` se toma del encabezado `X-Empresa-Id`; en cualquier otro entorno responde 401. Con Supabase Auth solo cambia esa función.
 - Pendiente de la base: desactivar productos (falta la columna `activo`) y la restricción `UNIQUE` del código (hoy lo valida el servicio).
-- Pruebas del módulo incluido el aislamiento entre empresas (137 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
+- Pruebas del módulo incluido el aislamiento entre empresas (156 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
 
 ### Backend: base de la facturación del SRI (adelanto del Sprint 2)
 - `app/sri/identificacion.py`: valida cédula, RUC (persona natural, sociedad y entidad pública), pasaporte,
@@ -43,7 +43,8 @@
 - `app/sri/ride.py`: RIDE en PDF con el código de barras de la clave de acceso, generado a partir del XML (`DECISIONES.md` 2.20).
 - `app/sri/servicios_web.py`: cliente de recepción y autorización del SRI, probado con respuestas simuladas (`DECISIONES.md` 2.21).
 - `app/sri/emision.py` y `app/sri/firma.py`: flujo de emisión completo con la firma como pieza intercambiable (`DECISIONES.md` 2.22).
-- Sin base de datos; 87 pruebas (ninguna se conecta al SRI).
+- `app/core/cifrado.py` (AES-256-GCM con `MASTER_ENCRYPTION_KEY`) y `app/sri/certificado.py` (abrir el `.p12`, titular y vencimiento): listos para guardar y usar el certificado de cada empresa (`DECISIONES.md` 2.5).
+- Sin base de datos; 106 pruebas (ninguna se conecta al SRI).
 - Falta para facturar: firma XAdES-BES y la prueba real contra el SRI de pruebas (ambas requieren el `.p12`); guardar ventas y facturas en la base y los reintentos en el worker (requieren el esquema corregido).
 
 ### Backend (base)
@@ -88,7 +89,7 @@
 |---|---|---|---|
 | Infraestructura | 90 % | Docker, base local, migraciones, CI, errores, Ruff | Desplegar en el VPS |
 | 1. Usuarios, roles y empresa | 40 % | Verificación del token, empresa y rol desde `usuario_empresa`, permiso de Administrador, `/api/me` | Tabla `usuario_empresa` en la base, configuración de la empresa, gestión de usuarios |
-| 2. Facturación y ventas | 50 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión | Firma y prueba real (`.p12`); clientes, ventas y reintentos (esquema) |
+| 2. Facturación y ventas | 55 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión, cifrado y lectura del `.p12` | Firma y prueba real (`.p12`); clientes, ventas y reintentos (esquema) |
 | 3. Gastos | 0 % | — | Gastos, proveedores, correo (IMAP) |
 | 4. Productos e inventario | 55 % | Categorías y productos | Desactivar, movimientos, ajustes, alertas |
 | 5. Dashboard | 0 % | — | Indicadores (necesita ventas y gastos) |

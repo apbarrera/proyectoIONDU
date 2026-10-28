@@ -55,6 +55,13 @@ class UnprocessableError(AppError):
     code = "VALIDATION_ERROR"
 
 
+class ServiceUnavailableError(AppError):
+    """Un servicio externo (Supabase, SRI) no responde: no es culpa del usuario."""
+
+    status_code = 503
+    code = "SERVICE_UNAVAILABLE"
+
+
 def _error_body(code: str, message: str, details: list | None = None) -> dict[str, Any]:
     return {"error": {"code": code, "message": message, "details": details or []}}
 

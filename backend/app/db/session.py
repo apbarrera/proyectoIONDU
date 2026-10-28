@@ -36,14 +36,15 @@ def get_engine() -> Engine | None:
 
 @lru_cache
 def _session_factory() -> sessionmaker[Session]:
-    engine = get_engine()
-    if engine is None:
-        raise RuntimeError("DATABASE_URL no está configurada")
-    return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    # Sin DATABASE_URL la sesión se crea igual, sin conexión: solo falla si se consulta.
+    return sessionmaker(bind=get_engine(), autoflush=False, expire_on_commit=False)
 
 
 def get_db() -> Iterator[Session]:
-    """Uso en un endpoint: `def listar(db: Session = Depends(get_db))`."""
+    """Uso en un endpoint: `def listar(db: Session = Depends(get_db))`.
+
+    La sesión es perezosa: no se conecta a la base hasta la primera consulta, así que
+    pedirla en una dependencia que a veces no la usa no cuesta nada."""
     with _session_factory()() as session:
         yield session
 

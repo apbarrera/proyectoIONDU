@@ -1,7 +1,7 @@
-"""Verificación de tokens de Supabase con llaves generadas en la prueba (sin red).
+"""Verificación de tokens de Supabase (sin base de datos ni red).
 
-Un "Supabase falso" firma los tokens con su llave privada; el backend verifica con
-la pública, como haría con las llaves que publica Supabase.
+Los tokens válidos se prueban directamente con el verificador; los inválidos, contra
+/api/me, que debe rechazarlos antes de consultar la base.
 """
 
 import base64
@@ -14,41 +14,26 @@ import uuid
 import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_verificador
 from app.core.config import get_settings
+from app.core.errors import UnauthenticatedError
 from app.core.seguridad import VerificadorTokens
 from app.main import app
+from tests.tokens import EMISOR, LLAVE_ATACANTE, LLAVE_SUPABASE, crear_token, verificador_de_prueba
 
-EMISOR = "https://proyecto-prueba.supabase.co/auth/v1"
-LLAVE_SUPABASE = ec.generate_private_key(ec.SECP256R1())
-LLAVE_ATACANTE = ec.generate_private_key(ec.SECP256R1())
 USUARIO = uuid.uuid4()
-
 client = TestClient(app)
 
 
-def _token(llave=LLAVE_SUPABASE, algoritmo="ES256", **cambios) -> str:
-    ahora = int(time.time())
-    datos = {
-        "sub": str(USUARIO),
-        "email": "ana@empresa.ec",
-        "aud": "authenticated",
-        "role": "authenticated",
-        "iss": EMISOR,
-        "iat": ahora,
-        "exp": ahora + 3600,
-    } | cambios
-    datos = {k: v for k, v in datos.items() if v is not None}  # None = quitar el campo
-    return jwt.encode(datos, llave, algorithm=algoritmo)
+def _token(**cambios) -> str:
+    return crear_token(USUARIO, **cambios)
 
 
 @pytest.fixture(autouse=True)
 def supabase_falso():
-    verificador = VerificadorTokens(EMISOR, lambda _token: LLAVE_SUPABASE.public_key())
-    app.dependency_overrides[get_verificador] = lambda: verificador
+    app.dependency_overrides[get_verificador] = verificador_de_prueba
     yield
     app.dependency_overrides.clear()
 
@@ -64,13 +49,13 @@ def _codigo(response) -> str:
 
 # ---------- Tokens válidos ----------
 def test_token_valido_identifica_al_usuario():
-    response = _me(_token())
-    assert response.status_code == 200
-    assert response.json() == {"id": str(USUARIO), "email": "ana@empresa.ec"}
+    usuario = verificador_de_prueba().verificar(_token())
+    assert (usuario.id, usuario.email) == (USUARIO, "ana@empresa.ec")
 
 
 def test_acepta_hasta_30_segundos_de_diferencia_de_reloj():
-    assert _me(_token(exp=int(time.time()) - 20)).status_code == 200
+    usuario = verificador_de_prueba().verificar(_token(exp=int(time.time()) - 20))
+    assert usuario.id == USUARIO
 
 
 # ---------- Sin sesión o sesión vencida ----------
@@ -97,7 +82,7 @@ def test_firmado_con_otra_llave():
 
 
 def test_token_alterado():
-    encabezado, datos, firma = _token().split(".")
+    encabezado, _, firma = _token().split(".")
     otro = _token(sub=str(uuid.uuid4())).split(".")[1]  # datos de otro usuario, firma original
     assert _rechazado(f"{encabezado}.{otro}.{firma}")
 
@@ -163,3 +148,8 @@ def test_sin_supabase_configurado_no_se_puede_iniciar_sesion(monkeypatch):
 def test_para_supabase_usa_las_direcciones_del_proyecto():
     verificador = VerificadorTokens.para_supabase("https://abc123.supabase.co/")
     assert verificador._emisor == "https://abc123.supabase.co/auth/v1"
+
+
+def test_el_verificador_rechaza_directamente_un_token_falso():
+    with pytest.raises(UnauthenticatedError):
+        verificador_de_prueba().verificar(_token(llave=LLAVE_ATACANTE))

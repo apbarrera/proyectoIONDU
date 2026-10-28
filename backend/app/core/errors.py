@@ -38,6 +38,13 @@ class UnauthenticatedError(AppError):
     code = "UNAUTHENTICATED"
 
 
+class ForbiddenError(AppError):
+    """Se sabe quién es el usuario, pero no tiene permiso para esto."""
+
+    status_code = 403
+    code = "FORBIDDEN"
+
+
 class NotFoundError(AppError):
     status_code = 404
     code = "NOT_FOUND"

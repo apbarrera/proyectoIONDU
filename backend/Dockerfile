@@ -8,9 +8,9 @@
 ARG PYTHON_VERSION=3.12
 
 # ---------- Etapa 1: dependencias ----------
-# Cuando se agregue la firma XAdES-BES del SRI (python-xmlsec), instalar aquí
-# build-essential, pkg-config, libxml2-dev y libxmlsec1-dev, y las librerías
-# de ejecución (libxml2, libxmlsec1-openssl) en la etapa runtime.
+# Todas las dependencias se instalan como wheels precompilados: la firma XAdES-BES
+# del SRI usa lxml y cryptography (app/sri/xades.py), sin python-xmlsec ni
+# librerías del sistema.
 FROM python:${PYTHON_VERSION}-slim-bookworm AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1

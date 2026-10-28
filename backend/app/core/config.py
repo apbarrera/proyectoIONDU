@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     supabase_url: str | None = None
     supabase_service_role_key: str | None = None
 
+    # Llave maestra (32 bytes en base64) para cifrar los .p12 y otras credenciales.
+    # Si se pierde, se pierden todos los certificados guardados: respaldarla aparte.
+    master_encryption_key: str | None = None
+
     worker_heartbeat_file: str = "/tmp/worker-heartbeat"
     worker_tick_seconds: int = 30
 

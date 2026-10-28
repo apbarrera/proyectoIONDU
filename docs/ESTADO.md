@@ -14,13 +14,20 @@
 - Corregido: `api` y `worker` compartían nombre de imagen y la construcción fallaba a veces con `image ... already exists`.
 - `CLAUDE.md` con las reglas del proyecto y el formato obligatorio de commits.
 
+### Backend: sesión con Supabase Auth (verificación del token)
+- `app/core/seguridad.py`: verifica el JWT de Supabase (firma con sus llaves públicas, algoritmo, vencimiento,
+  proyecto y audiencia) y bloquea los ataques `alg: none` y confusión con `HS256` (`DECISIONES.md` 2.3).
+- `GET /api/me` devuelve el usuario del token ([`API.md`](API.md), sección 5). Probado con llaves generadas en las
+  pruebas; con Supabase real solo hace falta `SUPABASE_URL`.
+- Falta: la empresa y el rol del usuario (tabla `usuario_empresa`), y quitar el encabezado provisional `X-Empresa-Id`.
+
 ### Backend: primer módulo (categorías y productos)
 - Endpoints según [`API.md`](API.md): `GET/POST /api/product-categories` y `GET/POST /api/products`, `GET/PATCH /api/products/{id}`, con páginas, búsqueda y filtros (`categoryId`, `type`, `lowStock`).
 - Capas: `models/` (empresa, categoría y producto, idénticos a `schema.sql`, comprobado con `alembic check`) → `repositories/` (cada repositorio recibe la empresa y todas sus consultas la filtran) → `services/` (reglas: categoría de la misma empresa, código único por empresa, el stock no se edita) → `schemas/` (validación y nombres del contrato) → `api/`.
 - **Errores con formato único** (`app/core/errors.py`): `{"error": {"code", "message", "details"}}`, con mensajes de validación en español por campo.
 - **Empresa provisional** (`app/api/deps.py`): solo con `APP_ENV=development` se toma del encabezado `X-Empresa-Id`; en cualquier otro entorno responde 401. Con Supabase Auth solo cambia esa función.
 - Pendiente de la base: desactivar productos (falta la columna `activo`) y la restricción `UNIQUE` del código (hoy lo valida el servicio).
-- Pruebas del módulo incluido el aislamiento entre empresas (110 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
+- Pruebas del módulo incluido el aislamiento entre empresas (128 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
 
 ### Backend: base de la facturación del SRI (adelanto del Sprint 2)
 - `app/sri/identificacion.py`: valida cédula, RUC (persona natural, sociedad y entidad pública), pasaporte,
@@ -76,7 +83,7 @@
 | Módulo (requisitos) | Avance | Hecho | Falta |
 |---|---|---|---|
 | Infraestructura | 90 % | Docker, base local, migraciones, CI, errores, Ruff | Desplegar en el VPS |
-| 1. Usuarios, roles y empresa | 5 % | Empresa provisional por encabezado | Login con Supabase, roles, configuración de la empresa, usuarios |
+| 1. Usuarios, roles y empresa | 25 % | Verificación del token de Supabase, `/api/me`, empresa provisional | Empresa y rol del usuario (`usuario_empresa`), configuración de la empresa, usuarios |
 | 2. Facturación y ventas | 50 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión | Firma y prueba real (`.p12`); clientes, ventas y reintentos (esquema) |
 | 3. Gastos | 0 % | — | Gastos, proveedores, correo (IMAP) |
 | 4. Productos e inventario | 55 % | Categorías y productos | Desactivar, movimientos, ajustes, alertas |
@@ -91,7 +98,7 @@
 | 1 | Ariana | Corregir el esquema (2.F) | Primera migración real; ventas, gastos y movimientos (dependen de `usuario`) | Alta |
 | 2 | Equipo | Crear el proyecto de Supabase y pasar URL y claves por un canal seguro | Login real: validar el token y tomar la empresa del usuario | Alta |
 | 3 | Equipo | Decidir el tipo de producto y si Recetas/Producción entran en el MVP | Cerrar productos; tablas de recetas si entran | Media |
-| 4 | Denisse | Conectar `ProductsService` a `/api/products` (`API.md`, sección 5) | Primera pantalla con datos reales | Media |
+| 4 | Denisse | Conectar `ProductsService` a `/api/products` (`API.md`, sección 6) | Primera pantalla con datos reales | Media |
 | 5 | Denisse | Consumidor final con 13 nueves (2.F) | Evitar facturas rechazadas | Baja |
 | 6 | Denisse | Login de Angular con Supabase Auth | Enviar el token al backend | Después del #2 |
 | 7 | Cliente | Certificado `.p12`, RUC del emisor, VPS y dominio | Firmar y probar en el SRI de pruebas; desplegar | Pedirlo ya |

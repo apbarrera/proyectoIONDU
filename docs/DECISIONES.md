@@ -106,6 +106,17 @@
   para el tenant y los permisos.
 - **Por qué:** el presupuesto ya incluía Supabase Auth, pero el diagrama de login usaba contraseñas propias con IDs
   enteros. Supabase identifica a los usuarios con UUID y guarda sus propias contraseñas; no se duplican.
+- **Verificación del token en el backend (27/10/2026):** `app/core/seguridad.py` valida el JWT con **PyJWT** y las
+  llaves públicas que publica Supabase (`/auth/v1/.well-known/jwks.json`, guardadas en memoria 10 minutos).
+  - Solo se aceptan los algoritmos asimétricos `ES256` y `RS256`: bloquea el token sin firma (`alg: none`) y la
+    confusión de algoritmos (usar la llave pública como secreto de `HS256`); hay pruebas de ambos ataques.
+  - Se exige vencimiento (`exp`, con 30 s de margen por diferencias de reloj), emisor (`iss`) de nuestro proyecto,
+    audiencia `authenticated` (no la llave anónima) y el id del usuario (`sub`) como UUID.
+  - Token vencido: `401 TOKEN_EXPIRED` (el frontend renueva la sesión). Si Supabase no responde al pedir las
+    llaves: `503 AUTH_UNAVAILABLE`.
+  - `GET /api/me` devuelve el usuario del token, para comprobar el login de punta a punta.
+  - **Pendiente:** obtener la empresa y el rol del usuario desde `usuario_empresa` (esquema de Ariana); mientras
+    tanto, la empresa sigue saliendo del encabezado provisional (decisión 2.14).
 
 ### 2.4 Multi-tenant: filtro por `id_empresa` **y** RLS
 - **Decisión:** todo endpoint y consulta filtra estrictamente por `id_empresa`, y además se activa **Row Level

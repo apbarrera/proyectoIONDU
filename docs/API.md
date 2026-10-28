@@ -12,7 +12,9 @@
   `id_empresa` en el cuerpo ni en la ruta.
   - **Ahora (solo desarrollo):** encabezado `X-Empresa-Id: <número>`. En producción ese encabezado se ignora y
     se responde `401`.
-  - **Después (con Supabase Auth):** encabezado `Authorization: Bearer <token>`; la empresa sale del token.
+  - **Después (con Supabase Auth):** encabezado `Authorization: Bearer <token>` (el `access_token` de la sesión
+    de Supabase); la empresa sale del usuario. El backend ya verifica el token (ver sección 5); falta la tabla
+    `usuario_empresa` para saber la empresa de cada usuario.
 - **IDs:** números enteros (`"id": 12`). *En el frontend hoy son texto (`id: string`); hay que cambiarlos a `number`.*
 - **Montos y cantidades:** números con hasta 2 decimales (`"salePrice": 2.5`).
 - **Fechas:** texto ISO 8601 con zona horaria de Ecuador (`"2026-10-25T14:30:00-05:00"`).
@@ -127,7 +129,25 @@ Ejemplo:
 
 No hay `DELETE`: un producto con ventas o movimientos no se puede borrar sin romper el historial; se desactiva.
 
-## 5. Cambios que implica en el frontend
+## 5. Sesión
+
+El frontend inicia sesión con Supabase Auth y envía su `access_token` en cada petición:
+`Authorization: Bearer <token>`. El backend verifica la firma (llaves públicas de Supabase), el vencimiento, el
+proyecto (`iss`) y que sea de un usuario autenticado (`aud`).
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/me` | Quién es el usuario según su token. Sirve para comprobar que el login funciona de punta a punta | `200` con `{ "id": "<uuid>", "email": "..." }` |
+
+Errores de sesión:
+
+| HTTP | `code` | Cuándo | Qué hacer en el frontend |
+|---|---|---|---|
+| 401 | `UNAUTHENTICATED` | Sin token, token inválido o de otro proyecto | Ir al login |
+| 401 | `TOKEN_EXPIRED` | El token venció | Renovar la sesión con Supabase (`refreshSession`) y reintentar; si falla, ir al login |
+| 503 | `AUTH_UNAVAILABLE` | No se pudieron obtener las llaves de Supabase | Mostrar "intenta en un momento" |
+
+## 6. Cambios que implica en el frontend
 
 1. `Product.id`: de `string` a `number`.
 2. `category` (texto libre) pasa a ser `categoryId` (elegir de `GET /api/product-categories`) y `categoryName` (para mostrar).

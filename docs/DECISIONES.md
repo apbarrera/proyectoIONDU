@@ -202,6 +202,17 @@
   es imposible que quede abierto en el servidor. Con Supabase Auth solo cambia el interior de esa función.
 - Los repositorios reciben la empresa al crearse (`ProductoRepository(db, empresa_id)`) y todas sus consultas la
   filtran: no existe un método que consulte sin empresa.
+- **Cambio (27/10/2026): la empresa y el rol salen del token.** `get_contexto` verifica el token de Supabase y busca
+  al usuario en `usuario_empresa` (solo `ACTIVO`); sin empresa asignada o inactivo: `403 NO_COMPANY`. **El token
+  manda**: con token, `X-Empresa-Id` se ignora (hay una prueba que lo comprueba). El encabezado solo se acepta
+  **sin token y con `APP_ENV=development`**, con rol Administrador, para probar sin login.
+- La búsqueda en `usuario_empresa` es la única consulta que no filtra por `id_empresa`, porque es la que la averigua;
+  busca por el id del usuario que viene verificado en el token, así que nadie puede pedir la de otro.
+- **Roles:** `SoloAdministrador` (`requiere_administrador`) bloquea con `403 FORBIDDEN` lo exclusivo del
+  Administrador (regla del dashboard en `CLAUDE.md`). Los roles mínimos son Administrador y Operativo (RF-1.2).
+- **Modelo listo para la migración:** `app/models/usuario_empresa.py` sigue el diseño acordado (decisión 2.3):
+  `id_usuario UUID` (PK, el usuario de Supabase), `id_empresa`, `id_rol`, `nombre` y `estado` (por defecto
+  `ACTIVO`). Si el esquema corregido cambia algo, se ajusta el modelo.
 
 ### 2.15 El stock no se edita en el producto
 - **Decisión (25/10/2026):** `currentStock` se fija al crear el producto; después solo cambia por ventas, compras y

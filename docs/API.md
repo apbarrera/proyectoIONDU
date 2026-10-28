@@ -10,11 +10,11 @@
   el estilo del frontend (`camelCase`); la base de datos sigue en español y el backend traduce.
 - **Empresa (multi-tenant):** cada petición trabaja solo con los datos de la empresa del usuario. Nunca se envía
   `id_empresa` en el cuerpo ni en la ruta.
-  - **Ahora (solo desarrollo):** encabezado `X-Empresa-Id: <número>`. En producción ese encabezado se ignora y
-    se responde `401`.
-  - **Después (con Supabase Auth):** encabezado `Authorization: Bearer <token>` (el `access_token` de la sesión
-    de Supabase); la empresa sale del usuario. El backend ya verifica el token (ver sección 5); falta la tabla
-    `usuario_empresa` para saber la empresa de cada usuario.
+  - **Con sesión:** encabezado `Authorization: Bearer <token>` (el `access_token` de Supabase Auth). La empresa y
+    el rol salen del usuario (tabla `usuario_empresa`). **El token manda**: si también llega `X-Empresa-Id`, se
+    ignora. Ver sección 5.
+  - **Sin sesión, solo desarrollo:** encabezado `X-Empresa-Id: <número>`, con rol Administrador, para probar sin
+    login. En cualquier otro entorno se responde `401`.
 - **IDs:** números enteros (`"id": 12`). *En el frontend hoy son texto (`id: string`); hay que cambiarlos a `number`.*
 - **Montos y cantidades:** números con hasta 2 decimales (`"salePrice": 2.5`).
 - **Fechas:** texto ISO 8601 con zona horaria de Ecuador (`"2026-10-25T14:30:00-05:00"`).
@@ -51,6 +51,7 @@ Todo error responde con la misma forma, para que el frontend lo muestre sin caso
 |---|---|---|
 | 400 | `BAD_REQUEST` | El cuerpo no es un JSON válido o no está en UTF-8 |
 | 401 | `UNAUTHENTICATED` | Falta identificar al usuario o la empresa |
+| 403 | `FORBIDDEN`, `NO_COMPANY` | Se sabe quién es el usuario, pero no puede hacer esto (ver sección 5) |
 | 404 | `NOT_FOUND` | El recurso no existe **o es de otra empresa** (no se revela cuál de las dos) |
 | 409 | `PRODUCT_SKU_TAKEN`, … | Choca con un dato existente |
 | 422 | `VALIDATION_ERROR` | Datos con formato o valores inválidos (ver `details`) |
@@ -133,11 +134,27 @@ No hay `DELETE`: un producto con ventas o movimientos no se puede borrar sin rom
 
 El frontend inicia sesión con Supabase Auth y envía su `access_token` en cada petición:
 `Authorization: Bearer <token>`. El backend verifica la firma (llaves públicas de Supabase), el vencimiento, el
-proyecto (`iss`) y que sea de un usuario autenticado (`aud`).
+proyecto (`iss`) y que sea de un usuario autenticado (`aud`). Luego busca su empresa y su rol en `usuario_empresa`
+(solo usuarios con estado `ACTIVO`).
 
 | Estado | Método y ruta | Qué hace | Respuesta |
 |---|---|---|---|
-| ✅ | `GET /api/me` | Quién es el usuario según su token. Sirve para comprobar que el login funciona de punta a punta | `200` con `{ "id": "<uuid>", "email": "..." }` |
+| ✅ | `GET /api/me` | Perfil del usuario según su token. Sirve para comprobar que el login funciona de punta a punta | `200` con `Me` |
+
+Objeto `Me` (mismos campos que `User` del frontend, `core/models/user.model.ts`):
+
+```json
+{
+  "id": "6f1c2a1e-…",
+  "email": "ana@empresa.ec",
+  "fullName": "Ana Torres",
+  "role": "admin",
+  "tenantId": 7,
+  "active": true
+}
+```
+
+`role` es `"admin"` para el rol Administrador y `"operator"` para Operativo. `tenantId` es el `id_empresa`.
 
 Errores de sesión:
 
@@ -145,6 +162,8 @@ Errores de sesión:
 |---|---|---|---|
 | 401 | `UNAUTHENTICATED` | Sin token, token inválido o de otro proyecto | Ir al login |
 | 401 | `TOKEN_EXPIRED` | El token venció | Renovar la sesión con Supabase (`refreshSession`) y reintentar; si falla, ir al login |
+| 403 | `NO_COMPANY` | El usuario no tiene empresa asignada o está inactivo | Mostrar "tu usuario no tiene acceso; contacta al administrador" |
+| 403 | `FORBIDDEN` | Su rol no permite esa acción (por ejemplo, el dashboard es solo para Administrador) | Ocultar o bloquear esa opción |
 | 503 | `AUTH_UNAVAILABLE` | No se pudieron obtener las llaves de Supabase | Mostrar "intenta en un momento" |
 
 ## 6. Cambios que implica en el frontend
@@ -155,3 +174,8 @@ Errores de sesión:
 4. Campos nuevos: `description`, `appliesVat`, `lowStock`.
 5. El formulario de edición no debe cambiar `currentStock`; eso se hace desde Ajustes o Movimientos.
 6. En `ProductsService`, reemplazar `simulateRequest(...)` por `HttpClient` contra estas rutas.
+7. Login: `AuthService.login` usa Supabase Auth (`signInWithPassword`) y luego `GET /api/me` para obtener el
+   `User` (mismos campos). `User.tenantId` pasa de `string` a `number`.
+8. Un interceptor HTTP agrega `Authorization: Bearer <access_token>` a toda petición a `/api/...` y maneja
+   `TOKEN_EXPIRED` (renovar la sesión) y `NO_COMPANY` (ver sección 5).
+9. El `sku` admite máximo 25 caracteres (sección 4).

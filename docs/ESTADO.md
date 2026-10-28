@@ -17,9 +17,13 @@
 ### Backend: sesión con Supabase Auth (verificación del token)
 - `app/core/seguridad.py`: verifica el JWT de Supabase (firma con sus llaves públicas, algoritmo, vencimiento,
   proyecto y audiencia) y bloquea los ataques `alg: none` y confusión con `HS256` (`DECISIONES.md` 2.3).
-- `GET /api/me` devuelve el usuario del token ([`API.md`](API.md), sección 5). Probado con llaves generadas en las
-  pruebas; con Supabase real solo hace falta `SUPABASE_URL`.
-- Falta: la empresa y el rol del usuario (tabla `usuario_empresa`), y quitar el encabezado provisional `X-Empresa-Id`.
+- **Empresa y rol desde el token** (`app/api/deps.py`): se buscan en `usuario_empresa`; el token manda sobre
+  `X-Empresa-Id`, que solo vale sin token y en desarrollo. Permiso `SoloAdministrador` para lo exclusivo del
+  Administrador (`DECISIONES.md` 2.14).
+- `GET /api/me` devuelve el perfil con los mismos campos que `User` del frontend ([`API.md`](API.md), sección 5).
+  Probado con llaves generadas en las pruebas; con Supabase real solo hace falta `SUPABASE_URL`.
+- Modelos `Rol` y `UsuarioEmpresa` listos según el diseño acordado. **Falta la tabla `usuario_empresa` en la base**
+  (esquema de Ariana); hasta entonces el login con token no se puede usar contra la base real.
 
 ### Backend: primer módulo (categorías y productos)
 - Endpoints según [`API.md`](API.md): `GET/POST /api/product-categories` y `GET/POST /api/products`, `GET/PATCH /api/products/{id}`, con páginas, búsqueda y filtros (`categoryId`, `type`, `lowStock`).
@@ -27,7 +31,7 @@
 - **Errores con formato único** (`app/core/errors.py`): `{"error": {"code", "message", "details"}}`, con mensajes de validación en español por campo.
 - **Empresa provisional** (`app/api/deps.py`): solo con `APP_ENV=development` se toma del encabezado `X-Empresa-Id`; en cualquier otro entorno responde 401. Con Supabase Auth solo cambia esa función.
 - Pendiente de la base: desactivar productos (falta la columna `activo`) y la restricción `UNIQUE` del código (hoy lo valida el servicio).
-- Pruebas del módulo incluido el aislamiento entre empresas (128 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
+- Pruebas del módulo incluido el aislamiento entre empresas (137 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
 
 ### Backend: base de la facturación del SRI (adelanto del Sprint 2)
 - `app/sri/identificacion.py`: valida cédula, RUC (persona natural, sociedad y entidad pública), pasaporte,
@@ -83,7 +87,7 @@
 | Módulo (requisitos) | Avance | Hecho | Falta |
 |---|---|---|---|
 | Infraestructura | 90 % | Docker, base local, migraciones, CI, errores, Ruff | Desplegar en el VPS |
-| 1. Usuarios, roles y empresa | 25 % | Verificación del token de Supabase, `/api/me`, empresa provisional | Empresa y rol del usuario (`usuario_empresa`), configuración de la empresa, usuarios |
+| 1. Usuarios, roles y empresa | 40 % | Verificación del token, empresa y rol desde `usuario_empresa`, permiso de Administrador, `/api/me` | Tabla `usuario_empresa` en la base, configuración de la empresa, gestión de usuarios |
 | 2. Facturación y ventas | 50 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión | Firma y prueba real (`.p12`); clientes, ventas y reintentos (esquema) |
 | 3. Gastos | 0 % | — | Gastos, proveedores, correo (IMAP) |
 | 4. Productos e inventario | 55 % | Categorías y productos | Desactivar, movimientos, ajustes, alertas |
@@ -95,7 +99,7 @@
 
 | # | Quién | Qué | Desbloquea en el backend | Urgencia |
 |---|---|---|---|---|
-| 1 | Ariana | Corregir el esquema (2.F) | Primera migración real; ventas, gastos y movimientos (dependen de `usuario`) | Alta |
+| 1 | Ariana | Corregir el esquema (2.F). Para `usuario_empresa` y `rol` puede seguir `backend/app/models/usuario_empresa.py` y `rol.py`, ya escritos según lo acordado | Primera migración real; login con la base real; ventas, gastos y movimientos (dependen de `usuario`) | Alta |
 | 2 | Equipo | Crear el proyecto de Supabase y pasar URL y claves por un canal seguro | Login real: validar el token y tomar la empresa del usuario | Alta |
 | 3 | Equipo | Decidir el tipo de producto y si Recetas/Producción entran en el MVP | Cerrar productos; tablas de recetas si entran | Media |
 | 4 | Denisse | Conectar `ProductsService` a `/api/products` (`API.md`, sección 6) | Primera pantalla con datos reales | Media |

@@ -21,6 +21,8 @@ x-backend-env: &backend-env
   DATABASE_URL: ${DATABASE_URL:-}
   SUPABASE_URL: ${SUPABASE_URL:-}
   SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+  # Llave maestra para descifrar los .p12 en memoria al firmar (api y worker).
+  MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY:-}
 
 services:
   # ---------------- Frontend (público) ----------------

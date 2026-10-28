@@ -5,6 +5,7 @@ reglas que dependen de los datos guardados y confirma cada operación (commit).
 """
 
 from sqlalchemy.orm import Session
+from typing import cast
 
 from app.core.errors import ConflictError, NotFoundError, UnprocessableError
 from app.models import CategoriaProducto, Producto
@@ -47,10 +48,22 @@ def _a_category(categoria: CategoriaProducto) -> Category:
     )
 
 
+
 def _a_product(producto: Producto, nombre_categoria: str) -> Product:
     stock_bajo = (
-        producto.stock_minimo is not None and producto.stock_actual <= producto.stock_minimo
+        producto.stock_minimo is not None
+        and producto.stock_actual <= producto.stock_minimo
     )
+
+    tipo_normalizado = producto.tipo.lower()
+
+    if tipo_normalizado not in {"venta", "insumo", "ambos"}:
+        raise ValueError(
+            f"Tipo de producto inválido en la base de datos: {producto.tipo!r}"
+        )
+
+    tipo_api = cast(ProductType, tipo_normalizado)
+
     return Product(
         id=producto.id_producto,
         sku=producto.codigo_principal,
@@ -58,7 +71,7 @@ def _a_product(producto: Producto, nombre_categoria: str) -> Product:
         description=producto.descripcion,
         category_id=producto.id_categoria_producto,
         category_name=nombre_categoria,
-        type=producto.tipo.lower(),
+        type=tipo_api,
         unit=producto.unidad_medida,
         sale_price=producto.precio_venta,
         cost=producto.precio_compra,

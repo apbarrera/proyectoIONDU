@@ -1,16 +1,23 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 TIMEZONE = "America/Guayaquil"
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+ENV_FILE = PROJECT_ROOT / ".env"
+
 
 class Settings(BaseSettings):
-    """Toda la configuración se lee de variables de entorno (nada en el código)."""
-
-    model_config = SettingsConfigDict(env_ignore_empty=True, extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILE,
+        env_file_encoding="utf-8",
+        env_ignore_empty=True,
+        extra="ignore",
+    )
 
     app_env: str = "production"
     log_level: str = "info"
@@ -31,9 +38,7 @@ class Settings(BaseSettings):
     supabase_url: str | None = None
     supabase_service_role_key: str | None = None
 
-    # Llave maestra (32 bytes en base64) para cifrar los .p12 y otras credenciales.
-    # Si se pierde, se pierden todos los certificados guardados: respaldarla aparte.
-    master_encryption_key: str | None = None
+    master_encryption_key: SecretStr | None = None
 
     worker_heartbeat_file: str = "/tmp/worker-heartbeat"
     worker_tick_seconds: int = 30

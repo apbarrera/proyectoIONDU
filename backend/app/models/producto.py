@@ -1,33 +1,119 @@
 from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Numeric, String, Text, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Identity,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.schema import conv
 
 from app.db.base import Base
-
-# Igual que database/schema.sql. Pendiente (ver docs/ESTADO.md, 2.F): columna
-# "activo", UNIQUE (id_empresa, codigo_principal), CHECK de no negativos e índices.
-
 
 class Producto(Base):
     __tablename__ = "producto"
 
-    id_producto: Mapped[int] = mapped_column(primary_key=True)
+    __table_args__ = (
+        UniqueConstraint(
+            "id_empresa",
+            "codigo_principal",
+            name="producto_codigo_empresa_uq",
+        ),
+        UniqueConstraint(
+            "id_empresa",
+            "id_producto",
+            name="producto_empresa_id_uq",
+        ),
+        ForeignKeyConstraint(
+            ["id_empresa", "id_categoria_producto"],
+            [
+                "categoria_producto.id_empresa",
+                "categoria_producto.id_categoria_producto",
+            ],
+            ondelete="RESTRICT",
+            name="producto_categoria_empresa_fk",
+        ),
+        CheckConstraint(
+            "precio_compra >= 0",
+            name=conv("producto_precio_compra_check"),
+        ),
+        CheckConstraint(
+            "precio_venta >= 0",
+            name=conv("producto_precio_venta_check"),
+        ),
+        CheckConstraint(
+            "stock_actual >= 0",
+            name=conv("producto_stock_actual_check"),
+        ),
+        CheckConstraint(
+            "stock_minimo IS NULL OR stock_minimo >= 0",
+            name=conv("producto_stock_minimo_check"),
+        ),
+        Index("idx_producto_categoria", "id_categoria_producto"),
+        Index("idx_producto_empresa", "id_empresa"),
+    )
+
+    id_producto: Mapped[int] = mapped_column(
+        Identity(always=False),
+        primary_key=True,
+    )
+
     id_empresa: Mapped[int] = mapped_column(
-        ForeignKey("empresa.id_empresa", onupdate="CASCADE", ondelete="CASCADE")
-    )
-    id_categoria_producto: Mapped[int] = mapped_column(
         ForeignKey(
-            "categoria_producto.id_categoria_producto", onupdate="CASCADE", ondelete="RESTRICT"
-        )
+            "empresa.id_empresa",
+            ondelete="CASCADE",
+            name="producto_id_empresa_fkey",
+        ),
+        nullable=False,
     )
-    codigo_principal: Mapped[str] = mapped_column(String(50))
-    nombre: Mapped[str] = mapped_column(String(150))
+
+    id_categoria_producto: Mapped[int] = mapped_column(nullable=False)
+    codigo_principal: Mapped[str] = mapped_column(String(50), nullable=False)
+    nombre: Mapped[str] = mapped_column(String(150), nullable=False)
     descripcion: Mapped[str | None] = mapped_column(Text)
-    precio_compra: Mapped[Decimal] = mapped_column(Numeric(10, 2), server_default=text("0.00"))
-    precio_venta: Mapped[Decimal] = mapped_column(Numeric(10, 2), server_default=text("0.00"))
-    stock_actual: Mapped[Decimal] = mapped_column(Numeric(10, 2), server_default=text("0.00"))
-    stock_minimo: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
-    unidad_medida: Mapped[str] = mapped_column(String(20), server_default=text("'UNIDAD'"))
-    tipo: Mapped[str] = mapped_column(String(20), server_default=text("'VENTA'"))
-    aplica_iva: Mapped[bool] = mapped_column(server_default=text("true"))
+
+    precio_compra: Mapped[Decimal] = mapped_column(
+        Numeric(12, 4),
+        nullable=False,
+        server_default=text("0"),
+    )
+    precio_venta: Mapped[Decimal] = mapped_column(
+        Numeric(12, 4),
+        nullable=False,
+        server_default=text("0"),
+    )
+    stock_actual: Mapped[Decimal] = mapped_column(
+        Numeric(12, 4),
+        nullable=False,
+        server_default=text("0"),
+    )
+    stock_minimo: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+
+    unidad_medida: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default=text("'UNIDAD'"),
+    )
+    tipo: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default=text("'VENTA'"),
+    )
+    aplica_iva: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("true"),
+    )
+    activo: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("true"),
+    )

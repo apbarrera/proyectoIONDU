@@ -1,10 +1,13 @@
 """Cifrado AES-256-GCM de secretos y lectura del certificado .p12."""
+from pathlib import Path
+from types import SimpleNamespace
 
 import base64
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 
+from pydantic import SecretStr
 import pytest
 
 from app.core import cifrado
@@ -84,17 +87,24 @@ def test_llave_maestra_invalida(valor, error):
 
 
 def test_sin_llave_maestra_configurada_avisa_como_generarla(monkeypatch):
-    monkeypatch.setenv("MASTER_ENCRYPTION_KEY", "")
-    get_settings.cache_clear()
-    try:
-        with pytest.raises(RuntimeError, match="python -m app.core.cifrado"):
-            get_cifrador()
-    finally:
-        get_settings.cache_clear()
+    monkeypatch.setattr(
+        cifrado,
+        "get_settings",
+        lambda: SimpleNamespace(master_encryption_key=None),
+    )
+
+    with pytest.raises(RuntimeError, match="python -m app.core.cifrado"):
+        get_cifrador()
 
 
 def test_con_llave_maestra_configurada(monkeypatch):
-    monkeypatch.setenv("MASTER_ENCRYPTION_KEY", generar_llave_maestra())
+    monkeypatch.setattr(
+    cifrado,
+    "get_settings",
+    lambda: SimpleNamespace(
+        master_encryption_key=SecretStr(generar_llave_maestra())
+    ),
+)
     get_settings.cache_clear()
     cifrado._cifrador.cache_clear()
     try:
@@ -106,9 +116,16 @@ def test_con_llave_maestra_configurada(monkeypatch):
 
 
 def test_el_comando_genera_una_llave_valida():
+    directorio_backend = Path(__file__).resolve().parents[1]
+
     salida = subprocess.run(
-        [sys.executable, "-m", "app.core.cifrado"], capture_output=True, text=True, check=True
+        [sys.executable, "-m", "app.core.cifrado"],
+        cwd=directorio_backend,
+        capture_output=True,
+        text=True,
+        check=True,
     )
+
     assert len(leer_llave_maestra(salida.stdout.strip())) == 32
 
 

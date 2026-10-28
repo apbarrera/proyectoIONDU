@@ -4,8 +4,18 @@ Todo modelo hereda de `Base`; así queda registrado en `Base.metadata`, que es
 lo que Alembic compara contra la base de datos para generar migraciones.
 """
 
-from sqlalchemy import MetaData
+from sqlalchemy import Column, MetaData, Table
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.dialects.postgresql import UUID
+
+AUTH_METADATA = MetaData()
+
+auth_users = Table(
+    "users",
+    AUTH_METADATA,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    schema="auth",
+)
 
 # Nombres de restricciones e índices fijos y predecibles (mismo estilo que
 # PostgreSQL y que database/schema.sql). Sin esto, Alembic no puede modificar

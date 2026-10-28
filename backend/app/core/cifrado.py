@@ -74,14 +74,23 @@ def _cifrador(valor: str) -> Cifrador:
     return Cifrador(leer_llave_maestra(valor))
 
 
+
 def get_cifrador() -> Cifrador:
-    valor = get_settings().master_encryption_key
+    secreto = get_settings().master_encryption_key
+
+    if secreto is None:
+        raise RuntimeError(
+            "Falta MASTER_ENCRYPTION_KEY (genera una con: python -m app.core.cifrado)."
+        )
+
+    valor = secreto.get_secret_value()
+
     if not valor:
         raise RuntimeError(
             "Falta MASTER_ENCRYPTION_KEY (genera una con: python -m app.core.cifrado)."
         )
-    return _cifrador(valor)
 
+    return _cifrador(valor)
 
 if __name__ == "__main__":
     print(generar_llave_maestra())

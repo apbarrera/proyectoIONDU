@@ -1,9 +1,9 @@
 """Firma electrónica de los comprobantes (pieza intercambiable).
 
-El flujo de emisión solo necesita algo con `firmar(xml) -> xml firmado`. La firma
-real (XAdES-BES con el certificado .p12 del cliente, descifrado solo en memoria)
-se implementará cuando exista el certificado; hasta entonces existe
-`FirmadorSinFirma`, que NO firma y solo sirve para pruebas.
+El flujo de emisión solo necesita algo con `firmar(xml) -> xml firmado`:
+- `FirmadorXadesBes` (app/sri/xades.py): la firma real que exige el SRI, con el
+  certificado .p12 de la empresa descifrado solo en memoria.
+- `FirmadorSinFirma`: NO firma; solo para pruebas del flujo.
 """
 
 from typing import Protocol

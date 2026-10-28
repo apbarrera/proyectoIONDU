@@ -2,3 +2,5 @@
 pytest==9.1.1
 ruff==0.17.1
 pypdf==6.21.2
+# Verificador independiente de la firma XAdES-BES en las pruebas (admite RSA-SHA1, que exige el SRI).
+xmlsig==1.0.1

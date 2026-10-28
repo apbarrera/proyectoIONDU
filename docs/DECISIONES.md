@@ -319,7 +319,21 @@
   el usuario no se queda esperando.
 - **Firma:** `app/sri/firma.py` define `Firmador` (`firmar(xml) -> xml firmado`). Mientras no exista el `.p12`, solo
   hay `FirmadorSinFirma`, que **no firma** y **se niega a procesar comprobantes del ambiente de producción**.
-  La firma XAdES-BES real se agregará como otro `Firmador`, sin tocar el flujo.
+  La firma XAdES-BES real es otro `Firmador` (decisión 2.23), sin tocar el flujo.
+
+### 2.23 Firma XAdES-BES
+- **Decisión (27/10/2026):** `app/sri/xades.py` (`FirmadorXadesBes`) firma como exige la ficha técnica del SRI:
+  XAdES-BES 1.3.2 envuelta al final de `<factura id="comprobante">`, **RSA-SHA1**, resúmenes **SHA-1** y C14N
+  inclusiva, con tres referencias firmadas (propiedades firmadas, certificado y comprobante). Las propiedades
+  firmadas llevan la hora de firma en `America/Guayaquil` y la huella, emisor y número de serie del certificado.
+- **SHA-1** hoy se considera débil, pero **lo exige el SRI**; con SHA-256 rechaza el comprobante. Solo se usa aquí.
+- **Sin `python-xmlsec`:** implementada con `lxml` y `cryptography`, que ya están en el proyecto. Así no hacen falta
+  librerías del sistema ni compilar nada en la imagen Docker.
+- Antes de firmar valida que el certificado no esté vencido, que exista `id="comprobante"` y que no esté ya firmado.
+- **Verificación independiente:** las pruebas verifican con `xmlsig` (solo desarrollo). Se descartó `signxml` 5.x
+  porque ya no admite SHA-1. Además, la firma RSA se comprueba directamente con `cryptography`.
+- **Pendiente:** confirmar que el SRI de pruebas acepta la firma con un `.p12` real. Las pruebas usan certificados
+  autofirmados (`tests/certificados.py`).
 
 ## 3. Producto
 

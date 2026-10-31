@@ -41,14 +41,14 @@ class CategoriaGasto(Base):
     )
 
     nombre: Mapped[str] = mapped_column(
-        String,
+        String(100),
         nullable=False,
     )
 
     origen: Mapped[str] = mapped_column(
-        String,
+        String(50),
         nullable=False,
         server_default=text("'PREDEFINIDA'"),
     )
 
-    descripcion: Mapped[str | None] = mapped_column(String)
+    descripcion: Mapped[str | None] = mapped_column(String(255))

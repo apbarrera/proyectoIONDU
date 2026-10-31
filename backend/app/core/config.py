@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
         env_file_encoding="utf-8",
-        env_ignore_empty=True,
+        env_ignore_empty=False,
         extra="ignore",
     )
 
@@ -42,6 +42,18 @@ class Settings(BaseSettings):
 
     worker_heartbeat_file: str = "/tmp/worker-heartbeat"
     worker_tick_seconds: int = 30
+
+    @field_validator(
+        "database_url",
+        "supabase_url",
+        "supabase_service_role_key",
+        mode="before",
+    )
+    @classmethod
+    def _empty_strings_to_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     @property
     def is_production(self) -> bool:

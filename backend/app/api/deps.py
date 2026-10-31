@@ -14,11 +14,18 @@ from fastapi import Depends, Header
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.errors import ForbiddenError, UnauthenticatedError
+from app.core.errors import (
+    ConflictError,
+    ForbiddenError,
+    UnauthenticatedError,
+)
 from app.core.seguridad import UsuarioAutenticado, VerificadorTokens
 from app.db.session import get_db
 from app.models.rol import ADMINISTRADOR
-from app.repositories.usuario_empresa import obtener_pertenencia_activa
+from app.repositories.usuario_empresa import (
+    obtener_empresas_activas,
+    obtener_pertenencia_activa,
+)
 
 DbSession = Annotated[Session, Depends(get_db)]
 
@@ -60,25 +67,70 @@ def get_contexto(
     authorization: Annotated[str | None, Header()] = None,
     x_empresa_id: Annotated[int | None, Header(gt=0)] = None,
 ) -> Contexto:
-    """Con token: la empresa y el rol salen de usuario_empresa (el token manda; el
-    encabezado X-Empresa-Id se ignora). Sin token: solo en APP_ENV=development se
-    acepta X-Empresa-Id, con rol Administrador, para probar sin login."""
+    """Obtiene el contexto validando la pertenencia activa a la empresa."""
+
     token = _token_bearer(authorization)
+
     if token:
         if verificador is None:
             raise UnauthenticatedError(
                 "El inicio de sesión no está configurado (falta SUPABASE_URL)."
             )
+
         usuario = verificador.verificar(token)
-        pertenencia = obtener_pertenencia_activa(db, usuario.id)
+        empresas = obtener_empresas_activas(db, usuario.id)
+
+        if not empresas:
+            raise ForbiddenError(
+                "Tu usuario no tiene una empresa asignada o está inactivo.",
+                code="NO_COMPANY",
+            )
+
+        if x_empresa_id is not None:
+            empresa_seleccionada = next(
+                (empresa for empresa in empresas if empresa.id_empresa == x_empresa_id),
+                None,
+            )
+
+            if empresa_seleccionada is None:
+                raise ForbiddenError(
+                    "No tienes una pertenencia activa a la empresa seleccionada.",
+                    code="COMPANY_ACCESS_DENIED",
+                )
+
+            id_empresa = empresa_seleccionada.id_empresa
+
+        else:
+            if len(empresas) > 1:
+                raise ConflictError(
+                    "Debes seleccionar una empresa para continuar.",
+                    code="COMPANY_SELECTION_REQUIRED",
+                )
+
+            id_empresa = empresas[0].id_empresa
+
+        pertenencia = obtener_pertenencia_activa(
+            db,
+            usuario.id,
+            id_empresa,
+        )
+
         if pertenencia is None:
             raise ForbiddenError(
-                "Tu usuario no tiene una empresa asignada o está inactivo.", code="NO_COMPANY"
+                "No tienes una pertenencia activa a la empresa seleccionada.",
+                code="COMPANY_ACCESS_DENIED",
             )
-        return Contexto(pertenencia.id_empresa, pertenencia.rol, usuario, pertenencia.nombre)
+
+        return Contexto(
+            empresa_id=pertenencia.id_empresa,
+            rol=pertenencia.rol,
+            usuario=usuario,
+            nombre=pertenencia.nombre,
+        )
 
     if get_settings().app_env == "development" and x_empresa_id is not None:
         return Contexto(empresa_id=x_empresa_id, rol=ADMINISTRADOR)
+
     raise UnauthenticatedError("Inicia sesión para continuar.")
 
 

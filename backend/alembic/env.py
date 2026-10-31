@@ -28,6 +28,10 @@ def _database_url() -> str:
 
 
 def include_object(obj, name, type_, reflected, compare_to) -> bool:
+    # No gestionar tablas del esquema auth de Supabase.
+    if type_ == "table" and getattr(obj, "schema", None) == "auth":
+        return False
+
     # Una tabla que existe en la base pero no tiene modelo NO se propone borrar:
     # el autogenerate solo crea o modifica; un DROP TABLE se escribe a mano.
     return not (type_ == "table" and reflected and compare_to is None)

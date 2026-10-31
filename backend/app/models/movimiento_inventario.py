@@ -4,9 +4,10 @@ from decimal import Decimal
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
-    ForeignKey,
+    ForeignKeyConstraint,
     Identity,
     Index,
+    Integer,
     Numeric,
     String,
     text,
@@ -15,13 +16,25 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.schema import conv
 
-from app.db.base import Base, auth_users
+from app.db.base import Base
 
 
 class MovimientoInventario(Base):
     __tablename__ = "movimiento_inventario"
 
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["id_empresa", "id_producto"],
+            ["producto.id_empresa", "producto.id_producto"],
+            name="movimiento_inventario_empresa_producto_fkey",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["id_usuario", "id_empresa"],
+            ["usuario_empresa.id_usuario", "usuario_empresa.id_empresa"],
+            name="movimiento_inventario_usuario_empresa_fkey",
+            ondelete="RESTRICT",
+        ),
         CheckConstraint(
             "cantidad > 0",
             name=conv("movimiento_inventario_cantidad_check"),
@@ -31,10 +44,8 @@ class MovimientoInventario(Base):
             "id_producto",
             text("fecha DESC"),
         ),
-        Index(
-            "idx_movimiento_usuario",
-            "id_usuario",
-        ),
+        Index("idx_movimiento_usuario", "id_usuario"),
+        Index("idx_movimiento_empresa", "id_empresa"),
     )
 
     id_movimiento: Mapped[int] = mapped_column(
@@ -42,32 +53,28 @@ class MovimientoInventario(Base):
         primary_key=True,
     )
 
+    id_empresa: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
     id_producto: Mapped[int] = mapped_column(
-        ForeignKey(
-            "producto.id_producto",
-            ondelete="CASCADE",
-            name="movimiento_inventario_id_producto_fkey",
-        ),
+        Integer,
         nullable=False,
     )
 
     id_usuario: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(
-            auth_users.c.id,
-            ondelete="RESTRICT",
-            name="movimiento_inventario_id_usuario_fkey",
-        ),
         nullable=False,
     )
 
     tipo_movimiento: Mapped[str] = mapped_column(
-        String,
+        String(30),
         nullable=False,
     )
 
     cantidad: Mapped[Decimal] = mapped_column(
-        Numeric,
+        Numeric(12, 4),
         nullable=False,
     )
 

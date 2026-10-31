@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health, me, products
+from app.api import certificados, health, me, products
 from app.core.config import get_settings
 from app.core.errors import register_error_handlers
 
@@ -37,3 +37,4 @@ register_error_handlers(app)
 app.include_router(health.router, prefix="/api")
 app.include_router(products.router, prefix="/api")
 app.include_router(me.router, prefix="/api")
+app.include_router(certificados.router, prefix="/api")

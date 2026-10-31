@@ -44,20 +44,20 @@ class Cliente(Base):
     )
 
     tipo_identificacion: Mapped[str] = mapped_column(
-        String,
+        String(20),
         nullable=False,
     )
 
     identificacion: Mapped[str] = mapped_column(
-        String,
+        String(20),
         nullable=False,
     )
 
     nombre_razon_social: Mapped[str] = mapped_column(
-        String,
+        String(255),
         nullable=False,
     )
 
     direccion: Mapped[str | None] = mapped_column(Text)
-    telefono: Mapped[str | None] = mapped_column(String)
-    correo_electronico: Mapped[str | None] = mapped_column(String)
+    telefono: Mapped[str | None] = mapped_column(String(20))
+    correo_electronico: Mapped[str | None] = mapped_column(String(150))

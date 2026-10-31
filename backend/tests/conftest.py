@@ -14,12 +14,12 @@ os.environ["APP_ENV"] = "development"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from sqlalchemy import create_engine, text  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.engine import make_url  # noqa: E402
 from sqlalchemy.exc import OperationalError  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
-from app.db.base import AUTH_METADATA, Base  # noqa: E402
+from app.db.base import Base  # noqa: E402
 from app.db.session import get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Empresa  # noqa: E402
@@ -41,12 +41,15 @@ def engine():
             "No se pudo conectar a TEST_DATABASE_URL. ¿Está encendido Docker con el servicio db?",
             returncode=1,
         )
+
+    # Esquema mínimo para representar la dependencia externa de Supabase Auth.
+    # Se crea únicamente en la base de pruebas.
+    with eng.begin() as conn:
+        conn.exec_driver_sql("CREATE SCHEMA IF NOT EXISTS auth")
+
     Base.metadata.drop_all(eng)
     # Imita el esquema "auth" de Supabase (auth.users), al que apuntan algunos modelos;
     # un PostgreSQL normal (Docker local, CI) no lo tiene.
-    with eng.begin() as conn:
-        conn.execute(text("CREATE SCHEMA IF NOT EXISTS auth"))
-    AUTH_METADATA.create_all(eng)
     Base.metadata.create_all(eng)
     yield eng
     Base.metadata.drop_all(eng)

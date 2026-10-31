@@ -8,15 +8,6 @@ from sqlalchemy import Column, MetaData, Table
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase
 
-AUTH_METADATA = MetaData()
-
-auth_users = Table(
-    "users",
-    AUTH_METADATA,
-    Column("id", UUID(as_uuid=True), primary_key=True),
-    schema="auth",
-)
-
 # Nombres de restricciones e índices fijos y predecibles (mismo estilo que
 # PostgreSQL y que database/schema.sql). Sin esto, Alembic no puede modificar
 # ni borrar una restricción en una migración posterior.
@@ -31,3 +22,11 @@ NAMING_CONVENTION = {
 
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
+
+
+auth_users = Table(
+    "users",
+    Base.metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    schema="auth",
+)

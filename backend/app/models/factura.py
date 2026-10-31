@@ -66,29 +66,26 @@ class Factura(Base):
     )
 
     numero_comprobante: Mapped[str] = mapped_column(
-        String,
+        String(17),
         nullable=False,
     )
 
-    clave_acceso: Mapped[str | None] = mapped_column(String)
+    clave_acceso: Mapped[str | None] = mapped_column(String(49), nullable=True)
 
-    estado_autorizacion: Mapped[str] = mapped_column(
-        String,
-        nullable=False,
-    )
+    estado_autorizacion: Mapped[str] = mapped_column(String(30), nullable=False)
 
     subtotal: Mapped[Decimal] = mapped_column(
-        Numeric,
+        Numeric(12, 2),
         nullable=False,
     )
 
     impuestos: Mapped[Decimal] = mapped_column(
-        Numeric,
+        Numeric(12, 2),
         nullable=False,
     )
 
     total: Mapped[Decimal] = mapped_column(
-        Numeric,
+        Numeric(12, 2),
         nullable=False,
     )
 
@@ -99,4 +96,4 @@ class Factura(Base):
 
     xml_firmado: Mapped[str | None] = mapped_column(Text)
 
-    pdf_ride_path: Mapped[str | None] = mapped_column(String)
+    pdf_ride_path: Mapped[str | None] = mapped_column(String(255))

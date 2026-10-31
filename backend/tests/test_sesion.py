@@ -7,6 +7,7 @@ import pytest
 from app.api.deps import Contexto, get_verificador, requiere_administrador
 from app.core.config import get_settings
 from app.core.errors import ForbiddenError
+from app.db.base import auth_users
 from app.main import app
 from app.models import Rol, UsuarioEmpresa
 from app.models.rol import ADMINISTRADOR, OPERATIVO
@@ -32,12 +33,13 @@ def roles(db) -> dict[str, int]:
 def nuevo_usuario(db, roles):
     def crear(id_empresa: int, rol: str = ADMINISTRADOR, estado: str = "ACTIVO") -> uuid.UUID:
         usuario = uuid.uuid4()
+        db.execute(auth_users.insert().values(id=usuario))
         db.add(
             UsuarioEmpresa(
                 id_usuario=usuario,
                 id_empresa=id_empresa,
                 id_rol=roles[rol],
-                nombre="Ana Torres",
+                nombre_visible="Ana Torres",
                 estado=estado,
             )
         )
@@ -45,6 +47,28 @@ def nuevo_usuario(db, roles):
         return usuario
 
     return crear
+
+
+@pytest.fixture
+def agregar_pertenencia(db, roles):
+    def agregar(
+        usuario: uuid.UUID,
+        id_empresa: int,
+        rol: str = ADMINISTRADOR,
+        estado: str = "ACTIVO",
+    ) -> None:
+        db.add(
+            UsuarioEmpresa(
+                id_usuario=usuario,
+                id_empresa=id_empresa,
+                id_rol=roles[rol],
+                nombre_visible="Ana Torres",
+                estado=estado,
+            )
+        )
+        db.flush()
+
+    return agregar
 
 
 def _con_token(usuario: uuid.UUID, **extra) -> dict[str, str]:
@@ -87,26 +111,97 @@ def test_me_sin_token_no_sirve_con_el_encabezado_de_desarrollo(client, empresas)
     assert client.get("/api/me", headers={"X-Empresa-Id": str(a)}).status_code == 401
 
 
-# ---------- La empresa sale del token ----------
-def test_el_token_manda_sobre_el_encabezado_de_empresa(client, empresas, nuevo_usuario):
+# ---------- Selección de empresa ----------
+def test_usuario_con_varias_empresas_debe_seleccionar_una(
+    client, empresas, nuevo_usuario, agregar_pertenencia
+):
     a, b = empresas
-    # La empresa B tiene una categoría (creada con el encabezado de desarrollo, sin token).
-    client.post("/api/product-categories", json={"name": "De B"}, headers={"X-Empresa-Id": str(b)})
-    usuario_a = nuevo_usuario(a)
+    usuario = nuevo_usuario(a)
+    agregar_pertenencia(usuario, b)
 
-    # Un usuario de A que además envía X-Empresa-Id de B sigue viendo solo lo de A.
+    response = client.get("/api/product-categories", headers=_con_token(usuario))
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "COMPANY_SELECTION_REQUIRED"
+
+
+def test_usuario_puede_cambiar_entre_sus_empresas(
+    client, empresas, nuevo_usuario, agregar_pertenencia
+):
+    a, b = empresas
+
+    # Crear datos independientes en cada empresa usando el modo desarrollo.
+    client.post(
+        "/api/product-categories",
+        json={"name": "De A"},
+        headers={"X-Empresa-Id": str(a)},
+    )
+    client.post(
+        "/api/product-categories",
+        json={"name": "De B"},
+        headers={"X-Empresa-Id": str(b)},
+    )
+
+    usuario = nuevo_usuario(a)
+    agregar_pertenencia(usuario, b)
+
+    categorias_a = client.get(
+        "/api/product-categories",
+        headers=_con_token(usuario, **{"X-Empresa-Id": str(a)}),
+    )
+    categorias_b = client.get(
+        "/api/product-categories",
+        headers=_con_token(usuario, **{"X-Empresa-Id": str(b)}),
+    )
+
+    assert categorias_a.status_code == 200
+    assert [c["name"] for c in categorias_a.json()] == ["De A"]
+
+    assert categorias_b.status_code == 200
+    assert [c["name"] for c in categorias_b.json()] == ["De B"]
+
+
+def test_el_rol_corresponde_a_la_empresa_seleccionada(
+    client, empresas, nuevo_usuario, agregar_pertenencia
+):
+    a, b = empresas
+    usuario = nuevo_usuario(a, rol=ADMINISTRADOR)
+    agregar_pertenencia(usuario, b, rol=OPERATIVO)
+
+    respuesta_a = client.get(
+        "/api/me",
+        headers=_con_token(usuario, **{"X-Empresa-Id": str(a)}),
+    )
+    respuesta_b = client.get(
+        "/api/me",
+        headers=_con_token(usuario, **{"X-Empresa-Id": str(b)}),
+    )
+
+    assert respuesta_a.status_code == 200
+    assert respuesta_a.json()["role"] == "admin"
+    assert respuesta_a.json()["tenantId"] == a
+
+    assert respuesta_b.status_code == 200
+    assert respuesta_b.json()["role"] == "operator"
+    assert respuesta_b.json()["tenantId"] == b
+
+
+def test_no_puede_seleccionar_una_empresa_sin_pertenencia_activa(
+    client, empresas, nuevo_usuario, agregar_pertenencia
+):
+    a, b = empresas
+    usuario = nuevo_usuario(a)
+
+    # La pertenencia a B existe, pero está inactiva.
+    agregar_pertenencia(usuario, b, estado="INACTIVO")
+
     response = client.get(
-        "/api/product-categories", headers=_con_token(usuario_a, **{"X-Empresa-Id": str(b)})
+        "/api/product-categories",
+        headers=_con_token(usuario, **{"X-Empresa-Id": str(b)}),
     )
-    assert response.status_code == 200
-    assert response.json() == []
 
-    creada = client.post(
-        "/api/product-categories", json={"name": "De A"}, headers=_con_token(usuario_a)
-    )
-    assert creada.status_code == 201
-    nombres_b = client.get("/api/product-categories", headers={"X-Empresa-Id": str(b)}).json()
-    assert [c["name"] for c in nombres_b] == ["De B"]
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "COMPANY_ACCESS_DENIED"
 
 
 def test_con_token_funciona_tambien_en_produccion(client, empresas, nuevo_usuario, monkeypatch):

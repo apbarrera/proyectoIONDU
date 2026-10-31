@@ -14,14 +14,7 @@ class CategoriaProducto(Base):
     nombre: Mapped[str] = mapped_column(String(100))
     descripcion: Mapped[str | None] = mapped_column(String(255))"""
 
-from sqlalchemy import (
-    ForeignKey,
-    Index,
-    String,
-    Text,
-    UniqueConstraint,
-    Identity
-)
+from sqlalchemy import ForeignKey, Identity, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -44,9 +37,9 @@ class CategoriaProducto(Base):
     )
 
     id_categoria_producto: Mapped[int] = mapped_column(
-    Identity(always=False),
-    primary_key=True,
-)
+        Identity(always=False),
+        primary_key=True,
+    )
     id_empresa: Mapped[int] = mapped_column(
         ForeignKey(
             "empresa.id_empresa",

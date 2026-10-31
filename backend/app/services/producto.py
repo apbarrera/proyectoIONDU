@@ -4,8 +4,9 @@ Traduce entre la API (docs/API.md, en inglés) y la base (en español), valida l
 reglas que dependen de los datos guardados y confirma cada operación (commit).
 """
 
-from sqlalchemy.orm import Session
 from typing import cast
+
+from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError, NotFoundError, UnprocessableError
 from app.models import CategoriaProducto, Producto
@@ -48,19 +49,15 @@ def _a_category(categoria: CategoriaProducto) -> Category:
     )
 
 
-
 def _a_product(producto: Producto, nombre_categoria: str) -> Product:
     stock_bajo = (
-        producto.stock_minimo is not None
-        and producto.stock_actual <= producto.stock_minimo
+        producto.stock_minimo is not None and producto.stock_actual <= producto.stock_minimo
     )
 
     tipo_normalizado = producto.tipo.lower()
 
     if tipo_normalizado not in {"venta", "insumo", "ambos"}:
-        raise ValueError(
-            f"Tipo de producto inválido en la base de datos: {producto.tipo!r}"
-        )
+        raise ValueError(f"Tipo de producto inválido en la base de datos: {producto.tipo!r}")
 
     tipo_api = cast(ProductType, tipo_normalizado)
 

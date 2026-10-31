@@ -1,4 +1,3 @@
-
 from sqlalchemy import (
     ForeignKey,
     Identity,

@@ -1,4 +1,3 @@
-
 import base64
 import os
 
@@ -6,7 +5,6 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from app.core.config import get_settings
-
 
 NONCE_BYTES = 12
 KEY_BYTES = 32
@@ -25,9 +23,7 @@ def _get_key() -> bytes:
     secret = settings.master_encryption_key
 
     if secret is None:
-        raise EncryptionConfigurationError(
-            "Falta configurar MASTER_ENCRYPTION_KEY."
-        )
+        raise EncryptionConfigurationError("Falta configurar MASTER_ENCRYPTION_KEY.")
 
     try:
         key = base64.b64decode(
@@ -41,8 +37,7 @@ def _get_key() -> bytes:
 
     if len(key) != KEY_BYTES:
         raise EncryptionConfigurationError(
-            "MASTER_ENCRYPTION_KEY debe representar exactamente "
-            "32 bytes para AES-256-GCM."
+            "MASTER_ENCRYPTION_KEY debe representar exactamente 32 bytes para AES-256-GCM."
         )
 
     return key
@@ -81,9 +76,7 @@ def decrypt_bytes(
         nonce = base64.b64decode(nonce_b64, validate=True)
         tag = base64.b64decode(tag_b64, validate=True)
     except (ValueError, TypeError) as exc:
-        raise EncryptionIntegrityError(
-            "El contenido cifrado tiene un formato inválido."
-        ) from exc
+        raise EncryptionIntegrityError("El contenido cifrado tiene un formato inválido.") from exc
 
     if len(nonce) != NONCE_BYTES or len(tag) != 16:
         raise EncryptionIntegrityError(
@@ -124,6 +117,4 @@ def decrypt_text(
             tag_b64,
         ).decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise EncryptionIntegrityError(
-            "El contenido descifrado no es texto UTF-8 válido."
-        ) from exc
+        raise EncryptionIntegrityError("El contenido descifrado no es texto UTF-8 válido.") from exc

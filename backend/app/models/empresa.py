@@ -25,7 +25,6 @@ class Empresa(Base):
     firma_electronica: Mapped[str | None] = mapped_column(String(255))
     fecha_creacion: Mapped[datetime] = mapped_column(server_default=text("CURRENT_TIMESTAMP"))"""
 
-
 from datetime import date, datetime
 from typing import Any
 
@@ -74,20 +73,14 @@ class Empresa(Base):
         String(150),
         nullable=False,
     )
-    datos_facturacion_electronica: Mapped[dict[str, Any] | None] = (
-        mapped_column(JSONB)
-    )
+    datos_facturacion_electronica: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     certificado_p12_cifrado: Mapped[str | None] = mapped_column(Text)
     certificado_nonce: Mapped[str | None] = mapped_column(String(64))
     certificado_tag: Mapped[str | None] = mapped_column(String(64))
     certificado_password_cifrada: Mapped[str | None] = mapped_column(Text)
-    certificado_password_nonce: Mapped[str | None] = mapped_column(
-        String(64)
-    )
-    certificado_password_tag: Mapped[str | None] = mapped_column(
-        String(64)
-    )
+    certificado_password_nonce: Mapped[str | None] = mapped_column(String(64))
+    certificado_password_tag: Mapped[str | None] = mapped_column(String(64))
     certificado_fecha_vencimiento: Mapped[date | None] = mapped_column(Date)
 
     fecha_creacion: Mapped[datetime] = mapped_column(

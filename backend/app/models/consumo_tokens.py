@@ -1,4 +1,3 @@
-
 from datetime import datetime
 from decimal import Decimal
 
@@ -20,7 +19,6 @@ from app.db.base import Base
 
 class ConsumoTokens(Base):
     __tablename__ = "consumo_tokens"
-
 
     __table_args__ = (
         CheckConstraint(

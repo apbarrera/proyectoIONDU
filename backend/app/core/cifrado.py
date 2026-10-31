@@ -74,7 +74,6 @@ def _cifrador(valor: str) -> Cifrador:
     return Cifrador(leer_llave_maestra(valor))
 
 
-
 def get_cifrador() -> Cifrador:
     secreto = get_settings().master_encryption_key
 
@@ -91,6 +90,7 @@ def get_cifrador() -> Cifrador:
         )
 
     return _cifrador(valor)
+
 
 if __name__ == "__main__":
     print(generar_llave_maestra())

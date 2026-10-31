@@ -1,4 +1,6 @@
-import pytest, base64
+import base64
+
+import pytest
 
 from app.core.encryption import (
     EncryptionConfigurationError,
@@ -62,24 +64,21 @@ def test_missing_encryption_key(monkeypatch):
     with pytest.raises(EncryptionConfigurationError):
         encryption.encrypt_text("Texto de prueba")
 
+
 def test_rejects_modified_ciphertext():
     original = "Contraseña de prueba del certificado SRI"
 
     ciphertext, nonce, tag = encrypt_text(original)
 
     # Decodificamos el contenido cifrado para modificar un byte.
-    ciphertext_bytes = bytearray(
-        base64.b64decode(ciphertext)
-    )
+    ciphertext_bytes = bytearray(base64.b64decode(ciphertext))
 
     # Alteramos un byte si el contenido no está vacío.
     assert ciphertext_bytes
     ciphertext_bytes[0] ^= 1
 
     # Volvemos a codificarlo en Base64.
-    modified_ciphertext = base64.b64encode(
-        bytes(ciphertext_bytes)
-    ).decode("ascii")
+    modified_ciphertext = base64.b64encode(bytes(ciphertext_bytes)).decode("ascii")
 
     # La autenticación debe fallar al intentar descifrarlo.
     with pytest.raises(EncryptionIntegrityError):

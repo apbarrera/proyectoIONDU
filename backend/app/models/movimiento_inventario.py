@@ -1,7 +1,5 @@
-
 from datetime import datetime
 from decimal import Decimal
-from app.db.base import Base, auth_users
 
 from sqlalchemy import (
     CheckConstraint,
@@ -13,10 +11,11 @@ from sqlalchemy import (
     String,
     text,
 )
-
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.schema import conv
+
+from app.db.base import Base, auth_users
 
 
 class MovimientoInventario(Base):
@@ -58,7 +57,7 @@ class MovimientoInventario(Base):
             auth_users.c.id,
             ondelete="RESTRICT",
             name="movimiento_inventario_id_usuario_fkey",
-            ),
+        ),
         nullable=False,
     )
 

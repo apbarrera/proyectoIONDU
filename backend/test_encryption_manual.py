@@ -1,7 +1,7 @@
 from app.core.encryption import (
-    encrypt_text,
-    decrypt_text,
     EncryptionIntegrityError,
+    decrypt_text,
+    encrypt_text,
 )
 
 original = "Clave de prueba del certificado SRI"

@@ -18,6 +18,7 @@ from sqlalchemy.schema import conv
 
 from app.db.base import Base
 
+
 class Producto(Base):
     __tablename__ = "producto"
 

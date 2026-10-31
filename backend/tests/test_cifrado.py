@@ -1,14 +1,14 @@
 """Cifrado AES-256-GCM de secretos y lectura del certificado .p12."""
-from pathlib import Path
-from types import SimpleNamespace
 
 import base64
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from types import SimpleNamespace
 
-from pydantic import SecretStr
 import pytest
+from pydantic import SecretStr
 
 from app.core import cifrado
 from app.core.cifrado import (
@@ -99,12 +99,10 @@ def test_sin_llave_maestra_configurada_avisa_como_generarla(monkeypatch):
 
 def test_con_llave_maestra_configurada(monkeypatch):
     monkeypatch.setattr(
-    cifrado,
-    "get_settings",
-    lambda: SimpleNamespace(
-        master_encryption_key=SecretStr(generar_llave_maestra())
-    ),
-)
+        cifrado,
+        "get_settings",
+        lambda: SimpleNamespace(master_encryption_key=SecretStr(generar_llave_maestra())),
+    )
     get_settings.cache_clear()
     cifrado._cifrador.cache_clear()
     try:

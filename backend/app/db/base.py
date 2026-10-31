@@ -5,8 +5,8 @@ lo que Alembic compara contra la base de datos para generar migraciones.
 """
 
 from sqlalchemy import Column, MetaData, Table
-from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import DeclarativeBase
 
 AUTH_METADATA = MetaData()
 

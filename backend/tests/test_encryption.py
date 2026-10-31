@@ -2,6 +2,8 @@ import base64
 
 import pytest
 
+from app.core.cifrado import generar_llave_maestra
+from app.core.config import get_settings
 from app.core.encryption import (
     EncryptionConfigurationError,
     EncryptionIntegrityError,
@@ -10,6 +12,15 @@ from app.core.encryption import (
     encrypt_bytes,
     encrypt_text,
 )
+
+
+@pytest.fixture(autouse=True)
+def llave_de_prueba(monkeypatch):
+    """Cada prueba usa una llave propia: no depende del .env de la máquina (en el CI no hay)."""
+    monkeypatch.setenv("MASTER_ENCRYPTION_KEY", generar_llave_maestra())
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def test_encrypt_and_decrypt_text():

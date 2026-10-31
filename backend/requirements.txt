@@ -10,4 +10,3 @@ httpx2==2.13.1
 PyJWT[crypto]==2.15.1
 cryptography==50.0.2
 tzdata==2025.2
-cryptography==50.0.2

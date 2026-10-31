@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import ForeignKey, String, text
+from sqlalchemy import ForeignKey, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -19,6 +19,10 @@ ACTIVO = "ACTIVO"
 
 class UsuarioEmpresa(Base):
     __tablename__ = "usuario_empresa"
+    # Gasto, venta y accion_ia apuntan a (id_usuario, id_empresa) para que la base
+    # impida registrar algo con un usuario de otra empresa; PostgreSQL exige que esa
+    # pareja esté declarada como única (lo es: id_usuario ya es la clave primaria).
+    __table_args__ = (UniqueConstraint("id_usuario", "id_empresa"),)
 
     id_usuario: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     id_empresa: Mapped[int] = mapped_column(

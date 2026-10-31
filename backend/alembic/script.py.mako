@@ -1,3 +1,5 @@
+## -*- coding: utf-8 -*-
+## (Mako: leer esta plantilla como UTF-8 en cualquier sistema; si no, en Windows las tildes salen mal)
 """${message}
 
 Revision ID: ${up_revision}

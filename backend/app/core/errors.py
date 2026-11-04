@@ -88,6 +88,7 @@ _VALIDATION_MESSAGES = {
     "literal_error": "Valor no permitido. Opciones: {expected}.",
     "decimal_max_places": "Debe tener como máximo {decimal_places} decimales.",
     "extra_forbidden": "Este campo no se puede enviar.",
+    "string_pattern_mismatch": "El formato no es válido.",
 }
 
 

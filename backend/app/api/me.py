@@ -5,11 +5,39 @@ from uuid import UUID
 
 from fastapi import APIRouter
 
-from app.api.deps import ContextoActual
+from app.api.deps import ContextoActual, DbSession, UsuarioActual
 from app.core.errors import UnauthenticatedError
+from app.models.rol import ADMINISTRADOR
+from app.repositories.usuario_empresa import obtener_empresas_activas
 from app.schemas.common import ApiModel
 
 router = APIRouter(tags=["Sesión"])
+
+
+class EmpresaDelUsuario(ApiModel):
+    """Una empresa a la que el usuario pertenece (para el selector de empresa)."""
+
+    id: int
+    name: str
+    trade_name: str | None
+    ruc: str
+    role: Literal["admin", "operator"]
+
+
+@router.get("/me/companies", response_model=list[EmpresaDelUsuario])
+def mis_empresas(usuario: UsuarioActual, db: DbSession):
+    """Empresas con pertenencia activa del usuario. No exige haber elegido empresa:
+    con más de una, el frontend muestra el selector y envía X-Empresa-Id."""
+    return [
+        EmpresaDelUsuario(
+            id=e.id_empresa,
+            name=e.razon_social,
+            trade_name=e.nombre_comercial,
+            ruc=e.ruc,
+            role="admin" if e.rol == ADMINISTRADOR else "operator",
+        )
+        for e in obtener_empresas_activas(db, usuario.id)
+    ]
 
 
 class Me(ApiModel):

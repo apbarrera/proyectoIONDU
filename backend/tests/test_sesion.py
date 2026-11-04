@@ -112,6 +112,40 @@ def test_me_sin_token_no_sirve_con_el_encabezado_de_desarrollo(client, empresas)
 
 
 # ---------- Selección de empresa ----------
+def test_lista_sus_empresas_activas_sin_haber_elegido_una(
+    client, empresas, nuevo_usuario, agregar_pertenencia
+):
+    a, b = empresas
+    usuario = nuevo_usuario(a)
+    agregar_pertenencia(usuario, b, rol=OPERATIVO)
+
+    response = client.get("/api/me/companies", headers=_con_token(usuario))
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"id": a, "name": "Empresa A", "tradeName": None, "ruc": "0990000000001", "role": "admin"},
+        {
+            "id": b,
+            "name": "Empresa B",
+            "tradeName": None,
+            "ruc": "0990000000002",
+            "role": "operator",
+        },
+    ]
+
+
+def test_la_lista_de_empresas_no_incluye_las_inactivas_ni_sirve_sin_token(
+    client, empresas, nuevo_usuario, agregar_pertenencia
+):
+    a, b = empresas
+    usuario = nuevo_usuario(a)
+    agregar_pertenencia(usuario, b, estado="INACTIVO")
+    assert [
+        e["id"] for e in client.get("/api/me/companies", headers=_con_token(usuario)).json()
+    ] == [a]
+    assert client.get("/api/me/companies", headers={"X-Empresa-Id": str(a)}).status_code == 401
+
+
 def test_usuario_con_varias_empresas_debe_seleccionar_una(
     client, empresas, nuevo_usuario, agregar_pertenencia
 ):

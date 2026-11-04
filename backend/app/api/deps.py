@@ -48,6 +48,23 @@ def _token_bearer(authorization: str | None) -> str | None:
     return token if esquema.lower() == "bearer" and token else None
 
 
+def get_usuario_actual(
+    verificador: Annotated[VerificadorTokens | None, Depends(get_verificador)],
+    authorization: Annotated[str | None, Header()] = None,
+) -> UsuarioAutenticado:
+    """Usuario con sesión, SIN exigir que haya elegido empresa (p. ej., para listar
+    sus empresas y mostrar el selector)."""
+    token = _token_bearer(authorization)
+    if not token:
+        raise UnauthenticatedError("Inicia sesión para continuar.")
+    if verificador is None:
+        raise UnauthenticatedError("El inicio de sesión no está configurado (falta SUPABASE_URL).")
+    return verificador.verificar(token)
+
+
+UsuarioActual = Annotated[UsuarioAutenticado, Depends(get_usuario_actual)]
+
+
 # ---------- Contexto de la petición: usuario, empresa y rol ----------
 @dataclass(frozen=True)
 class Contexto:

@@ -4,75 +4,16 @@ import uuid
 
 import pytest
 
-from app.api.deps import Contexto, get_verificador, requiere_administrador
+from app.api.deps import Contexto, requiere_administrador
 from app.core.config import get_settings
 from app.core.errors import ForbiddenError
-from app.db.base import auth_users
-from app.main import app
-from app.models import Rol, UsuarioEmpresa
 from app.models.rol import ADMINISTRADOR, OPERATIVO
-from tests.tokens import crear_token, verificador_de_prueba
+from tests.conftest import con_token as _con_token
 
 
 @pytest.fixture(autouse=True)
-def supabase_falso():
-    app.dependency_overrides[get_verificador] = verificador_de_prueba
-    yield
-    app.dependency_overrides.pop(get_verificador, None)
-
-
-@pytest.fixture
-def roles(db) -> dict[str, int]:
-    admin, operativo = Rol(nombre=ADMINISTRADOR), Rol(nombre=OPERATIVO)
-    db.add_all([admin, operativo])
-    db.flush()
-    return {ADMINISTRADOR: admin.id_rol, OPERATIVO: operativo.id_rol}
-
-
-@pytest.fixture
-def nuevo_usuario(db, roles):
-    def crear(id_empresa: int, rol: str = ADMINISTRADOR, estado: str = "ACTIVO") -> uuid.UUID:
-        usuario = uuid.uuid4()
-        db.execute(auth_users.insert().values(id=usuario))
-        db.add(
-            UsuarioEmpresa(
-                id_usuario=usuario,
-                id_empresa=id_empresa,
-                id_rol=roles[rol],
-                nombre_visible="Ana Torres",
-                estado=estado,
-            )
-        )
-        db.flush()
-        return usuario
-
-    return crear
-
-
-@pytest.fixture
-def agregar_pertenencia(db, roles):
-    def agregar(
-        usuario: uuid.UUID,
-        id_empresa: int,
-        rol: str = ADMINISTRADOR,
-        estado: str = "ACTIVO",
-    ) -> None:
-        db.add(
-            UsuarioEmpresa(
-                id_usuario=usuario,
-                id_empresa=id_empresa,
-                id_rol=roles[rol],
-                nombre_visible="Ana Torres",
-                estado=estado,
-            )
-        )
-        db.flush()
-
-    return agregar
-
-
-def _con_token(usuario: uuid.UUID, **extra) -> dict[str, str]:
-    return {"Authorization": f"Bearer {crear_token(usuario)}"} | extra
+def _sesion(supabase_falso):
+    """Todas las pruebas de este archivo usan el "Supabase falso" (fixture en conftest)."""
 
 
 # ---------- /api/me ----------

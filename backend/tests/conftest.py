@@ -12,6 +12,8 @@ import os
 # Las pruebas simulan el entorno de desarrollo (encabezado X-Empresa-Id habilitado).
 os.environ["APP_ENV"] = "development"
 
+import uuid  # noqa: E402
+
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
@@ -19,10 +21,13 @@ from sqlalchemy.engine import make_url  # noqa: E402
 from sqlalchemy.exc import OperationalError  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
-from app.db.base import Base  # noqa: E402
+from app.api.deps import get_verificador  # noqa: E402
+from app.db.base import Base, auth_users  # noqa: E402
 from app.db.session import get_db  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Empresa  # noqa: E402
+from app.models import Empresa, Rol, UsuarioEmpresa  # noqa: E402
+from app.models.rol import ADMINISTRADOR, OPERATIVO  # noqa: E402
+from tests.tokens import crear_token, verificador_de_prueba  # noqa: E402
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
 
@@ -85,3 +90,59 @@ def empresas(db) -> tuple[int, int]:
     db.add_all([a, b])
     db.flush()
     return a.id_empresa, b.id_empresa
+
+
+# ---------- Usuarios con sesión (token de un "Supabase falso", ver tests/tokens.py) ----------
+@pytest.fixture
+def supabase_falso():
+    """La API verifica los tokens con la llave de prueba en vez de la de Supabase."""
+    app.dependency_overrides[get_verificador] = verificador_de_prueba
+    yield
+    app.dependency_overrides.pop(get_verificador, None)
+
+
+@pytest.fixture
+def roles(db) -> dict[str, int]:
+    admin, operativo = Rol(nombre=ADMINISTRADOR), Rol(nombre=OPERATIVO)
+    db.add_all([admin, operativo])
+    db.flush()
+    return {ADMINISTRADOR: admin.id_rol, OPERATIVO: operativo.id_rol}
+
+
+@pytest.fixture
+def agregar_pertenencia(db, roles):
+    """Agrega una pertenencia de un usuario existente a una empresa."""
+
+    def agregar(
+        usuario: uuid.UUID, id_empresa: int, rol: str = ADMINISTRADOR, estado: str = "ACTIVO"
+    ) -> None:
+        db.add(
+            UsuarioEmpresa(
+                id_usuario=usuario,
+                id_empresa=id_empresa,
+                id_rol=roles[rol],
+                nombre_visible="Ana Torres",
+                estado=estado,
+            )
+        )
+        db.flush()
+
+    return agregar
+
+
+@pytest.fixture
+def nuevo_usuario(db, agregar_pertenencia):
+    """Crea un usuario de Supabase (auth.users) con pertenencia a una empresa."""
+
+    def crear(id_empresa: int, rol: str = ADMINISTRADOR, estado: str = "ACTIVO") -> uuid.UUID:
+        usuario = uuid.uuid4()
+        db.execute(auth_users.insert().values(id=usuario))
+        agregar_pertenencia(usuario, id_empresa, rol, estado)
+        return usuario
+
+    return crear
+
+
+def con_token(usuario: uuid.UUID, **extra: str) -> dict[str, str]:
+    """Encabezados de una petición con la sesión de ese usuario."""
+    return {"Authorization": f"Bearer {crear_token(usuario)}"} | extra

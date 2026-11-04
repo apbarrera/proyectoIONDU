@@ -194,7 +194,37 @@ Se envía como formulario `multipart/form-data` con dos campos: `archivo` (el `.
 Errores: `422` si el archivo no es `.p12`, supera el tamaño, la contraseña es incorrecta o el certificado está
 vencido; `403` si el usuario no es Administrador.
 
-## 7. Cambios que implica en el frontend
+## 7. Clientes
+
+En la venta se escribe la cédula o el RUC del cliente; si ya existe, se autocompletan sus datos (`lookup`). El
+**consumidor final** (`9999999999999`) no se guarda como cliente: se usa directamente en la venta.
+
+### Objeto `Customer`
+
+| Campo | Tipo | Columna en la base | Notas |
+|---|---|---|---|
+| `id` | number | `id_cliente` | Solo lectura |
+| `identificationType` | `"cedula"` \| `"ruc"` \| `"pasaporte"` \| `"exterior"` | `tipo_identificacion` (código SRI `05`, `04`, `06`, `08`) | Opcional al crear: con 10 dígitos se toma cédula; con 13, RUC |
+| `identification` | string | `identificacion` | Obligatorio; validado con las reglas del SRI (dígito verificador, provincia, etc.) |
+| `name` | string (1–255) | `nombre_razon_social` | Obligatorio |
+| `address` | string \| null | `direccion` | Opcional |
+| `phone` | string \| null (≤20) | `telefono` | Opcional |
+| `email` | string \| null (≤150) | `correo_electronico` | Opcional; si tiene, se le envía la factura |
+| `identificationWarning` | string \| null | (calculado) | Solo lectura. Aviso si el RUC de una sociedad no cumple el dígito verificador clásico (se acepta igual, `DECISIONES.md` 2.16) |
+
+### Endpoints
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/customers` | Lista con páginas, ordenada por nombre. Filtro `search` (en identificación y nombre) | `200` con `PageResult<Customer>` |
+| ✅ | `GET /api/customers/lookup?identification=…` | Busca por cédula, RUC o pasaporte exactos (para autocompletar en la venta) | `200` con `Customer`, o `404` |
+| ✅ | `GET /api/customers/{id}` | Un cliente | `200` con `Customer`, o `404` |
+| ✅ | `POST /api/customers` | Crea un cliente | `201` con `Customer`; `409 CUSTOMER_EXISTS` si ya existe esa identificación en la empresa; `422` si la identificación no es válida |
+| ✅ | `PATCH /api/customers/{id}` | Modifica solo los campos enviados | `200` con `Customer`; mismos errores que al crear |
+
+No hay `DELETE`: un cliente con ventas o facturas no se puede borrar sin romper el historial.
+
+## 8. Cambios que implica en el frontend
 
 1. `Product.id`: de `string` a `number`.
 2. `category` (texto libre) pasa a ser `categoryId` (elegir de `GET /api/product-categories`) y `categoryName` (para mostrar).
@@ -209,3 +239,5 @@ vencido; `403` si el usuario no es Administrador.
    empresa) a toda petición a `/api/...`, y maneja `TOKEN_EXPIRED`, `NO_COMPANY`, `COMPANY_SELECTION_REQUIRED` y
    `COMPANY_ACCESS_DENIED` (sección 5).
 9. El `sku` admite máximo 25 caracteres (sección 4).
+10. Nueva venta: al escribir la cédula o el RUC, `GET /api/customers/lookup` autocompleta el cliente; si no existe,
+    `POST /api/customers` lo crea. El consumidor final debe ser `9999999999999` (13 nueves), no `9999999999`.

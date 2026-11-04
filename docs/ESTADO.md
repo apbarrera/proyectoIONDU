@@ -26,13 +26,18 @@
   solo hace falta `SUPABASE_URL`.
 - `PUT /api/company/certificate` (Ariana): el Administrador sube el `.p12`, que se guarda cifrado (`API.md` 6).
 
+### Backend: clientes
+- `GET/POST /api/customers`, `GET/PATCH /api/customers/{id}` y `GET /api/customers/lookup` (autocompletar en la
+  venta), según [`API.md`](API.md), sección 7. La cédula/RUC se valida con las reglas del SRI y el tipo se deduce de
+  10 o 13 dígitos; el consumidor final no se guarda como cliente (`DECISIONES.md` 2.24).
+
 ### Backend: primer módulo (categorías y productos)
 - Endpoints según [`API.md`](API.md): `GET/POST /api/product-categories` y `GET/POST /api/products`, `GET/PATCH /api/products/{id}`, con páginas, búsqueda y filtros (`categoryId`, `type`, `lowStock`).
 - Capas: `models/` (empresa, categoría y producto, idénticos a `schema.sql`, comprobado con `alembic check`) → `repositories/` (cada repositorio recibe la empresa y todas sus consultas la filtran) → `services/` (reglas: categoría de la misma empresa, código único por empresa, el stock no se edita) → `schemas/` (validación y nombres del contrato) → `api/`.
 - **Errores con formato único** (`app/core/errors.py`): `{"error": {"code", "message", "details"}}`, con mensajes de validación en español por campo.
 - **Empresa provisional** (`app/api/deps.py`): solo con `APP_ENV=development` se toma del encabezado `X-Empresa-Id`; en cualquier otro entorno responde 401. Con Supabase Auth solo cambia esa función.
 - Pendiente de la base: desactivar productos (falta la columna `activo`) y la restricción `UNIQUE` del código (hoy lo valida el servicio).
-- Pruebas del módulo incluido el aislamiento entre empresas (179 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
+- Pruebas del módulo incluido el aislamiento entre empresas (193 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
 
 ### Backend: base de la facturación del SRI (adelanto del Sprint 2)
 - `app/sri/identificacion.py`: valida cédula, RUC (persona natural, sociedad y entidad pública), pasaporte,
@@ -97,7 +102,7 @@
 |---|---|---|---|
 | Infraestructura | 90 % | Docker, base local, migraciones, CI, errores, Ruff | Desplegar en el VPS |
 | 1. Usuarios, roles y empresa | 55 % | Token de Supabase, varias empresas por usuario y selector, rol y permiso de Administrador, `/api/me`, subir el certificado | Configuración de la empresa, gestión de usuarios |
-| 2. Facturación y ventas | 65 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión, cifrado del `.p12` y firma XAdES-BES | Firma y prueba real (`.p12`); clientes, ventas y reintentos (esquema) |
+| 2. Facturación y ventas | 70 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión, cifrado del `.p12` y firma XAdES-BES, clientes | Prueba real con el SRI (`.p12`); ventas, guardar facturas y reintentos |
 | 3. Gastos | 0 % | — | Gastos, proveedores, correo (IMAP) |
 | 4. Productos e inventario | 55 % | Categorías y productos | Desactivar, movimientos, ajustes, alertas |
 | 5. Dashboard | 0 % | — | Indicadores (necesita ventas y gastos) |
@@ -111,7 +116,7 @@
 | 1 | Ariana | ✅ Modelos con el esquema corregido. Falta: migración que cree todo desde cero y los pendientes de `SEGURIDAD_BD.md` | Desplegar en Supabase | Media |
 | 2 | Equipo | Crear el proyecto de Supabase y pasar URL y claves por un canal seguro | Login real: validar el token y tomar la empresa del usuario | Alta |
 | 3 | Equipo | Decidir el tipo de producto y si Recetas/Producción entran en el MVP | Cerrar productos; tablas de recetas si entran | Media |
-| 4 | Denisse | Conectar `ProductsService` a `/api/products` (`API.md`, sección 7) | Primera pantalla con datos reales | Media |
+| 4 | Denisse | Conectar `ProductsService` a `/api/products` (`API.md`, sección 8) | Primera pantalla con datos reales | Media |
 | 5 | Denisse | Consumidor final con 13 nueves (2.F) | Evitar facturas rechazadas | Baja |
 | 6 | Denisse | Login de Angular con Supabase Auth | Enviar el token al backend | Después del #2 |
 | 7 | Cliente | Certificado `.p12`, RUC del emisor, VPS y dominio | Probar la firma y el envío en el SRI de pruebas (el código ya está listo); desplegar | Pedirlo ya |

@@ -351,6 +351,19 @@
 - **Pendiente:** confirmar que el SRI de pruebas acepta la firma con un `.p12` real. Las pruebas usan certificados
   autofirmados (`tests/certificados.py`).
 
+### 2.24 Clientes
+- **Decisión (03/11/2026):** el tipo de identificación se guarda con su código del SRI (`05` cédula, `04` RUC,
+  `06` pasaporte, `08` exterior) y en la API se usa el nombre (`cedula`, `ruc`, …). Si no se envía, se deduce:
+  10 dígitos = cédula, 13 = RUC; pasaporte y exterior deben indicarse.
+- **Por qué:** el frontend tiene un solo campo "Cédula o RUC" en la venta, y el código del SRI es el que va en el
+  XML de la factura.
+- La identificación se valida con `app/sri/identificacion.py` (decisión 2.16): un RUC de sociedad con el dígito
+  verificador distinto se acepta y la respuesta trae `identificationWarning`.
+- El **consumidor final** (`9999999999999`) no se guarda como cliente: se usa directamente en la venta.
+- Identificación única por empresa: la valida el servicio y la exige la base (si dos peticiones chocan, `409`).
+- `GET /api/customers/lookup` busca por identificación exacta para autocompletar en "Nueva venta".
+- La búsqueda por texto (escapando `%` y `_`) se comparte entre repositorios (`app/repositories/comun.py`).
+
 ## 3. Producto
 
 ### 3.1 Ventas y Facturación son un solo módulo

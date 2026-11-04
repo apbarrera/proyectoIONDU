@@ -27,6 +27,19 @@ Amount = Annotated[
 ]
 
 
+# Cantidades y precios unitarios: NUMERIC(12,4) en la base (p. ej. 1.5 kg o $0.5555).
+Quantity = Annotated[
+    Decimal,
+    Field(gt=0, max_digits=12, decimal_places=4),
+    PlainSerializer(float, return_type=float, when_used="json"),
+]
+UnitPrice = Annotated[
+    Decimal,
+    Field(ge=0, max_digits=12, decimal_places=4),
+    PlainSerializer(float, return_type=float, when_used="json"),
+]
+
+
 def text_field(max_length: int, min_length: int = 1):
     """Texto sin espacios sobrantes al inicio y al final, con largo mínimo y máximo."""
     return Annotated[

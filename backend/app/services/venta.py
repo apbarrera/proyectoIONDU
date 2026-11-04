@@ -1,0 +1,202 @@
+"""Reglas de negocio de las ventas.
+
+Registrar una venta es UNA transacción (todo o nada): venta, líneas, descuento de
+stock y movimientos de inventario. El precio y el IVA salen del producto, nunca del
+frontend, y los totales se calculan con las reglas del SRI (app/sri/totales.py).
+"""
+
+import uuid
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+from sqlalchemy.orm import Session
+
+from app.core.config import TIMEZONE
+from app.core.errors import ConflictError, NotFoundError, UnprocessableError
+from app.models import Cliente, DetalleVenta, MovimientoInventario, Producto, Venta
+from app.repositories.cliente import ClienteRepository
+from app.repositories.venta import VentaRepository
+from app.schemas.common import Page
+from app.schemas.venta import PaymentMethod, Sale, SaleCreate, SaleItem
+from app.sri.totales import Linea, TarifaIva, calcular_totales
+
+CONSUMIDOR_FINAL = "CONSUMIDOR FINAL"
+ORIGEN_MANUAL = "MANUAL"  # la fase 2 agregará la venta facturada electrónicamente
+MOVIMIENTO_VENTA = "VENTA"
+_ZONA = ZoneInfo(TIMEZONE)
+
+
+def _error(campo: str, mensaje: str, code: str) -> UnprocessableError:
+    return UnprocessableError(mensaje, code=code, details=[{"field": campo, "message": mensaje}])
+
+
+def _a_sale(venta: Venta, cliente: Cliente | None, lineas) -> Sale:
+    return Sale(
+        id=venta.id_venta,
+        date=venta.fecha.astimezone(_ZONA),
+        customer_id=venta.id_cliente,
+        customer_name=cliente.nombre_razon_social if cliente else CONSUMIDOR_FINAL,
+        customer_identification=cliente.identificacion if cliente else None,
+        items=[
+            SaleItem(
+                product_id=detalle.id_producto,
+                sku=producto.codigo_principal if producto else None,
+                product_name=producto.nombre if producto else (detalle.descripcion_libre or ""),
+                quantity=detalle.cantidad,
+                unit_price=detalle.precio_unitario,
+                discount=detalle.descuento,
+                subtotal=detalle.subtotal,
+            )
+            for detalle, producto in lineas
+        ],
+        subtotal=venta.subtotal,
+        iva_amount=venta.iva,
+        total=venta.monto_total,
+        payment_method=venta.metodo_pago.lower(),
+        status=venta.estado.lower(),
+        observation=venta.observacion,
+    )
+
+
+def _rango_del_dia(
+    desde: date | None, hasta: date | None
+) -> tuple[datetime | None, datetime | None]:
+    """Días del calendario de Ecuador -> desde el inicio de "desde" hasta antes del día
+    siguiente a "hasta" (así "hasta" incluye todo ese día)."""
+    inicio = datetime.combine(desde, time.min, _ZONA) if desde else None
+    fin = datetime.combine(hasta + timedelta(days=1), time.min, _ZONA) if hasta else None
+    return inicio, fin
+
+
+class VentaService:
+    def __init__(self, db: Session, empresa_id: int):
+        self._db = db
+        self._repo = VentaRepository(db, empresa_id)
+        self._clientes = ClienteRepository(db, empresa_id)
+
+    # ---------- consultas ----------
+    def listar(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        desde: date | None = None,
+        hasta: date | None = None,
+        customer_id: int | None = None,
+        payment_method: PaymentMethod | None = None,
+    ) -> Page[Sale]:
+        inicio, fin = _rango_del_dia(desde, hasta)
+        filas, total = self._repo.listar(
+            desde=inicio,
+            hasta=fin,
+            id_cliente=customer_id,
+            metodo_pago=payment_method.upper() if payment_method else None,
+            offset=(page - 1) * page_size,
+            limit=page_size,
+        )
+        lineas = self._repo.detalles([venta.id_venta for venta, _ in filas])
+        return Page[Sale](
+            items=[_a_sale(v, c, lineas.get(v.id_venta, [])) for v, c in filas],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+
+    def obtener(self, id_venta: int) -> Sale:
+        encontrada = self._repo.obtener(id_venta)  # de otra empresa también es 404
+        if encontrada is None:
+            raise NotFoundError("La venta no existe.")
+        venta, cliente = encontrada
+        return _a_sale(venta, cliente, self._repo.detalles([id_venta]).get(id_venta, []))
+
+    # ---------- registrar ----------
+    def crear(self, datos: SaleCreate, id_usuario: uuid.UUID) -> Sale:
+        ids = [item.product_id for item in datos.items]
+        if len(set(ids)) != len(ids):
+            raise _error(
+                "items", "Un producto no puede repetirse en la venta.", "DUPLICATE_PRODUCT"
+            )
+        if datos.customer_id is not None and self._clientes.obtener(datos.customer_id) is None:
+            raise _error("customerId", "El cliente no existe.", "CUSTOMER_NOT_FOUND")
+
+        productos = self._repo.bloquear_productos(ids)  # bloqueados hasta el commit
+        self._validar_productos(datos, productos)
+
+        lineas = []
+        for i, item in enumerate(datos.items):
+            producto = productos[item.product_id]
+            tarifa = TarifaIva.IVA_15 if producto.aplica_iva else TarifaIva.IVA_0
+            try:
+                lineas.append(Linea(item.quantity, producto.precio_venta, tarifa, item.discount))
+            except ValueError as exc:
+                raise _error(f"items[{i}].discount", str(exc), "VALIDATION_ERROR") from exc
+        totales = calcular_totales(lineas)
+
+        venta = Venta(
+            id_usuario=id_usuario,
+            id_cliente=datos.customer_id,
+            subtotal=totales.total_sin_impuestos,
+            iva=totales.total_iva,
+            monto_total=totales.importe_total,
+            tipo_origen=ORIGEN_MANUAL,
+            metodo_pago=datos.payment_method.upper(),
+            observacion=datos.observation or None,
+            estado="COMPLETADA",
+        )
+        self._repo.agregar(venta)
+        self._repo.guardar_pendientes()  # obtiene id_venta para las líneas y los movimientos
+
+        for item, calculada in zip(datos.items, totales.lineas, strict=True):
+            producto = productos[item.product_id]
+            self._repo.agregar(
+                DetalleVenta(
+                    id_venta=venta.id_venta,
+                    id_producto=producto.id_producto,
+                    cantidad=item.quantity,
+                    precio_unitario=producto.precio_venta,
+                    descuento=item.discount,
+                    subtotal=calculada.precio_total_sin_impuesto,
+                )
+            )
+            producto.stock_actual -= item.quantity
+            self._repo.agregar(
+                MovimientoInventario(
+                    id_producto=producto.id_producto,
+                    id_usuario=id_usuario,
+                    tipo_movimiento=MOVIMIENTO_VENTA,
+                    cantidad=item.quantity,
+                    motivo=f"Venta #{venta.id_venta}",
+                )
+            )
+        self._db.commit()
+        return self.obtener(venta.id_venta)
+
+    def _validar_productos(self, datos: SaleCreate, productos: dict[int, Producto]) -> None:
+        sin_stock = []
+        for i, item in enumerate(datos.items):
+            producto = productos.get(item.product_id)
+            campo = f"items[{i}].productId"
+            if producto is None:
+                raise _error(campo, "El producto no existe.", "PRODUCT_NOT_FOUND")
+            if not producto.activo:
+                raise _error(
+                    campo, f"El producto {producto.nombre} está desactivado.", "PRODUCT_INACTIVE"
+                )
+            if producto.tipo.upper() == "INSUMO":
+                raise _error(
+                    campo, f"{producto.nombre} es un insumo y no se vende.", "PRODUCT_NOT_SELLABLE"
+                )
+            if producto.stock_actual < item.quantity:
+                disponible = f"{producto.stock_actual.normalize():f}"
+                sin_stock.append(
+                    {
+                        "field": f"items[{i}].quantity",
+                        "message": f"Stock disponible de {producto.nombre}: {disponible}.",
+                    }
+                )
+        if sin_stock:
+            raise ConflictError(
+                "No hay stock suficiente para registrar la venta.",
+                code="INSUFFICIENT_STOCK",
+                details=sin_stock,
+            )

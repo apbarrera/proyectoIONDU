@@ -4,10 +4,11 @@ Cada repositorio recibe la empresa al crearse y TODAS sus consultas filtran por
 ella: no existe forma de consultar sin empresa.
 """
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import CategoriaProducto, Producto
+from app.repositories.comun import contiene_texto
 
 
 class CategoriaProductoRepository:
@@ -66,15 +67,7 @@ class ProductoRepository:
         """Una página de productos (ordenados por nombre) y el total que cumple los filtros."""
         stmt = self._con_categoria()
         if buscar:
-            # Escapa % y _ para que se busquen como texto y no como comodines.
-            escapado = buscar.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
-            patron = f"%{escapado}%"
-            stmt = stmt.where(
-                or_(
-                    Producto.codigo_principal.ilike(patron, escape="\\"),
-                    Producto.nombre.ilike(patron, escape="\\"),
-                )
-            )
+            stmt = stmt.where(contiene_texto(buscar, Producto.codigo_principal, Producto.nombre))
         if id_categoria is not None:
             stmt = stmt.where(Producto.id_categoria_producto == id_categoria)
         if tipo is not None:

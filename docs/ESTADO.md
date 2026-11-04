@@ -26,6 +26,14 @@
   solo hace falta `SUPABASE_URL`.
 - `PUT /api/company/certificate` (Ariana): el Administrador sube el `.p12`, que se guarda cifrado (`API.md` 6).
 
+### Backend: ventas (fase 1)
+- `POST /api/sales`, `GET /api/sales` (historial con filtros de fecha, cliente y método de pago) y
+  `GET /api/sales/{id}` ([`API.md`](API.md), sección 8). Registrar exige sesión de usuario.
+- En una transacción: venta, líneas, **descuento de stock** con la fila del producto bloqueada (dos ventas
+  simultáneas no lo dejan en negativo) y **movimiento de inventario** `VENTA`. Precio e IVA salen del producto y
+  los totales del módulo del SRI (`DECISIONES.md` 2.25).
+- Falta (fase 2): emitir la factura de la venta, que requiere cambios en `factura` (sección 2.F).
+
 ### Backend: clientes
 - `GET/POST /api/customers`, `GET/PATCH /api/customers/{id}` y `GET /api/customers/lookup` (autocompletar en la
   venta), según [`API.md`](API.md), sección 7. La cédula/RUC se valida con las reglas del SRI y el tipo se deduce de
@@ -37,7 +45,7 @@
 - **Errores con formato único** (`app/core/errors.py`): `{"error": {"code", "message", "details"}}`, con mensajes de validación en español por campo.
 - **Empresa provisional** (`app/api/deps.py`): solo con `APP_ENV=development` se toma del encabezado `X-Empresa-Id`; en cualquier otro entorno responde 401. Con Supabase Auth solo cambia esa función.
 - Pendiente de la base: desactivar productos (falta la columna `activo`) y la restricción `UNIQUE` del código (hoy lo valida el servicio).
-- Pruebas del módulo incluido el aislamiento entre empresas (193 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
+- Pruebas del módulo incluido el aislamiento entre empresas (207 en total en el backend). Las de base de datos usan `TEST_DATABASE_URL` (ver sección 3) y en el CI corren contra un PostgreSQL temporal.
 
 ### Backend: base de la facturación del SRI (adelanto del Sprint 2)
 - `app/sri/identificacion.py`: valida cédula, RUC (persona natural, sociedad y entidad pública), pasaporte,
@@ -102,9 +110,9 @@
 |---|---|---|---|
 | Infraestructura | 90 % | Docker, base local, migraciones, CI, errores, Ruff | Desplegar en el VPS |
 | 1. Usuarios, roles y empresa | 55 % | Token de Supabase, varias empresas por usuario y selector, rol y permiso de Administrador, `/api/me`, subir el certificado | Configuración de la empresa, gestión de usuarios |
-| 2. Facturación y ventas | 70 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión, cifrado del `.p12` y firma XAdES-BES, clientes | Prueba real con el SRI (`.p12`); ventas, guardar facturas y reintentos |
+| 2. Facturación y ventas | 75 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión, cifrado del `.p12` y firma XAdES-BES, clientes, registrar ventas | Facturar la venta (fase 2), anular ventas, prueba real con el SRI (`.p12`) |
 | 3. Gastos | 0 % | — | Gastos, proveedores, correo (IMAP) |
-| 4. Productos e inventario | 55 % | Categorías y productos | Desactivar, movimientos, ajustes, alertas |
+| 4. Productos e inventario | 60 % | Categorías, productos y movimientos por venta | Desactivar, movimientos, ajustes, alertas |
 | 5. Dashboard | 0 % | — | Indicadores (necesita ventas y gastos) |
 | 6. Agente IA | 0 % | — | Todo (Sprint 4) |
 | 7. Recomendaciones | 0 % | — | Todo (Sprint 5) |
@@ -116,7 +124,7 @@
 | 1 | Ariana | ✅ Modelos con el esquema corregido. Falta: migración que cree todo desde cero y los pendientes de `SEGURIDAD_BD.md` | Desplegar en Supabase | Media |
 | 2 | Equipo | Crear el proyecto de Supabase y pasar URL y claves por un canal seguro | Login real: validar el token y tomar la empresa del usuario | Alta |
 | 3 | Equipo | Decidir el tipo de producto y si Recetas/Producción entran en el MVP | Cerrar productos; tablas de recetas si entran | Media |
-| 4 | Denisse | Conectar `ProductsService` a `/api/products` (`API.md`, sección 8) | Primera pantalla con datos reales | Media |
+| 4 | Denisse | Conectar `ProductsService` a `/api/products` (`API.md`, sección 9) | Primera pantalla con datos reales | Media |
 | 5 | Denisse | Consumidor final con 13 nueves (2.F) | Evitar facturas rechazadas | Baja |
 | 6 | Denisse | Login de Angular con Supabase Auth | Enviar el token al backend | Después del #2 |
 | 7 | Cliente | Certificado `.p12`, RUC del emisor, VPS y dominio | Probar la firma y el envío en el SRI de pruebas (el código ya está listo); desplegar | Pedirlo ya |
@@ -178,6 +186,14 @@ Después de corregirlo, el esquema pasa a ser **la primera migración de Alembic
 **Frontend: consumidor final.** `new-sale.ts` y `sales-history.ts` usan `FINAL_CONSUMER_ID = '9999999999'`
 (10 nueves); el SRI exige `9999999999999` (13 nueves) con el tipo de identificación `07`. Con 10, la factura sería
 rechazada.
+
+**Tabla `factura` (para la fase 2 de ventas):**
+1. `numero_comprobante` es único en todo el sistema: la segunda empresa no podría emitir su factura
+   `001-001-000000001`. Debe ser único por empresa (agregar `id_empresa` a `factura`).
+2. Faltan columnas para el resultado del SRI: número y fecha de autorización, motivos de rechazo (JSONB) e
+   intentos de envío.
+3. `detalle_venta` no guarda la tarifa de IVA de cada línea (hace falta para el XML y para las líneas sin producto).
+4. Dónde se configuran el establecimiento, el punto de emisión, el ambiente y el secuencial de cada empresa.
 
 **Por decidir en equipo:** los valores del tipo de producto, y si Recetas y Producción entran en el MVP (si entran, hay que agregarlas a los requisitos y crear sus tablas).
 

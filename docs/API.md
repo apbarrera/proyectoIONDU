@@ -224,7 +224,81 @@ En la venta se escribe la cédula o el RUC del cliente; si ya existe, se autocom
 
 No hay `DELETE`: un cliente con ventas o facturas no se puede borrar sin romper el historial.
 
-## 8. Cambios que implica en el frontend
+## 8. Ventas
+
+Registrar una venta **exige sesión** (`Authorization: Bearer`): la venta guarda qué usuario la hizo. Con el
+encabezado de desarrollo `X-Empresa-Id` se pueden consultar, pero no registrar (`403 USER_SESSION_REQUIRED`).
+
+**El precio y el IVA los pone el backend** desde el producto (`salePrice` y `appliesVat`): el frontend solo envía
+qué productos y cuántos. Los totales se calculan con las reglas del SRI (decisión 2.18), así la venta y su factura
+cuadran al centavo.
+
+### Registrar: `POST /api/sales`
+
+```json
+{
+  "customerId": 5,
+  "items": [ { "productId": 12, "quantity": 2, "discount": 0 } ],
+  "paymentMethod": "efectivo",
+  "observation": "Entrega a domicilio"
+}
+```
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `customerId` | number \| null | Un cliente de la empresa (sección 7). `null` = consumidor final |
+| `items` | lista (1–200) | Un producto no puede repetirse en la lista |
+| `items[].productId` | number | Producto activo de tipo `venta` o `ambos` |
+| `items[].quantity` | number > 0 | Hasta 4 decimales (por ejemplo, 1.5 kg) |
+| `items[].discount` | number ≥ 0 | Descuento en dólares de esa línea; por defecto 0 |
+| `paymentMethod` | `"efectivo"` \| `"tarjeta_debito"` \| `"tarjeta_credito"` \| `"transferencia"` | Se separa la tarjeta en débito y crédito porque el SRI las distingue |
+| `observation` | string \| null (≤255) | Opcional |
+
+En una sola transacción (se guarda todo o nada): crea la venta y sus líneas, **descuenta el stock** de cada producto
+y registra su **movimiento de inventario** (`VENTA`). Dos ventas simultáneas del mismo producto no pueden dejarlo en
+negativo: la fila del producto se bloquea mientras se descuenta.
+
+Respuestas: `201` con `Sale`; `409 INSUFFICIENT_STOCK` si no alcanza el stock (con el producto en `details`);
+`422` si un producto o cliente no existe en la empresa, está inactivo, no se vende o el descuento supera la línea;
+`403 USER_SESSION_REQUIRED` sin sesión de usuario.
+
+### Objeto `Sale`
+
+```json
+{
+  "id": 31,
+  "date": "2026-11-03T15:20:00-05:00",
+  "customerId": 5,
+  "customerName": "Juan Pérez",
+  "customerIdentification": "1710000009",
+  "items": [
+    { "productId": 12, "sku": "CAF-250", "productName": "Café molido 250 g",
+      "quantity": 2, "unitPrice": 4.5, "discount": 0, "subtotal": 9.0 }
+  ],
+  "subtotal": 9.0,
+  "ivaAmount": 1.35,
+  "total": 10.35,
+  "paymentMethod": "efectivo",
+  "status": "completada",
+  "observation": "Entrega a domicilio"
+}
+```
+
+Sin cliente: `customerId` y `customerIdentification` son `null` y `customerName` es `"CONSUMIDOR FINAL"`.
+
+### Consultar
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `POST /api/sales` | Registra la venta (arriba) | `201` con `Sale` |
+| ✅ | `GET /api/sales` | Historial, de la más reciente a la más antigua. Filtros: `from` y `to` (fechas `AAAA-MM-DD`, en hora de Ecuador), `customerId`, `paymentMethod` | `200` con `PageResult<Sale>` |
+| ✅ | `GET /api/sales/{id}` | Una venta | `200` con `Sale`, o `404` |
+| ⏳ | Factura de la venta | Emitir, reintentar y ver su estado | Fase 2: requiere cambios en la tabla `factura` |
+
+Pendiente: líneas de concepto libre sin producto (falta guardar la tarifa de IVA por línea en `detalle_venta`) y
+anular ventas (RF-2.7).
+
+## 9. Cambios que implica en el frontend
 
 1. `Product.id`: de `string` a `number`.
 2. `category` (texto libre) pasa a ser `categoryId` (elegir de `GET /api/product-categories`) y `categoryName` (para mostrar).
@@ -241,3 +315,5 @@ No hay `DELETE`: un cliente con ventas o facturas no se puede borrar sin romper 
 9. El `sku` admite máximo 25 caracteres (sección 4).
 10. Nueva venta: al escribir la cédula o el RUC, `GET /api/customers/lookup` autocompleta el cliente; si no existe,
     `POST /api/customers` lo crea. El consumidor final debe ser `9999999999999` (13 nueves), no `9999999999`.
+11. `SalesService.createSale` envía `customerId` (no el nombre), `items` con `productId` y `quantity` (sin precio)
+    y `paymentMethod` con tarjeta separada en `tarjeta_debito` / `tarjeta_credito` (sección 8).

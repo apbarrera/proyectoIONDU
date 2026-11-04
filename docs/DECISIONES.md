@@ -364,6 +364,23 @@
 - `GET /api/customers/lookup` busca por identificación exacta para autocompletar en "Nueva venta".
 - La búsqueda por texto (escapando `%` y `_`) se comparte entre repositorios (`app/repositories/comun.py`).
 
+### 2.25 Ventas
+- **Decisión (03/11/2026):** el **precio y el IVA los pone el backend** desde el producto (`precio_venta`,
+  `aplica_iva`); el frontend solo envía productos y cantidades. **Por qué:** si el precio viniera del navegador,
+  cualquiera podría registrar una venta a $0,01.
+- Los totales se calculan con `app/sri/totales.py` (decisión 2.18): la venta y su factura cuadran al centavo.
+- Registrar es **una transacción**: venta, líneas, descuento de stock y movimiento de inventario `VENTA`; si algo
+  falla (por ejemplo, stock insuficiente: `409 INSUFFICIENT_STOCK`), no se guarda nada.
+- **Stock bajo concurrencia** (pendiente 7 de `SEGURIDAD_BD.md`): los productos se bloquean con
+  `SELECT … FOR UPDATE`, ordenados por id para evitar *deadlocks*, y se valida el stock con la fila bloqueada.
+  La restricción `stock_actual >= 0` de la base es la última protección.
+- Registrar exige **sesión de usuario** (`venta.id_usuario` es obligatorio); el encabezado de desarrollo solo
+  sirve para consultar (`403 USER_SESSION_REQUIRED`).
+- Métodos de pago: `efectivo`, `tarjeta_debito`, `tarjeta_credito` y `transferencia` (la tarjeta se separa porque
+  el SRI distingue débito y crédito). `tipo_origen` es `MANUAL` por ahora.
+- Solo se venden productos activos de tipo `venta` o `ambos`. Las líneas de concepto libre esperan la columna de
+  tarifa de IVA en `detalle_venta`.
+
 ## 3. Producto
 
 ### 3.1 Ventas y Facturación son un solo módulo

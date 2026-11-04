@@ -11,8 +11,9 @@
 - **Empresa (multi-tenant):** cada petición trabaja solo con los datos de la empresa del usuario. Nunca se envía
   `id_empresa` en el cuerpo ni en la ruta.
   - **Con sesión:** encabezado `Authorization: Bearer <token>` (el `access_token` de Supabase Auth). La empresa y
-    el rol salen del usuario (tabla `usuario_empresa`). **El token manda**: si también llega `X-Empresa-Id`, se
-    ignora. Ver sección 5.
+    el rol salen de las pertenencias del usuario (tabla `usuario_empresa`). Un usuario **puede pertenecer a varias
+    empresas**: si tiene una sola, se usa esa; si tiene varias, el frontend envía también `X-Empresa-Id` con la
+    elegida, y el backend comprueba que el usuario pertenezca a ella. Ver sección 5.
   - **Sin sesión, solo desarrollo:** encabezado `X-Empresa-Id: <número>`, con rol Administrador, para probar sin
     login. En cualquier otro entorno se responde `401`.
 - **IDs:** números enteros (`"id": 12`). *En el frontend hoy son texto (`id: string`); hay que cambiarlos a `number`.*
@@ -51,9 +52,9 @@ Todo error responde con la misma forma, para que el frontend lo muestre sin caso
 |---|---|---|
 | 400 | `BAD_REQUEST` | El cuerpo no es un JSON válido o no está en UTF-8 |
 | 401 | `UNAUTHENTICATED` | Falta identificar al usuario o la empresa |
-| 403 | `FORBIDDEN`, `NO_COMPANY` | Se sabe quién es el usuario, pero no puede hacer esto (ver sección 5) |
+| 403 | `FORBIDDEN`, `NO_COMPANY`, `COMPANY_ACCESS_DENIED` | Se sabe quién es el usuario, pero no puede hacer esto (ver sección 5) |
 | 404 | `NOT_FOUND` | El recurso no existe **o es de otra empresa** (no se revela cuál de las dos) |
-| 409 | `PRODUCT_SKU_TAKEN`, … | Choca con un dato existente |
+| 409 | `PRODUCT_SKU_TAKEN`, `COMPANY_SELECTION_REQUIRED`, … | Choca con un dato existente, o falta elegir empresa (sección 5) |
 | 422 | `VALIDATION_ERROR` | Datos con formato o valores inválidos (ver `details`) |
 | 503 | `DATABASE_UNAVAILABLE` | La base de datos no responde |
 | 500 | `INTERNAL_ERROR` | Error inesperado (el detalle queda en los registros del servidor, no en la respuesta) |
@@ -139,7 +140,8 @@ proyecto (`iss`) y que sea de un usuario autenticado (`aud`). Luego busca su emp
 
 | Estado | Método y ruta | Qué hace | Respuesta |
 |---|---|---|---|
-| ✅ | `GET /api/me` | Perfil del usuario según su token. Sirve para comprobar que el login funciona de punta a punta | `200` con `Me` |
+| ✅ | `GET /api/me/companies` | Empresas activas del usuario, con su rol en cada una. **No** exige haber elegido empresa: sirve para mostrar el selector | `200` con `CompanyOption[]` |
+| ✅ | `GET /api/me` | Perfil del usuario en la empresa de la petición. Sirve para comprobar que el login funciona de punta a punta | `200` con `Me` |
 
 Objeto `Me` (mismos campos que `User` del frontend, `core/models/user.model.ts`):
 
@@ -156,6 +158,20 @@ Objeto `Me` (mismos campos que `User` del frontend, `core/models/user.model.ts`)
 
 `role` es `"admin"` para el rol Administrador y `"operator"` para Operativo. `tenantId` es el `id_empresa`.
 
+Objeto `CompanyOption`:
+
+```json
+{ "id": 7, "name": "CAFETERÍA DEMO S.A.", "tradeName": "Café Demo", "ruc": "1790010937001", "role": "admin" }
+```
+
+**Flujo de inicio de sesión:**
+
+1. Login con Supabase Auth (`signInWithPassword`).
+2. `GET /api/me/companies`. Si devuelve **una** empresa, se usa esa. Si devuelve **varias**, se muestra el
+   selector y desde ahí toda petición lleva `X-Empresa-Id: <id elegido>` (se puede cambiar de empresa en cualquier
+   momento). Si devuelve **ninguna**, mostrar "tu usuario no tiene acceso".
+3. `GET /api/me` (con `X-Empresa-Id` si corresponde) para el perfil y el rol en esa empresa.
+
 Errores de sesión:
 
 | HTTP | `code` | Cuándo | Qué hacer en el frontend |
@@ -163,10 +179,22 @@ Errores de sesión:
 | 401 | `UNAUTHENTICATED` | Sin token, token inválido o de otro proyecto | Ir al login |
 | 401 | `TOKEN_EXPIRED` | El token venció | Renovar la sesión con Supabase (`refreshSession`) y reintentar; si falla, ir al login |
 | 403 | `NO_COMPANY` | El usuario no tiene empresa asignada o está inactivo | Mostrar "tu usuario no tiene acceso; contacta al administrador" |
+| 403 | `COMPANY_ACCESS_DENIED` | `X-Empresa-Id` es de una empresa a la que el usuario no pertenece (o su pertenencia está inactiva) | Volver al selector de empresa |
 | 403 | `FORBIDDEN` | Su rol no permite esa acción (por ejemplo, el dashboard es solo para Administrador) | Ocultar o bloquear esa opción |
+| 409 | `COMPANY_SELECTION_REQUIRED` | El usuario tiene varias empresas y no envió `X-Empresa-Id` | Mostrar el selector de empresa |
 | 503 | `AUTH_UNAVAILABLE` | No se pudieron obtener las llaves de Supabase | Mostrar "intenta en un momento" |
 
-## 6. Cambios que implica en el frontend
+## 6. Certificado de firma electrónica de la empresa
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `PUT /api/company/certificate` | **Solo Administrador.** Sube el `.p12` de la empresa con su contraseña. Se valida (contraseña, no vencido) y se guarda **cifrado**; nunca se escribe en disco | `200` con `{ "mensaje", "fecha_vencimiento" }` |
+
+Se envía como formulario `multipart/form-data` con dos campos: `archivo` (el `.p12`, máximo 5 MiB) y `clave`.
+Errores: `422` si el archivo no es `.p12`, supera el tamaño, la contraseña es incorrecta o el certificado está
+vencido; `403` si el usuario no es Administrador.
+
+## 7. Cambios que implica en el frontend
 
 1. `Product.id`: de `string` a `number`.
 2. `category` (texto libre) pasa a ser `categoryId` (elegir de `GET /api/product-categories`) y `categoryName` (para mostrar).
@@ -174,8 +202,10 @@ Errores de sesión:
 4. Campos nuevos: `description`, `appliesVat`, `lowStock`.
 5. El formulario de edición no debe cambiar `currentStock`; eso se hace desde Ajustes o Movimientos.
 6. En `ProductsService`, reemplazar `simulateRequest(...)` por `HttpClient` contra estas rutas.
-7. Login: `AuthService.login` usa Supabase Auth (`signInWithPassword`) y luego `GET /api/me` para obtener el
-   `User` (mismos campos). `User.tenantId` pasa de `string` a `number`.
-8. Un interceptor HTTP agrega `Authorization: Bearer <access_token>` a toda petición a `/api/...` y maneja
-   `TOKEN_EXPIRED` (renovar la sesión) y `NO_COMPANY` (ver sección 5).
+7. Login: `AuthService.login` usa Supabase Auth (`signInWithPassword`), luego `GET /api/me/companies` (selector
+   si hay varias empresas) y `GET /api/me` para obtener el `User` (mismos campos). `User.tenantId` pasa de
+   `string` a `number`. Ver el flujo en la sección 5.
+8. Un interceptor HTTP agrega `Authorization: Bearer <access_token>` (y `X-Empresa-Id` si el usuario eligió
+   empresa) a toda petición a `/api/...`, y maneja `TOKEN_EXPIRED`, `NO_COMPANY`, `COMPANY_SELECTION_REQUIRED` y
+   `COMPANY_ACCESS_DENIED` (sección 5).
 9. El `sku` admite máximo 25 caracteres (sección 4).

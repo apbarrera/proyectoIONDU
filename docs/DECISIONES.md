@@ -142,6 +142,11 @@
   - La llave se genera con `python -m app.core.cifrado`; cómo cuidarla está en `DESPLIEGUE.md`.
 - `app/sri/certificado.py` abre el `.p12` en memoria, valida la contraseña y exige llave RSA (la usa la firma del
   SRI), y da el titular y la fecha de vencimiento: `por_vencer()` (30 días o menos, RNF-25) y `vencido()`.
+- **Guardar el certificado (31/10/2026, Ariana):** `PUT /api/company/certificate` (solo Administrador) recibe el
+  `.p12` y su contraseña, los valida en memoria (máximo 5 MiB, contraseña correcta, no vencido) y guarda ambos
+  cifrados con `cifrado.py` en `empresa` (base64 del dato cifrado completo), más `certificado_fecha_vencimiento`.
+  Se descartó el segundo módulo de cifrado (`encryption.py`); las columnas `certificado_nonce`,
+  `certificado_tag`, `certificado_password_nonce` y `certificado_password_tag` quedaron sin uso.
 
 ### 2.6 Worker simple, sin Redis ni Celery (por ahora)
 - **Decisión:** un ciclo con una cola en PostgreSQL (`SELECT … FOR UPDATE SKIP LOCKED`), una sola instancia.
@@ -222,6 +227,17 @@
 - **Modelo listo para la migración:** `app/models/usuario_empresa.py` sigue el diseño acordado (decisión 2.3):
   `id_usuario UUID` (PK, el usuario de Supabase), `id_empresa`, `id_rol`, `nombre` y `estado` (por defecto
   `ACTIVO`). Si el esquema corregido cambia algo, se ajusta el modelo.
+- **Cambio (31/10/2026, Ariana): un usuario puede pertenecer a varias empresas.** `usuario_empresa` tiene clave
+  primaria `(id_usuario, id_empresa)`, `id_usuario` apunta a `auth.users`, `estado` admite `ACTIVO`, `INACTIVO` e
+  `INVITADO`, y el nombre pasó a `nombre_visible`. **Por qué:** por ejemplo, un contador que lleva varias PyMEs.
+  - Con token: si el usuario tiene **una** empresa activa, se usa esa; si tiene **varias**, debe enviar
+    `X-Empresa-Id` y el backend comprueba que pertenezca a ella (`403 COMPANY_ACCESS_DENIED` si no); sin elegir,
+    `409 COMPANY_SELECTION_REQUIRED`. Esto **reemplaza** la regla anterior de que el token ignoraba el encabezado:
+    ahora el encabezado elige, pero solo entre las empresas del usuario, así que sigue siendo seguro.
+  - `GET /api/me/companies` (03/11/2026) lista las empresas activas del usuario sin exigir que haya elegido
+    una, para que el frontend muestre el selector.
+  - `gasto`, `venta` y `accion_ia` apuntan a `(id_usuario, id_empresa)` en `usuario_empresa`: la base impide
+    registrar algo con un usuario de otra empresa.
 
 ### 2.15 El stock no se edita en el producto
 - **Decisión (25/10/2026):** `currentStock` se fija al crear el producto; después solo cambia por ventas, compras y

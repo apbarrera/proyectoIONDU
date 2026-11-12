@@ -8,6 +8,7 @@ variable se saltan; las demás corren igual.
 """
 
 import os
+import warnings
 
 # Las pruebas simulan el entorno de desarrollo (encabezado X-Empresa-Id habilitado).
 os.environ["APP_ENV"] = "development"
@@ -32,33 +33,78 @@ from tests.tokens import crear_token, verificador_de_prueba  # noqa: E402
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
 
 
+def validar_url_pruebas(database_url: str) -> None:
+    """Impide que las pruebas destructivas apunten a una base distinta de iondu_test."""
+    try:
+        url = make_url(database_url)
+    except Exception:
+        pytest.fail("TEST_DATABASE_URL no contiene una URL válida")
+
+    if url.drivername != "postgresql+psycopg":
+        pytest.fail("TEST_DATABASE_URL debe usar postgresql+psycopg")
+    if url.database != "iondu_test":
+        pytest.fail("TEST_DATABASE_URL debe apuntar exactamente a iondu_test")
+    if url.host not in {"127.0.0.1", "localhost"} or url.port != 15432:
+        pytest.fail("TEST_DATABASE_URL debe usar localhost o 127.0.0.1 en el puerto 15432")
+    if url.username != "iondu":
+        pytest.fail("TEST_DATABASE_URL debe conectarse con el usuario iondu")
+
+
 @pytest.fixture(scope="session")
 def engine():
     if not TEST_DATABASE_URL:
         pytest.skip("Define TEST_DATABASE_URL para las pruebas con base de datos")
-    if not (make_url(TEST_DATABASE_URL).database or "").endswith("_test"):
-        pytest.fail("TEST_DATABASE_URL debe apuntar a una base cuyo nombre termine en _test")
+
+    validar_url_pruebas(TEST_DATABASE_URL)
     eng = create_engine(TEST_DATABASE_URL, connect_args={"connect_timeout": 5})
+    inicializado = False
+
     try:
-        eng.connect().close()
-    except OperationalError:
-        pytest.exit(
-            "No se pudo conectar a TEST_DATABASE_URL. ¿Está encendido Docker con el servicio db?",
-            returncode=1,
-        )
+        try:
+            with eng.connect() as conn:
+                identidad = conn.exec_driver_sql(
+                    """
+                    SELECT current_database(), current_user,
+                           rol.rolsuper, rol.rolbypassrls
+                    FROM pg_roles AS rol
+                    WHERE rol.rolname = current_user
+                    """
+                ).one()
 
-    # Esquema mínimo para representar la dependencia externa de Supabase Auth.
-    # Se crea únicamente en la base de pruebas.
-    with eng.begin() as conn:
-        conn.exec_driver_sql("CREATE SCHEMA IF NOT EXISTS auth")
+                if identidad[0] != "iondu_test" or identidad[1] != "iondu":
+                    pytest.fail(
+                        "La conexión real no corresponde a iondu_test con el usuario iondu"
+                    )
 
-    Base.metadata.drop_all(eng)
-    # Imita el esquema "auth" de Supabase (auth.users), al que apuntan algunos modelos;
-    # un PostgreSQL normal (Docker local, CI) no lo tiene.
-    Base.metadata.create_all(eng)
-    yield eng
-    Base.metadata.drop_all(eng)
-    eng.dispose()
+                if identidad[2] or identidad[3]:
+                    warnings.warn(
+                        "El usuario de pruebas tiene permisos SUPERUSER o BYPASSRLS; "
+                        "estas pruebas no pueden demostrar el cumplimiento de RLS "
+                        "a nivel de PostgreSQL.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+        except OperationalError:
+            pytest.exit(
+                "No se pudo conectar a iondu_test. ¿Está encendido Docker con el servicio db?",
+                returncode=1,
+            )
+
+        # Esquema mínimo para representar la dependencia externa de Supabase Auth.
+        with eng.begin() as conn:
+            conn.exec_driver_sql("CREATE SCHEMA IF NOT EXISTS auth")
+
+        Base.metadata.drop_all(eng)
+        # Imita el esquema auth.users de Supabase en la base de pruebas.
+        Base.metadata.create_all(eng)
+        inicializado = True
+        yield eng
+    finally:
+        try:
+            if inicializado:
+                Base.metadata.drop_all(eng)
+        finally:
+            eng.dispose()
 
 
 @pytest.fixture

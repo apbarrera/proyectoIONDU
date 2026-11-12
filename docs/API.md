@@ -96,7 +96,7 @@ Todo error responde con la misma forma, para que el frontend lo muestre sin caso
 | `currentStock` | number | `stock_actual` | **Solo se fija al crear** (≥ 0, por defecto 0). Después cambia por ventas, compras y ajustes de inventario, nunca editando el producto |
 | `minStock` | number ≥ 0 \| null | `stock_minimo` | Opcional; sin valor, no hay alerta |
 | `lowStock` | boolean | (calculado) | Solo lectura; `true` si `minStock` tiene valor y `currentStock ≤ minStock` (RF-4.6) |
-| `active` | boolean | ⏳ falta la columna `activo` | Se agregará cuando exista en la base (RF-4.1, desactivar) |
+| `active` | boolean | `producto.activo` | Lectura y edición; por defecto `true` (RF-4.1) |
 
 Ejemplo:
 
@@ -127,7 +127,7 @@ Ejemplo:
 | ✅ | `GET /api/products/{id}` | Un producto | `200` con `Product`, o `404` |
 | ✅ | `POST /api/products` | Crea un producto. Cuerpo: todos los campos editables (`sku`, `name`, `categoryId` obligatorios) y `currentStock` inicial | `201` con `Product`; `409 PRODUCT_SKU_TAKEN` si el código ya existe en la empresa; `422 CATEGORY_NOT_FOUND` si la categoría no existe |
 | ✅ | `PATCH /api/products/{id}` | Modifica solo los campos enviados. **No acepta `currentStock`** | `200` con `Product`; mismos errores que al crear, y `404` |
-| ⏳ | Desactivar / reactivar | `PATCH` con `{ "active": false }` | Cuando exista la columna `activo` |
+| ✅ | Desactivar / reactivar | `PATCH` con `{ "active": false }` o `{ "active": true }` | Disponible; los productos inactivos siguen visibles en el listado |
 
 No hay `DELETE`: un producto con ventas o movimientos no se puede borrar sin romper el historial; se desactiva.
 
@@ -226,19 +226,29 @@ No hay `DELETE`: un cliente con ventas o facturas no se puede borrar sin romper 
 
 ## 8. Ventas
 
-Registrar una venta **exige sesión** (`Authorization: Bearer`): la venta guarda qué usuario la hizo. Con el
-encabezado de desarrollo `X-Empresa-Id` se pueden consultar, pero no registrar (`403 USER_SESSION_REQUIRED`).
+Registrar una venta **exige sesión** (`Authorization: Bearer`): la venta guarda qué usuario la hizo. Con el encabezado de desarrollo `X-Empresa-Id` se pueden consultar, pero no registrar (`403 USER_SESSION_REQUIRED`).
 
-**El precio y el IVA los pone el backend** desde el producto (`salePrice` y `appliesVat`): el frontend solo envía
-qué productos y cuántos. Los totales se calculan con las reglas del SRI (decisión 2.18), así la venta y su factura
-cuadran al centavo.
+Una venta admite líneas de **productos** y de **concepto libre** (servicios u otros conceptos sin producto). En las líneas de producto, el backend obtiene el precio y el código de IVA desde el producto. En las líneas de concepto libre, el frontend envía descripción, precio unitario y código de IVA. El código de IVA se conserva como dato histórico en cada detalle de venta.
+
+Los totales se calculan con las reglas del SRI (decisión 2.18), usando aritmética decimal y redondeo comercial.
 
 ### Registrar: `POST /api/sales`
+
+Ejemplo con una línea de producto y otra de concepto libre:
 
 ```json
 {
   "customerId": 5,
-  "items": [ { "productId": 12, "quantity": 2, "discount": 0 } ],
+  "items": [
+    { "productId": 12, "quantity": 2, "discount": 0 },
+    {
+      "description": "Servicio de instalación",
+      "quantity": 1,
+      "unitPrice": 15.00,
+      "vatPercentageCode": "4",
+      "discount": 0
+    }
+  ],
   "paymentMethod": "efectivo",
   "observation": "Entrega a domicilio"
 }
@@ -247,20 +257,25 @@ cuadran al centavo.
 | Campo | Tipo | Notas |
 |---|---|---|
 | `customerId` | number \| null | Un cliente de la empresa (sección 7). `null` = consumidor final |
-| `items` | lista (1–200) | Un producto no puede repetirse en la lista |
-| `items[].productId` | number | Producto activo de tipo `venta` o `ambos` |
-| `items[].quantity` | number > 0 | Hasta 4 decimales (por ejemplo, 1.5 kg) |
-| `items[].discount` | number ≥ 0 | Descuento en dólares de esa línea; por defecto 0 |
+| `items` | lista (1–200) | Líneas de producto o concepto libre |
+| `items[].productId` | number \| null | Para una línea de producto: producto activo de tipo `venta` o `ambos`. Si se omite o es `null`, la línea se interpreta como concepto libre |
+| `items[].quantity` | number > 0 | Hasta 4 decimales |
+| `items[].discount` | number ≥ 0 | Descuento en dólares de esa línea; por defecto 0, hasta 2 decimales |
+| `items[].description` | string | Obligatorio para concepto libre; hasta 255 caracteres |
+| `items[].unitPrice` | number ≥ 0 | Obligatorio para concepto libre; hasta 4 decimales |
+| `items[].vatPercentageCode` | string | Obligatorio para concepto libre. Códigos admitidos: `"0"` (0 %), `"4"` (15 %), `"5"` (5 %), `"6"` (no objeto de IVA) y `"7"` (exento de IVA) |
 | `paymentMethod` | `"efectivo"` \| `"tarjeta_debito"` \| `"tarjeta_credito"` \| `"transferencia"` | Se separa la tarjeta en débito y crédito porque el SRI las distingue |
 | `observation` | string \| null (≤255) | Opcional |
 
-En una sola transacción (se guarda todo o nada): crea la venta y sus líneas, **descuenta el stock** de cada producto
-y registra su **movimiento de inventario** (`VENTA`). Dos ventas simultáneas del mismo producto no pueden dejarlo en
-negativo: la fila del producto se bloquea mientras se descuenta.
+**Reglas de las líneas:**
+- Una línea de producto envía `productId`, `quantity` y, opcionalmente, `discount`. No debe enviar `description`, `unitPrice` ni `vatPercentageCode`: esos datos se obtienen del producto.
+- Una línea de concepto libre no envía `productId` y debe incluir `description`, `quantity`, `unitPrice` y `vatPercentageCode`.
+- Un mismo producto no puede repetirse en la lista. Las líneas de concepto libre no están sujetas a esa restricción.
+- El descuento no puede superar el importe bruto de su línea.
 
-Respuestas: `201` con `Sale`; `409 INSUFFICIENT_STOCK` si no alcanza el stock (con el producto en `details`);
-`422` si un producto o cliente no existe en la empresa, está inactivo, no se vende o el descuento supera la línea;
-`403 USER_SESSION_REQUIRED` sin sesión de usuario.
+En una sola transacción (se guarda todo o nada), se crea la venta y sus líneas. **Solo las líneas de producto descuentan stock** y generan su movimiento de inventario (`VENTA`). Las líneas de concepto libre no modifican el inventario.
+
+Respuestas: `201` con `Sale`; `409 INSUFFICIENT_STOCK` si no alcanza el stock (con el producto en `details`); `422` si un producto o cliente no existe en la empresa, está inactivo, no se vende, los datos de una línea son inválidos o el descuento supera el importe bruto; `403 USER_SESSION_REQUIRED` sin sesión de usuario.
 
 ### Objeto `Sale`
 
@@ -272,17 +287,37 @@ Respuestas: `201` con `Sale`; `409 INSUFFICIENT_STOCK` si no alcanza el stock (c
   "customerName": "Juan Pérez",
   "customerIdentification": "1710000009",
   "items": [
-    { "productId": 12, "sku": "CAF-250", "productName": "Café molido 250 g",
-      "quantity": 2, "unitPrice": 4.5, "discount": 0, "subtotal": 9.0 }
+    {
+      "productId": 12,
+      "sku": "CAF-250",
+      "productName": "Café molido 250 g",
+      "quantity": 2,
+      "unitPrice": 4.5,
+      "discount": 0,
+      "vatPercentageCode": "4",
+      "subtotal": 9.0
+    },
+    {
+      "productId": null,
+      "sku": null,
+      "productName": "Servicio de instalación",
+      "quantity": 1,
+      "unitPrice": 15.0,
+      "discount": 0,
+      "vatPercentageCode": "4",
+      "subtotal": 15.0
+    }
   ],
-  "subtotal": 9.0,
-  "ivaAmount": 1.35,
-  "total": 10.35,
+  "subtotal": 24.0,
+  "ivaAmount": 3.6,
+  "total": 27.6,
   "paymentMethod": "efectivo",
   "status": "completada",
   "observation": "Entrega a domicilio"
 }
 ```
+
+En la respuesta, `vatPercentageCode` representa el código de IVA guardado en cada detalle. Para las líneas de concepto libre, `productId` y `sku` son `null`, y `productName` contiene la descripción registrada.
 
 Sin cliente: `customerId` y `customerIdentification` son `null` y `customerName` es `"CONSUMIDOR FINAL"`.
 
@@ -295,8 +330,7 @@ Sin cliente: `customerId` y `customerIdentification` son `null` y `customerName`
 | ✅ | `GET /api/sales/{id}` | Una venta | `200` con `Sale`, o `404` |
 | ⏳ | Factura de la venta | Emitir, reintentar y ver su estado | Fase 2: requiere cambios en la tabla `factura` |
 
-Pendiente: líneas de concepto libre sin producto (falta guardar la tarifa de IVA por línea en `detalle_venta`) y
-anular ventas (RF-2.7).
+Pendiente: anular ventas (RF-2.7) y completar la integración para emitir facturas electrónicas desde una venta.
 
 ## 9. Cambios que implica en el frontend
 

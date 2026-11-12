@@ -1,16 +1,21 @@
-from datetime import datetime
+﻿from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Identity,
+    Index,
+    Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.schema import conv
 
@@ -37,17 +42,33 @@ class Factura(Base):
             "total >= 0",
             name=conv("factura_total_check"),
         ),
+        CheckConstraint(
+            "intentos_envio >= 0",
+            name=conv("factura_intentos_envio_check"),
+        ),
         UniqueConstraint(
             "id_venta",
             name=conv("factura_id_venta_key"),
         ),
         UniqueConstraint(
+            "id_empresa",
             "numero_comprobante",
-            name=conv("factura_numero_comprobante_key"),
+            name="factura_empresa_numero_uq",
         ),
         UniqueConstraint(
             "clave_acceso",
             name=conv("factura_clave_acceso_key"),
+        ),
+        ForeignKeyConstraint(
+            ["id_empresa", "id_venta"],
+            ["venta.id_empresa", "venta.id_venta"],
+            ondelete="CASCADE",
+            name="factura_venta_empresa_fk",
+        ),
+        Index(
+            "idx_factura_empresa_fecha",
+            "id_empresa",
+            text("fecha_emision DESC"),
         ),
     )
 
@@ -56,12 +77,17 @@ class Factura(Base):
         primary_key=True,
     )
 
-    id_venta: Mapped[int] = mapped_column(
+    id_empresa: Mapped[int] = mapped_column(
         ForeignKey(
-            "venta.id_venta",
+            "empresa.id_empresa",
             ondelete="CASCADE",
-            name="factura_id_venta_fkey",
+            name="factura_id_empresa_fkey",
         ),
+        nullable=False,
+    )
+
+    id_venta: Mapped[int] = mapped_column(
+        Integer,
         nullable=False,
     )
 
@@ -73,6 +99,24 @@ class Factura(Base):
     clave_acceso: Mapped[str | None] = mapped_column(String(49), nullable=True)
 
     estado_autorizacion: Mapped[str] = mapped_column(String(30), nullable=False)
+
+    numero_autorizacion: Mapped[str | None] = mapped_column(String(49))
+
+    fecha_autorizacion: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
+
+    mensajes_sri: Mapped[list | None] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+
+    intentos_envio: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+    )
 
     subtotal: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
@@ -95,5 +139,7 @@ class Factura(Base):
     )
 
     xml_firmado: Mapped[str | None] = mapped_column(Text)
+
+    xml_autorizado: Mapped[str | None] = mapped_column(Text)
 
     pdf_ride_path: Mapped[str | None] = mapped_column(String(255))

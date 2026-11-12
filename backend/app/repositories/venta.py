@@ -31,7 +31,7 @@ class VentaRepository:
         return {p.id_producto: p for p in self._db.scalars(stmt)}
 
     def agregar(self, objeto: Venta | DetalleVenta | MovimientoInventario) -> None:
-        if isinstance(objeto, (Venta, MovimientoInventario)):
+        if isinstance(objeto, (Venta, DetalleVenta, MovimientoInventario)):
             objeto.id_empresa = self._empresa_id
         self._db.add(objeto)
 
@@ -86,9 +86,20 @@ class VentaRepository:
             return {}
         stmt = (
             select(DetalleVenta, Producto)
-            .join(Venta, Venta.id_venta == DetalleVenta.id_venta)
-            .outerjoin(Producto, Producto.id_producto == DetalleVenta.id_producto)
-            .where(Venta.id_empresa == self._empresa_id, DetalleVenta.id_venta.in_(ids_venta))
+            .join(
+                Venta,
+                (Venta.id_venta == DetalleVenta.id_venta)
+                & (Venta.id_empresa == DetalleVenta.id_empresa),
+            )
+            .outerjoin(
+                Producto,
+                (Producto.id_producto == DetalleVenta.id_producto)
+                & (Producto.id_empresa == DetalleVenta.id_empresa),
+            )
+            .where(
+                DetalleVenta.id_empresa == self._empresa_id,
+                DetalleVenta.id_venta.in_(ids_venta),
+            )
             .order_by(DetalleVenta.id_detalle_venta)
         )
         resultado: dict[int, list[tuple[DetalleVenta, Producto | None]]] = {}

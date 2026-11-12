@@ -1,31 +1,67 @@
-"""Datos de entrada y salida de ventas (docs/API.md, sección 8)."""
+﻿"""Datos de entrada y salida de ventas (docs/API.md, sección 8)."""
 
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
-from app.schemas.common import Amount, ApiInput, ApiModel, Quantity, UnitPrice, text_field
+from app.schemas.common import (
+    Amount,
+    ApiInput,
+    ApiModel,
+    OptionalText255,
+    Quantity,
+    Text255,
+    UnitPrice,
+)
+from app.schemas.producto import VatPercentageCode
 
-# La tarjeta se separa en débito y crédito porque el SRI las distingue (formas de pago 16 y 19).
+# La tarjeta se separa en débito y crédito porque el SRI las distingue.
 PaymentMethod = Literal["efectivo", "tarjeta_debito", "tarjeta_credito", "transferencia"]
 SaleStatus = Literal["completada", "anulada"]
 
 
 class SaleItemCreate(ApiInput):
-    product_id: int = Field(gt=0)
+    """Línea de producto o servicio de una venta."""
+
+    product_id: int | None = Field(default=None, gt=0)
+    description: Text255 | None = None
     quantity: Quantity
     discount: Amount = Decimal("0")
+    unit_price: UnitPrice | None = None
+    vat_percentage_code: VatPercentageCode | None = None
+
+    @model_validator(mode="after")
+    def validar_tipo_de_linea(self):
+        datos_servicio = (
+            self.description,
+            self.unit_price,
+            self.vat_percentage_code,
+        )
+
+        if self.product_id is not None:
+            if any(valor is not None for valor in datos_servicio):
+                raise ValueError(
+                    "Una línea de producto no puede incluir descripción, "
+                    "precio ni código IVA manuales."
+                )
+        elif any(valor is None for valor in datos_servicio):
+            raise ValueError(
+                "Una línea de servicio requiere descripción, precio unitario "
+                "y código de porcentaje IVA."
+            )
+
+        return self
 
 
 class SaleCreate(ApiInput):
-    """El precio y el IVA no se envían: los pone el backend desde el producto."""
+    """El precio y el IVA de productos los obtiene el backend."""
 
-    customer_id: int | None = Field(default=None, gt=0)  # None = consumidor final
+    customer_id: int | None = Field(default=None, gt=0)
     items: list[SaleItemCreate] = Field(min_length=1, max_length=200)
     payment_method: PaymentMethod
-    observation: text_field(255, min_length=0) | None = None
+    observation: OptionalText255 | None = None
 
 
 class SaleItem(ApiModel):
@@ -35,6 +71,7 @@ class SaleItem(ApiModel):
     quantity: Quantity
     unit_price: UnitPrice
     discount: Amount
+    vat_percentage_code: VatPercentageCode
     subtotal: Amount
 
 

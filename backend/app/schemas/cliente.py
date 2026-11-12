@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import StringConstraints
 
-from app.schemas.common import ApiInput, ApiModel, text_field
+from app.schemas.common import (ApiInput, ApiModel, Text20, Text255)
 
 IdentificationType = Literal["cedula", "ruc", "pasaporte", "exterior"]
 
@@ -19,8 +19,8 @@ Phone = Annotated[
 
 class CustomerCreate(ApiInput):
     identification_type: IdentificationType | None = None  # se deduce de 10 o 13 dígitos
-    identification: text_field(20)
-    name: text_field(255)
+    identification: Text20
+    name: Text255
     address: str | None = None
     phone: Phone | None = None
     email: Email | None = None
@@ -30,8 +30,8 @@ class CustomerUpdate(ApiInput):
     """Solo los campos enviados se modifican."""
 
     identification_type: IdentificationType | None = None
-    identification: text_field(20) | None = None
-    name: text_field(255) | None = None
+    identification: Text20 | None = None
+    name: Text255 | None = None
     address: str | None = None
     phone: Phone | None = None
     email: Email | None = None

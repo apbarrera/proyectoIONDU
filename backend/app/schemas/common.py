@@ -40,11 +40,17 @@ UnitPrice = Annotated[
 ]
 
 
-def text_field(max_length: int, min_length: int = 1):
-    """Texto sin espacios sobrantes al inicio y al final, con largo mínimo y máximo."""
-    return Annotated[
-        str, StringConstraints(strip_whitespace=True, min_length=min_length, max_length=max_length)
-    ]
+# Textos con longitud y normalización definidas estáticamente.
+Text20 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
+Text25 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=25)]
+Text100 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+Text150 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=150)]
+Text255 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+
+OptionalText255 = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=0, max_length=255),
+]
 
 
 class Page[T](ApiModel):

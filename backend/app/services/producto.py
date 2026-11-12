@@ -19,6 +19,7 @@ from app.schemas.producto import (
     ProductCreate,
     ProductType,
     ProductUpdate,
+    VatPercentageCode,
 )
 
 # Campo de la API -> columna de la base (los que se pueden escribir).
@@ -31,12 +32,23 @@ _COLUMNAS = {
     "unit": "unidad_medida",
     "sale_price": "precio_venta",
     "cost": "precio_compra",
-    "applies_vat": "aplica_iva",
+    "vat_percentage_code": "codigo_porcentaje_iva",
     "current_stock": "stock_actual",
     "min_stock": "stock_minimo",
+    "active": "activo",
 }
 # Columnas NOT NULL: al editar, no se pueden enviar vacías (null).
-_OBLIGATORIOS = {"sku", "name", "category_id", "type", "unit", "sale_price", "cost", "applies_vat"}
+_OBLIGATORIOS = {
+    "sku",
+    "name",
+    "category_id",
+    "type",
+    "unit",
+    "sale_price",
+    "cost",
+    "vat_percentage_code",
+    "active",
+}
 # Nombre del campo en el JSON (sale_price -> salePrice), para los mensajes de error.
 _ALIAS = {campo: info.alias for campo, info in ProductUpdate.model_fields.items()}
 
@@ -72,18 +84,27 @@ def _a_product(producto: Producto, nombre_categoria: str) -> Product:
         unit=producto.unidad_medida,
         sale_price=producto.precio_venta,
         cost=producto.precio_compra,
-        applies_vat=producto.aplica_iva,
+        vat_percentage_code=cast(
+            VatPercentageCode, producto.codigo_porcentaje_iva
+        ),
+        applies_vat=producto.codigo_porcentaje_iva in {"4", "5"},
         current_stock=producto.stock_actual,
         min_stock=producto.stock_minimo,
         low_stock=stock_bajo,
+        active=producto.activo,
     )
 
 
 def _a_columnas(campos: dict) -> dict:
-    """Pasa {campo_api: valor} a {columna: valor}; el tipo se guarda en mayúsculas."""
+    """Traduce campos de API a columnas de BD y sincroniza el IVA antiguo."""
     columnas = {_COLUMNAS[campo]: valor for campo, valor in campos.items()}
+
     if "tipo" in columnas:
         columnas["tipo"] = columnas["tipo"].upper()
+
+    if "codigo_porcentaje_iva" in columnas:
+        columnas["aplica_iva"] = columnas["codigo_porcentaje_iva"] in {"4", "5"}
+
     return columnas
 
 

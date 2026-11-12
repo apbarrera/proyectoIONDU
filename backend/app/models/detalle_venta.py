@@ -1,10 +1,11 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 
 from sqlalchemy import (
     CheckConstraint,
-    ForeignKey,
+    ForeignKeyConstraint,
     Identity,
     Index,
+    Integer,
     Numeric,
     String,
     text,
@@ -19,6 +20,18 @@ class DetalleVenta(Base):
     __tablename__ = "detalle_venta"
 
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["id_empresa", "id_venta"],
+            ["venta.id_empresa", "venta.id_venta"],
+            ondelete="CASCADE",
+            name="detalle_venta_empresa_venta_fk",
+        ),
+        ForeignKeyConstraint(
+            ["id_empresa", "id_producto"],
+            ["producto.id_empresa", "producto.id_producto"],
+            ondelete="SET NULL (id_producto)",
+            name="detalle_venta_empresa_producto_fk",
+        ),
         CheckConstraint(
             "cantidad > 0",
             name=conv("detalle_venta_cantidad_check"),
@@ -36,6 +49,10 @@ class DetalleVenta(Base):
             name=conv("detalle_venta_producto_o_descripcion_ck"),
         ),
         CheckConstraint(
+            "codigo_porcentaje_iva IN ('0', '4', '5', '6', '7')",
+            name=conv("detalle_venta_codigo_iva_check"),
+        ),
+        CheckConstraint(
             "subtotal >= 0",
             name=conv("detalle_venta_subtotal_check"),
         ),
@@ -48,22 +65,11 @@ class DetalleVenta(Base):
         primary_key=True,
     )
 
-    id_venta: Mapped[int] = mapped_column(
-        ForeignKey(
-            "venta.id_venta",
-            ondelete="CASCADE",
-            name="detalle_venta_id_venta_fkey",
-        ),
-        nullable=False,
-    )
+    id_empresa: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    id_producto: Mapped[int | None] = mapped_column(
-        ForeignKey(
-            "producto.id_producto",
-            ondelete="SET NULL",
-            name="detalle_venta_id_producto_fkey",
-        ),
-    )
+    id_venta: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    id_producto: Mapped[int | None] = mapped_column(Integer)
 
     descripcion_libre: Mapped[str | None] = mapped_column(String(255))
 
@@ -82,6 +88,12 @@ class DetalleVenta(Base):
         nullable=False,
         server_default=text("0"),
     )
+
+    codigo_porcentaje_iva: Mapped[str] = mapped_column(
+        String(2),
+        nullable=False,
+    )
+
     subtotal: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,

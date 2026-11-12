@@ -5,16 +5,26 @@ from typing import Literal
 
 from pydantic import Field
 
-from app.schemas.common import Amount, ApiInput, ApiModel, text_field
+from app.schemas.common import (
+    Amount,
+    ApiInput,
+    ApiModel,
+    OptionalText255,
+    Text25,
+    Text20,
+    Text100,
+    Text150,
+)
 
 # Provisional (RF-4.1), pendiente de decisión del equipo: ver docs/DECISIONES.md, sección 7.
 ProductType = Literal["venta", "insumo", "ambos"]
+VatPercentageCode = Literal["0", "4", "5", "6", "7"]
 
 
 # ---------- Categorías ----------
 class CategoryCreate(ApiInput):
-    name: text_field(100)
-    description: text_field(255, min_length=0) | None = None
+    name: Text100
+    description: OptionalText255 | None = None
 
 
 class Category(ApiModel):
@@ -24,39 +34,38 @@ class Category(ApiModel):
 
 
 # ---------- Productos ----------
-# El XML de la factura del SRI admite máximo 25 caracteres en codigoPrincipal
-# (la columna de la base admite 50, pero un código más largo no se podría facturar).
+# El XML de la factura del SRI admite máximo 25 caracteres en codigoPrincipal.
 SKU_MAX = 25
 
 
 class ProductCreate(ApiInput):
-    sku: text_field(SKU_MAX)
-    name: text_field(150)
-    description: str | None = None
+    sku: Text25
+    name: Text150
+    description: OptionalText255 | None = None
     category_id: int = Field(gt=0)
     type: ProductType = "venta"
-    unit: text_field(20) = "UNIDAD"
+    unit: Text20 = "UNIDAD"
     sale_price: Amount = Decimal("0")
     cost: Amount = Decimal("0")
-    applies_vat: bool = True
+    vat_percentage_code: VatPercentageCode = "4"
     current_stock: Amount = Decimal("0")
     min_stock: Amount | None = None
 
 
 class ProductUpdate(ApiInput):
-    """Solo los campos enviados se modifican. No incluye current_stock: el stock cambia
-    por ventas, compras y ajustes, nunca editando el producto."""
+    """Solo los campos enviados se modifican. No incluye current_stock."""
 
-    sku: text_field(SKU_MAX) | None = None
-    name: text_field(150) | None = None
-    description: str | None = None
+    sku: Text25 | None = None
+    name: Text150 | None = None
+    description: OptionalText255 | None = None
     category_id: int | None = Field(default=None, gt=0)
     type: ProductType | None = None
-    unit: text_field(20) | None = None
+    unit: Text20 | None = None
     sale_price: Amount | None = None
     cost: Amount | None = None
-    applies_vat: bool | None = None
+    vat_percentage_code: VatPercentageCode | None = None
     min_stock: Amount | None = None
+    active: bool | None = None
 
 
 class Product(ApiModel):
@@ -70,7 +79,9 @@ class Product(ApiModel):
     unit: str
     sale_price: Amount
     cost: Amount
+    vat_percentage_code: VatPercentageCode
     applies_vat: bool
     current_stock: Amount
     min_stock: Amount | None
     low_stock: bool
+    active: bool

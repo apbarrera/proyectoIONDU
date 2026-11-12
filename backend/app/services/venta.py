@@ -1,8 +1,9 @@
-"""Reglas de negocio de las ventas.
+﻿"""Reglas de negocio de las ventas.
 
-Registrar una venta es UNA transacción (todo o nada): venta, líneas, descuento de
-stock y movimientos de inventario. El precio y el IVA salen del producto, nunca del
-frontend, y los totales se calculan con las reglas del SRI (app/sri/totales.py).
+Registrar una venta es UNA transacción (todo o nada): venta, líneas,
+descuento de stock y movimientos de inventario.
+Los precios e IVA de productos salen del backend; los servicios utilizan
+los datos proporcionados en la solicitud.
 """
 
 import uuid
@@ -17,17 +18,65 @@ from app.models import Cliente, DetalleVenta, MovimientoInventario, Producto, Ve
 from app.repositories.cliente import ClienteRepository
 from app.repositories.venta import VentaRepository
 from app.schemas.common import Page
-from app.schemas.venta import PaymentMethod, Sale, SaleCreate, SaleItem
+from app.schemas.venta import (
+    PaymentMethod,
+    Sale,
+    SaleCreate,
+    SaleItem,
+    SaleStatus,
+)
 from app.sri.totales import Linea, TarifaIva, calcular_totales
 
 CONSUMIDOR_FINAL = "CONSUMIDOR FINAL"
-ORIGEN_MANUAL = "MANUAL"  # la fase 2 agregará la venta facturada electrónicamente
+ORIGEN_MANUAL = "MANUAL"
 MOVIMIENTO_VENTA = "VENTA"
 _ZONA = ZoneInfo(TIMEZONE)
 
+# Relación entre el código de porcentaje del SRI y su tarifa.
+TARIFAS_IVA_POR_CODIGO = {
+    tarifa.codigo: tarifa
+    for tarifa in TarifaIva
+}
+
+
+def _metodo_pago_desde_db(valor: str) -> PaymentMethod:
+    """Valida y convierte el método de pago almacenado en la base de datos."""
+    metodos_validos: dict[str, PaymentMethod] = {
+        "EFECTIVO": "efectivo",
+        "TARJETA_DEBITO": "tarjeta_debito",
+        "TARJETA_CREDITO": "tarjeta_credito",
+        "TRANSFERENCIA": "transferencia",
+    }
+
+    try:
+        return metodos_validos[valor.upper()]
+    except KeyError as exc:
+        raise ValueError(
+            f"Método de pago no válido en la base de datos: {valor}"
+        ) from exc
+
+
+def _estado_desde_db(valor: str) -> SaleStatus:
+    """Valida y convierte el estado almacenado en la base de datos."""
+    estados_validos: dict[str, SaleStatus] = {
+        "COMPLETADA": "completada",
+        "ANULADA": "anulada",
+    }
+
+    try:
+        return estados_validos[valor.upper()]
+    except KeyError as exc:
+        raise ValueError(
+            f"Estado de venta no válido en la base de datos: {valor}"
+        ) from exc
+
 
 def _error(campo: str, mensaje: str, code: str) -> UnprocessableError:
-    return UnprocessableError(mensaje, code=code, details=[{"field": campo, "message": mensaje}])
+    return UnprocessableError(
+        mensaje,
+        code=code,
+        details=[{"field": campo, "message": mensaje}],
+    )
 
 
 def _a_sale(venta: Venta, cliente: Cliente | None, lineas) -> Sale:
@@ -41,10 +90,15 @@ def _a_sale(venta: Venta, cliente: Cliente | None, lineas) -> Sale:
             SaleItem(
                 product_id=detalle.id_producto,
                 sku=producto.codigo_principal if producto else None,
-                product_name=producto.nombre if producto else (detalle.descripcion_libre or ""),
+                product_name=(
+                    producto.nombre
+                    if producto
+                    else (detalle.descripcion_libre or "")
+                ),
                 quantity=detalle.cantidad,
                 unit_price=detalle.precio_unitario,
                 discount=detalle.descuento,
+                vat_percentage_code=detalle.codigo_porcentaje_iva,
                 subtotal=detalle.subtotal,
             )
             for detalle, producto in lineas
@@ -52,17 +106,17 @@ def _a_sale(venta: Venta, cliente: Cliente | None, lineas) -> Sale:
         subtotal=venta.subtotal,
         iva_amount=venta.iva,
         total=venta.monto_total,
-        payment_method=venta.metodo_pago.lower(),
-        status=venta.estado.lower(),
+        payment_method=_metodo_pago_desde_db(venta.metodo_pago),
+        status=_estado_desde_db(venta.estado),
         observation=venta.observacion,
     )
 
 
 def _rango_del_dia(
-    desde: date | None, hasta: date | None
+    desde: date | None,
+    hasta: date | None,
 ) -> tuple[datetime | None, datetime | None]:
-    """Días del calendario de Ecuador -> desde el inicio de "desde" hasta antes del día
-    siguiente a "hasta" (así "hasta" incluye todo ese día)."""
+    """Convierte días de Ecuador a un intervalo semiabierto."""
     inicio = datetime.combine(desde, time.min, _ZONA) if desde else None
     fin = datetime.combine(hasta + timedelta(days=1), time.min, _ZONA) if hasta else None
     return inicio, fin
@@ -95,41 +149,125 @@ class VentaService:
             limit=page_size,
         )
         lineas = self._repo.detalles([venta.id_venta for venta, _ in filas])
+
         return Page[Sale](
-            items=[_a_sale(v, c, lineas.get(v.id_venta, [])) for v, c in filas],
+            items=[
+                _a_sale(v, c, lineas.get(v.id_venta, []))
+                for v, c in filas
+            ],
             total=total,
             page=page,
             page_size=page_size,
         )
 
     def obtener(self, id_venta: int) -> Sale:
-        encontrada = self._repo.obtener(id_venta)  # de otra empresa también es 404
+        encontrada = self._repo.obtener(id_venta)
+
         if encontrada is None:
             raise NotFoundError("La venta no existe.")
+
         venta, cliente = encontrada
-        return _a_sale(venta, cliente, self._repo.detalles([id_venta]).get(id_venta, []))
+        return _a_sale(
+            venta,
+            cliente,
+            self._repo.detalles([id_venta]).get(id_venta, []),
+        )
 
     # ---------- registrar ----------
     def crear(self, datos: SaleCreate, id_usuario: uuid.UUID) -> Sale:
-        ids = [item.product_id for item in datos.items]
-        if len(set(ids)) != len(ids):
-            raise _error(
-                "items", "Un producto no puede repetirse en la venta.", "DUPLICATE_PRODUCT"
-            )
-        if datos.customer_id is not None and self._clientes.obtener(datos.customer_id) is None:
-            raise _error("customerId", "El cliente no existe.", "CUSTOMER_NOT_FOUND")
+        try:
+            resultado = self._crear_sin_confirmar(datos, id_usuario)
+            self._db.commit()
+            return resultado
+        except Exception:
+            self._db.rollback()
+            raise
 
-        productos = self._repo.bloquear_productos(ids)  # bloqueados hasta el commit
+    def _crear_sin_confirmar(
+        self,
+        datos: SaleCreate,
+        id_usuario: uuid.UUID,
+    ) -> Sale:
+        ids_productos = [
+            item.product_id
+            for item in datos.items
+            if item.product_id is not None
+        ]
+
+        if len(set(ids_productos)) != len(ids_productos):
+            raise _error(
+                "items",
+                "Un producto no puede repetirse en la venta.",
+                "DUPLICATE_PRODUCT",
+            )
+
+        if (
+            datos.customer_id is not None
+            and self._clientes.obtener(datos.customer_id) is None
+        ):
+            raise _error(
+                "customerId",
+                "El cliente no existe.",
+                "CUSTOMER_NOT_FOUND",
+            )
+
+        productos = self._repo.bloquear_productos(ids_productos)
         self._validar_productos(datos, productos)
 
         lineas = []
+        codigos_iva = []
+
         for i, item in enumerate(datos.items):
-            producto = productos[item.product_id]
-            tarifa = TarifaIva.IVA_15 if producto.aplica_iva else TarifaIva.IVA_0
+            if item.product_id is not None:
+                producto = productos[item.product_id]
+                codigo_iva = producto.codigo_porcentaje_iva
+                precio_unitario = producto.precio_venta
+                campo_codigo = f"items[{i}].productId"
+            else:
+                codigo_iva = item.vat_percentage_code
+                precio_unitario = item.unit_price
+                campo_codigo = f"items[{i}].vatPercentageCode"
+
+            if codigo_iva is None:
+                raise _error(
+                    campo_codigo,
+                    "El código de porcentaje IVA es obligatorio.",
+                    "INVALID_VAT_CODE",
+                )
+
+            if precio_unitario is None:
+                raise _error(
+                    f"items[{i}].unitPrice",
+                    "El precio unitario es obligatorio.",
+                    "INVALID_UNIT_PRICE",
+                )
+
+            tarifa = TARIFAS_IVA_POR_CODIGO.get(codigo_iva)
+
+            if tarifa is None:
+                raise _error(
+                    campo_codigo,
+                    "El código de porcentaje IVA no es válido.",
+                    "INVALID_VAT_CODE",
+                )
+
             try:
-                lineas.append(Linea(item.quantity, producto.precio_venta, tarifa, item.discount))
+                linea = Linea(
+                    cantidad=item.quantity,
+                    precio_unitario=precio_unitario,
+                    tarifa=tarifa,
+                    descuento=item.discount,
+                )
             except ValueError as exc:
-                raise _error(f"items[{i}].discount", str(exc), "VALIDATION_ERROR") from exc
+                raise _error(
+                    f"items[{i}].discount",
+                    str(exc),
+                    "VALIDATION_ERROR",
+                ) from exc
+
+            lineas.append(linea)
+            codigos_iva.append(codigo_iva)
+
         totales = calcular_totales(lineas)
 
         venta = Venta(
@@ -143,60 +281,103 @@ class VentaService:
             observacion=datos.observation or None,
             estado="COMPLETADA",
         )
-        self._repo.agregar(venta)
-        self._repo.guardar_pendientes()  # obtiene id_venta para las líneas y los movimientos
 
-        for item, calculada in zip(datos.items, totales.lineas, strict=True):
-            producto = productos[item.product_id]
+        self._repo.agregar(venta)
+        self._repo.guardar_pendientes()
+
+        for item, calculada, codigo_iva in zip(
+            datos.items,
+            totales.lineas,
+            codigos_iva,
+            strict=True,
+        ):
+            producto = (
+                productos[item.product_id]
+                if item.product_id is not None
+                else None
+            )
+
             self._repo.agregar(
                 DetalleVenta(
                     id_venta=venta.id_venta,
-                    id_producto=producto.id_producto,
+                    id_producto=producto.id_producto if producto else None,
+                    descripcion_libre=(
+                        producto.nombre if producto else item.description
+                    ),
                     cantidad=item.quantity,
-                    precio_unitario=producto.precio_venta,
+                    precio_unitario=calculada.linea.precio_unitario,
                     descuento=item.discount,
+                    codigo_porcentaje_iva=codigo_iva,
                     subtotal=calculada.precio_total_sin_impuesto,
                 )
             )
-            producto.stock_actual -= item.quantity
-            self._repo.agregar(
-                MovimientoInventario(
-                    id_producto=producto.id_producto,
-                    id_usuario=id_usuario,
-                    tipo_movimiento=MOVIMIENTO_VENTA,
-                    cantidad=item.quantity,
-                    motivo=f"Venta #{venta.id_venta}",
+
+            if producto is not None:
+                producto.stock_actual -= item.quantity
+
+                self._repo.agregar(
+                    MovimientoInventario(
+                        id_producto=producto.id_producto,
+                        id_usuario=id_usuario,
+                        tipo_movimiento=MOVIMIENTO_VENTA,
+                        cantidad=item.quantity,
+                        motivo=f"Venta #{venta.id_venta}",
+                    )
                 )
-            )
-        self._db.commit()
+
+        # Hace visibles los detalles y movimientos antes de construir la respuesta.
+        self._repo.guardar_pendientes()
         return self.obtener(venta.id_venta)
 
-    def _validar_productos(self, datos: SaleCreate, productos: dict[int, Producto]) -> None:
+    def _validar_productos(
+        self,
+        datos: SaleCreate,
+        productos: dict[int, Producto],
+    ) -> None:
         sin_stock = []
+
         for i, item in enumerate(datos.items):
+            if item.product_id is None:
+                continue
+
             producto = productos.get(item.product_id)
             campo = f"items[{i}].productId"
+
             if producto is None:
-                raise _error(campo, "El producto no existe.", "PRODUCT_NOT_FOUND")
+                raise _error(
+                    campo,
+                    "El producto no existe.",
+                    "PRODUCT_NOT_FOUND",
+                )
+
             if not producto.activo:
                 raise _error(
-                    campo, f"El producto {producto.nombre} está desactivado.", "PRODUCT_INACTIVE"
+                    campo,
+                    f"El producto {producto.nombre} está desactivado.",
+                    "PRODUCT_INACTIVE",
                 )
+
             if producto.tipo.upper() == "INSUMO":
                 raise _error(
-                    campo, f"{producto.nombre} es un insumo y no se vende.", "PRODUCT_NOT_SELLABLE"
+                    campo,
+                    f"{producto.nombre} es un insumo y no se vende.",
+                    "PRODUCT_NOT_SELLABLE",
                 )
+
             if producto.stock_actual < item.quantity:
                 disponible = f"{producto.stock_actual.normalize():f}"
                 sin_stock.append(
                     {
                         "field": f"items[{i}].quantity",
-                        "message": f"Stock disponible de {producto.nombre}: {disponible}.",
+                        "message": (
+                            f"Stock disponible de {producto.nombre}: {disponible}."
+                        ),
                     }
                 )
+
         if sin_stock:
             raise ConflictError(
-                "No hay stock suficiente para registrar la venta.",
+                "No hay stock suficiente para registrar una venta.",
                 code="INSUFFICIENT_STOCK",
                 details=sin_stock,
             )

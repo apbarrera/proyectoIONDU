@@ -58,6 +58,10 @@ class Producto(Base):
             "stock_minimo IS NULL OR stock_minimo >= 0",
             name=conv("producto_stock_minimo_check"),
         ),
+        CheckConstraint(
+            "codigo_porcentaje_iva IN ('0', '4', '5', '6', '7')",
+            name=conv("producto_codigo_porcentaje_iva_check"),
+        ),
         Index("idx_producto_categoria", "id_categoria_producto"),
         Index("idx_producto_empresa", "id_empresa"),
     )
@@ -112,6 +116,11 @@ class Producto(Base):
         Boolean,
         nullable=False,
         server_default=text("true"),
+    )
+    codigo_porcentaje_iva: Mapped[str] = mapped_column(
+        String(2),
+        nullable=False,
+        server_default=text("'4'"),
     )
     activo: Mapped[bool] = mapped_column(
         Boolean,

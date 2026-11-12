@@ -24,7 +24,14 @@ def _crear_producto(client, empresa_id: int, categoria_id: int, **extra):
 def test_crear_producto_devuelve_el_contrato_de_la_api(client, empresas, categoria_a):
     a, _ = empresas
     response = _crear_producto(
-        client, a, categoria_a, salePrice=4.5, cost=2.8, currentStock=18, minStock=5
+        client,
+        a,
+        categoria_a,
+        salePrice=4.5,
+        cost=2.8,
+        currentStock=18,
+        minStock=5,
+        vatPercentageCode="4",
     )
 
     assert response.status_code == 201
@@ -40,10 +47,12 @@ def test_crear_producto_devuelve_el_contrato_de_la_api(client, empresas, categor
         "unit": "UNIDAD",
         "salePrice": 4.5,
         "cost": 2.8,
+        "vatPercentageCode": "4",
         "appliesVat": True,
         "currentStock": 18.0,
         "minStock": 5.0,
         "lowStock": False,
+        "active": True,
     }
     assert client.get(f"/api/products/{producto['id']}", headers=_h(a)).json() == producto
 
@@ -163,3 +172,97 @@ def test_el_mismo_codigo_puede_existir_en_empresas_distintas(client, empresas, c
     ).json()["id"]
     assert _crear_producto(client, a, categoria_a, sku="CAF-250").status_code == 201
     assert _crear_producto(client, b, categoria_b, sku="CAF-250").status_code == 201
+
+
+# ---------- Código de porcentaje IVA ----------
+@pytest.mark.parametrize("codigo", ["0", "4", "5", "6", "7"])
+def test_crear_producto_acepta_codigos_tributarios(
+    client, empresas, categoria_a, codigo
+):
+    a, _ = empresas
+    response = _crear_producto(
+        client, a, categoria_a, vatPercentageCode=codigo
+    )
+
+    assert response.status_code == 201
+    assert response.json()["vatPercentageCode"] == codigo
+
+
+def test_crear_producto_rechaza_codigo_tributario_invalido(
+    client, empresas, categoria_a
+):
+    a, _ = empresas
+    response = _crear_producto(
+        client, a, categoria_a, vatPercentageCode="15"
+    )
+
+    assert response.status_code == 422
+
+
+def test_crear_producto_no_acepta_applies_vat_como_entrada(
+    client, empresas, categoria_a
+):
+    a, _ = empresas
+    response = _crear_producto(
+        client, a, categoria_a, appliesVat=False
+    )
+
+    assert response.status_code == 422
+
+
+def test_editar_codigo_tributario(
+    client, empresas, categoria_a
+):
+    a, _ = empresas
+    producto = _crear_producto(client, a, categoria_a).json()
+
+    response = client.patch(
+        f"/api/products/{producto['id']}",
+        json={"vatPercentageCode": "5"},
+        headers=_h(a),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["vatPercentageCode"] == "5"
+
+# ---------- Activacion y desactivacion ----------
+def test_desactivar_y_reactivar_producto(client, empresas, categoria_a):
+    a, _ = empresas
+    producto = _crear_producto(client, a, categoria_a).json()
+    url = f"/api/products/{producto['id']}"
+
+    desactivado = client.patch(
+        url, json={"active": False}, headers=_h(a)
+    )
+    assert desactivado.status_code == 200
+    assert desactivado.json()["active"] is False
+
+    consultado = client.get(url, headers=_h(a))
+    assert consultado.status_code == 200
+    assert consultado.json()["active"] is False
+
+    listado = client.get("/api/products", headers=_h(a)).json()
+    encontrado = next(p for p in listado["items"] if p["id"] == producto["id"])
+    assert encontrado["active"] is False
+
+    reactivado = client.patch(
+        url, json={"active": True}, headers=_h(a)
+    )
+    assert reactivado.status_code == 200
+    assert reactivado.json()["active"] is True
+
+
+def test_editar_no_permite_active_null(client, empresas, categoria_a):
+    a, _ = empresas
+    producto = _crear_producto(client, a, categoria_a).json()
+
+    response = client.patch(
+        f"/api/products/{producto['id']}",
+        json={"active": None},
+        headers=_h(a),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"] == [
+        {"field": "active", "message": "No puede estar vacío."}
+    ]

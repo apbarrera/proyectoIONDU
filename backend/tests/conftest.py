@@ -77,9 +77,21 @@ def db(engine):
 
 @pytest.fixture
 def client(db):
-    app.dependency_overrides[get_db] = lambda: db
-    yield TestClient(app)
-    app.dependency_overrides.clear()
+    def sesion_por_peticion():
+        session = Session(
+            bind=db.connection(),
+            join_transaction_mode="create_savepoint",
+        )
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = sesion_por_peticion
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture

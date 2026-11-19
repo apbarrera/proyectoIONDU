@@ -26,6 +26,9 @@ class SesionFalsa:
 
     @contextmanager
     def begin(self):
+        if self.transaccion_activa:
+            raise AssertionError("La sesión ya tiene una transacción activa.")
+
         self.transaccion_activa = True
         try:
             yield
@@ -48,11 +51,15 @@ class SesionFalsa:
 class FabricaSesionesFalsa:
     def __init__(self, *sesiones):
         self.sesiones = list(sesiones)
+        self.sesiones_creadas = []
 
     def __call__(self):
         if not self.sesiones:
             raise AssertionError("Se solicitó una sesión inesperada.")
-        return self.sesiones.pop(0)
+
+        sesion = self.sesiones.pop(0)
+        self.sesiones_creadas.append(sesion)
+        return sesion
 
 
 class ClienteSriFalso:
@@ -72,14 +79,26 @@ class ServicioSriFalso:
         self.resultado_consulta = resultado_consulta
         self.envios = []
         self.consultas = []
+        self.al_enviar = None
 
     def enviar(self, xml, clave):
         self.envios.append((xml, clave))
+        if self.al_enviar is not None:
+            self.al_enviar()
         return self.resultado_envio
 
     def consultar(self, xml, clave):
         self.consultas.append((xml, clave))
         return self.resultado_consulta
+
+
+@pytest.fixture(autouse=True)
+def bloqueo_factura_falso(monkeypatch):
+    @contextmanager
+    def bloqueo(empresa_id, factura_id, **kwargs):
+        yield True
+
+    monkeypatch.setattr(worker, "bloqueo_factura", bloqueo)
 
 
 def factura_falsa(estado="por_enviar"):
@@ -141,13 +160,14 @@ def test_por_enviar_reutiliza_xml_y_clave_y_aumenta_intentos(monkeypatch):
     servicio = ServicioSriFalso(resultado_envio=resultado)
     instalar_sri_falso(monkeypatch, servicio)
 
-    sesion = SesionFalsa(
-        [True, factura],
+    sesion_inicio = SesionFalsa(
+        [factura],
         empresa=empresa_falsa(),
     )
+    sesion_respuesta = SesionFalsa([factura])
 
     worker._procesar_factura(
-        FabricaSesionesFalsa(sesion),
+        FabricaSesionesFalsa(sesion_inicio, sesion_respuesta),
         7,
         15,
         None,
@@ -155,6 +175,69 @@ def test_por_enviar_reutiliza_xml_y_clave_y_aumenta_intentos(monkeypatch):
 
     assert servicio.envios == [(XML.encode("utf-8"), CLAVE)]
     assert servicio.consultas == []
+    assert factura.intentos_envio == 1
+    assert factura.estado_autorizacion == "por_autorizar"
+
+
+def test_envio_sri_ocurre_sin_transaccion_y_con_intento_confirmado(
+    monkeypatch,
+):
+    factura = factura_falsa("por_enviar")
+    resultado = ResultadoEmision(
+        EstadoEmision.POR_AUTORIZAR,
+        CLAVE,
+        XML.encode("utf-8"),
+    )
+    servicio = ServicioSriFalso(resultado_envio=resultado)
+    instalar_sri_falso(monkeypatch, servicio)
+
+    sesion_inicio = SesionFalsa(
+        [factura],
+        empresa=empresa_falsa(),
+    )
+    sesion_respuesta = SesionFalsa([factura])
+    fabrica = FabricaSesionesFalsa(sesion_inicio, sesion_respuesta)
+    bloqueo_activo = False
+
+    @contextmanager
+    def bloqueo_controlado(empresa_id, factura_id, **kwargs):
+        nonlocal bloqueo_activo
+        bloqueo_activo = True
+        try:
+            yield True
+        finally:
+            bloqueo_activo = False
+
+    monkeypatch.setattr(
+        worker,
+        "bloqueo_factura",
+        bloqueo_controlado,
+    )
+
+    def verificar_estado_antes_del_envio():
+        assert bloqueo_activo is True
+        assert sesion_inicio.transaccion_confirmada is True
+        assert sesion_inicio.transaccion_activa is False
+        assert sesion_respuesta.transaccion_confirmada is False
+        assert sesion_respuesta.transaccion_activa is False
+        assert factura.intentos_envio == 1
+        assert factura.estado_autorizacion == "por_enviar"
+
+    servicio.al_enviar = verificar_estado_antes_del_envio
+
+    worker._procesar_factura(
+        fabrica,
+        7,
+        15,
+        None,
+    )
+
+    assert servicio.envios == [(XML.encode("utf-8"), CLAVE)]
+    assert sesion_inicio.transaccion_confirmada is True
+    assert sesion_inicio.transaccion_activa is False
+    assert sesion_respuesta.transaccion_confirmada is True
+    assert sesion_respuesta.transaccion_activa is False
+    assert bloqueo_activo is False
     assert factura.intentos_envio == 1
     assert factura.estado_autorizacion == "por_autorizar"
 
@@ -173,13 +256,14 @@ def test_por_autorizar_consulta_sin_reenviar_ni_aumentar_intentos(
     servicio = ServicioSriFalso(resultado_consulta=resultado)
     instalar_sri_falso(monkeypatch, servicio)
 
-    sesion = SesionFalsa(
-        [True, factura],
+    sesion_inicio = SesionFalsa(
+        [factura],
         empresa=empresa_falsa(),
     )
+    sesion_respuesta = SesionFalsa([factura])
 
     worker._procesar_factura(
-        FabricaSesionesFalsa(sesion),
+        FabricaSesionesFalsa(sesion_inicio, sesion_respuesta),
         7,
         15,
         None,
@@ -195,10 +279,18 @@ def test_bloqueo_advisory_impide_procesamiento(monkeypatch):
     servicio = ServicioSriFalso()
     instalar_sri_falso(monkeypatch, servicio)
 
-    sesion = SesionFalsa([False])
+    @contextmanager
+    def bloqueo_no_adquirido(empresa_id, factura_id, **kwargs):
+        yield False
+
+    monkeypatch.setattr(
+        worker,
+        "bloqueo_factura",
+        bloqueo_no_adquirido,
+    )
 
     worker._procesar_factura(
-        FabricaSesionesFalsa(sesion),
+        FabricaSesionesFalsa(SesionFalsa()),
         7,
         15,
         None,
@@ -223,12 +315,17 @@ def test_autorizacion_se_confirma_antes_de_guardar_ride(monkeypatch):
     servicio = ServicioSriFalso(resultado_consulta=resultado)
     instalar_sri_falso(monkeypatch, servicio)
 
-    sesion_proceso = SesionFalsa(
-        [True, factura],
+    sesion_inicio = SesionFalsa(
+        [factura],
         empresa=empresa_falsa(),
     )
+    sesion_proceso = SesionFalsa([factura])
     sesion_ruta = SesionFalsa([factura])
-    fabrica = FabricaSesionesFalsa(sesion_proceso, sesion_ruta)
+    fabrica = FabricaSesionesFalsa(
+        sesion_inicio,
+        sesion_proceso,
+        sesion_ruta,
+    )
 
     def generar_ride_falso(xml, *, numero_autorizacion, fecha_autorizacion):
         assert sesion_proceso.transaccion_confirmada
@@ -274,7 +371,11 @@ def test_fallo_al_generar_ride_no_revierte_autorizacion(monkeypatch):
     servicio = ServicioSriFalso(resultado_consulta=resultado)
     instalar_sri_falso(monkeypatch, servicio)
 
-    sesion = SesionFalsa([True, factura], empresa=empresa_falsa())
+    sesion_inicio = SesionFalsa(
+        [factura],
+        empresa=empresa_falsa(),
+    )
+    sesion = SesionFalsa([factura])
 
     def fallar_generacion(*args, **kwargs):
         assert sesion.transaccion_confirmada
@@ -287,7 +388,7 @@ def test_fallo_al_generar_ride_no_revierte_autorizacion(monkeypatch):
             raise AssertionError("No debe intentar Storage si falla el PDF.")
 
     worker._procesar_factura(
-        FabricaSesionesFalsa(sesion),
+        FabricaSesionesFalsa(sesion_inicio, sesion),
         7,
         15,
         AlmacenamientoFalso(),
@@ -316,10 +417,11 @@ def test_fallo_de_storage_no_revierte_autorizacion(monkeypatch):
     servicio = ServicioSriFalso(resultado_consulta=resultado)
     instalar_sri_falso(monkeypatch, servicio)
 
-    sesion = SesionFalsa(
-        [True, factura],
+    sesion_inicio = SesionFalsa(
+        [factura],
         empresa=empresa_falsa(),
     )
+    sesion = SesionFalsa([factura])
 
     monkeypatch.setattr(
         worker,
@@ -332,7 +434,7 @@ def test_fallo_de_storage_no_revierte_autorizacion(monkeypatch):
             raise RuntimeError("fallo simulado de Storage")
 
     worker._procesar_factura(
-        FabricaSesionesFalsa(sesion),
+        FabricaSesionesFalsa(sesion_inicio, sesion),
         7,
         15,
         AlmacenamientoConError(),
@@ -355,7 +457,7 @@ def test_error_al_enviar_conserva_por_enviar_y_aumenta_intentos(monkeypatch):
             raise AssertionError("No debe consultar después del fallo de envío.")
 
     instalar_sri_falso(monkeypatch, ServicioConError())
-    sesion = SesionFalsa([True, factura], empresa=empresa_falsa())
+    sesion = SesionFalsa([factura], empresa=empresa_falsa())
 
     worker._procesar_factura(
         FabricaSesionesFalsa(sesion), 7, 15, None
@@ -380,7 +482,7 @@ def test_error_al_consultar_conserva_por_autorizar_y_no_aumenta_intentos(
             raise RuntimeError("fallo simulado de comunicación")
 
     instalar_sri_falso(monkeypatch, ServicioConError())
-    sesion = SesionFalsa([True, factura], empresa=empresa_falsa())
+    sesion = SesionFalsa([factura], empresa=empresa_falsa())
 
     worker._procesar_factura(
         FabricaSesionesFalsa(sesion), 7, 15, None
@@ -422,18 +524,21 @@ def test_rotacion_de_lotes_avanza_y_vuelve_al_inicio():
 
     # Primer lote: dos facturas. Segundo ciclo: no quedan filas después
     # del cursor y la consulta circular recupera la primera.
-    sesion = SesionConsulta([
+    sesion_primera = SesionConsulta([
         [(fecha, 7, 15), (fecha, 7, 16)],
+    ])
+    sesion_segunda = SesionConsulta([
         [],
         [(fecha, 7, 15)],
     ])
 
-    fabrica = FabricaSesionesFalsa(sesion, sesion)
+    fabrica = FabricaSesionesFalsa(sesion_primera, sesion_segunda)
 
     primero = worker._obtener_pendientes(fabrica)
     segundo = worker._obtener_pendientes(fabrica)
 
     assert primero == [(7, 15), (7, 16)]
     assert segundo == [(7, 15)]
-    assert len(sesion.sentencias) == 3
+    assert len(sesion_primera.sentencias) == 1
+    assert len(sesion_segunda.sentencias) == 2
     assert worker._ultimo_pendiente == (fecha, 7, 15)

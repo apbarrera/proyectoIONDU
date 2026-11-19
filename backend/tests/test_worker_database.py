@@ -125,3 +125,42 @@ def test_listener_rls_registrado_solo_en_api_session():
         "after_begin",
         _aplicar_contexto_rls,
     )
+
+
+def test_bloqueo_factura_impide_adquisicion_simultanea(engine):
+    from app.worker.database import bloqueo_factura
+
+    with bloqueo_factura(7, 15, engine=engine) as adquirido:
+        assert adquirido is True
+
+        with bloqueo_factura(7, 15, engine=engine) as segundo:
+            assert segundo is False
+
+    # Una vez terminado el primer contexto, debe poder adquirirse otra vez.
+    with bloqueo_factura(7, 15, engine=engine) as tercero:
+        assert tercero is True
+
+
+def test_bloqueo_factura_se_libera_ante_excepcion(engine):
+    from app.worker.database import bloqueo_factura
+
+    with pytest.raises(RuntimeError, match="fallo simulado"):
+        with bloqueo_factura(7, 16, engine=engine) as adquirido:
+            assert adquirido is True
+            raise RuntimeError("fallo simulado")
+
+    # La excepción no debe dejar el bloqueo retenido.
+    with bloqueo_factura(7, 16, engine=engine) as siguiente:
+        assert siguiente is True
+
+
+def test_bloqueo_factura_rechaza_identificadores_invalidos():
+    from app.worker.database import bloqueo_factura
+
+    with pytest.raises(ValueError):
+        with bloqueo_factura(0, 15):
+            pass
+
+    with pytest.raises(ValueError):
+        with bloqueo_factura(7, 0):
+            pass

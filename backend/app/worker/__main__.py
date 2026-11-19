@@ -5,7 +5,7 @@ import threading
 from pathlib import Path
 
 import httpx
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, or_, select
 from supabase import create_client
 from supabase.lib.client_options import SyncClientOptions
 
@@ -14,6 +14,7 @@ from app.worker.database import (
     dispose_worker_engine,
     get_worker_engine,
     get_worker_session_factory,
+    bloqueo_factura,
 )
 from app.models.empresa import Empresa
 from app.models.factura import Factura
@@ -163,56 +164,63 @@ def _procesar_factura(
     factura_id: int,
     almacenamiento,
 ) -> None:
-    """Procesa una factura con bloqueo y transacción independientes."""
-    datos_ride = None
-
+    # Procesa la factura con bloqueo de sesión y transacciones cortas.
     try:
-        with session_factory() as session:
-            with session.begin():
-                bloqueada = session.scalar(
-                    select(
-                        func.pg_try_advisory_xact_lock(
-                            empresa_id,
-                            factura_id,
+        with bloqueo_factura(empresa_id, factura_id) as bloqueada:
+            if not bloqueada:
+                return
+
+            # Primera transacción: validar y persistir el intento antes del SRI.
+            with session_factory() as session:
+                with session.begin():
+                    factura = session.scalar(
+                        select(Factura)
+                        .where(
+                            Factura.id_empresa == empresa_id,
+                            Factura.id_factura == factura_id,
                         )
+                        .with_for_update()
                     )
-                )
 
-                if not bloqueada:
-                    return
+                    if (
+                        factura is None
+                        or factura.estado_autorizacion not in ESTADOS_PENDIENTES
+                    ):
+                        return
 
-                factura = session.scalar(
-                    select(Factura)
-                    .where(
-                        Factura.id_empresa == empresa_id,
-                        Factura.id_factura == factura_id,
-                    )
-                    .with_for_update()
-                )
+                    if not factura.clave_acceso or not factura.xml_firmado:
+                        raise ValueError(
+                            "La factura pendiente no tiene XML o clave de acceso."
+                        )
 
-                if (
-                    factura is None
-                    or factura.estado_autorizacion not in ESTADOS_PENDIENTES
-                ):
-                    return
+                    empresa = session.get(Empresa, empresa_id)
+                    if empresa is None:
+                        raise ValueError(
+                            "No existe la empresa asociada a la factura."
+                        )
 
-                if not factura.clave_acceso or not factura.xml_firmado:
-                    raise ValueError("La factura pendiente no tiene XML o clave de acceso.")
+                    configuracion = empresa.datos_facturacion_electronica or {}
+                    ambiente_configurado = configuracion.get("ambiente")
 
-                empresa = session.get(Empresa, empresa_id)
-                if empresa is None:
-                    raise ValueError("No existe la empresa asociada a la factura.")
+                    if ambiente_configurado not in ("1", "2"):
+                        raise ValueError(
+                            "El ambiente SRI de la empresa no es válido."
+                        )
 
-                configuracion = empresa.datos_facturacion_electronica or {}
-                ambiente_configurado = configuracion.get("ambiente")
+                    ambiente = Ambiente(ambiente_configurado)
+                    estado_anterior = factura.estado_autorizacion
+                    clave_acceso = factura.clave_acceso
+                    xml_firmado_texto = factura.xml_firmado
+                    xml_firmado = xml_firmado_texto.encode("utf-8")
 
-                if ambiente_configurado not in ("1", "2"):
-                    raise ValueError("El ambiente SRI de la empresa no es válido.")
+                    if estado_anterior == EstadoEmision.POR_ENVIAR.value:
+                        factura.intentos_envio = (
+                            factura.intentos_envio or 0
+                        ) + 1
 
-                ambiente = Ambiente(ambiente_configurado)
-                xml_firmado = factura.xml_firmado.encode("utf-8")
-                estado_anterior = factura.estado_autorizacion
-
+            # La transacción de negocio ya terminó. El advisory lock de sesión
+            # permanece adquirido durante toda la comunicación con el SRI.
+            try:
                 with ClienteSri(ambiente) as cliente_sri:
                     servicio = ServicioEmision(
                         cliente_sri,
@@ -220,97 +228,125 @@ def _procesar_factura(
                     )
 
                     if estado_anterior == EstadoEmision.POR_ENVIAR.value:
-                        # El intento se cuenta cuando se inicia el envío.
-                        factura.intentos_envio = (factura.intentos_envio or 0) + 1
-
-                        try:
-                            resultado = servicio.enviar(
-                                xml_firmado,
-                                factura.clave_acceso,
-                            )
-                        except Exception as exc:
-                            # Conserva el contador aunque el cliente falle
-                            # después de iniciar el intento de envío.
-                            factura.estado_autorizacion = EstadoEmision.POR_ENVIAR.value
-                            logger.error(
-                                "Error al enviar factura %s de empresa %s. tipo=%s",
-                                factura_id,
-                                empresa_id,
-                                type(exc).__name__,
-                            )
-                            return
+                        resultado = servicio.enviar(
+                            xml_firmado,
+                            clave_acceso,
+                        )
                     else:
-                        try:
-                            # Una factura por autorizar nunca se reenvía.
-                            resultado = servicio.consultar(
-                                xml_firmado,
-                                factura.clave_acceso,
-                            )
-                        except Exception as exc:
-                            logger.error(
-                                "Error al consultar factura %s de empresa %s. tipo=%s",
-                                factura_id,
-                                empresa_id,
-                                type(exc).__name__,
-                            )
-                            return
-
-                factura.estado_autorizacion = resultado.estado.value
-
-                if resultado.mensajes:
-                    factura.mensajes_sri = _serializar_mensajes(
-                        resultado.mensajes
-                    )
-
-                if resultado.estado == EstadoEmision.AUTORIZADA:
-                    factura.numero_autorizacion = resultado.numero_autorizacion
-                    factura.fecha_autorizacion = resultado.fecha_autorizacion
-
-                    if resultado.xml_autorizado:
-                        factura.xml_autorizado = (
-                            resultado.xml_autorizado.decode("utf-8")
+                        # Una factura por autorizar nunca se reenvía.
+                        resultado = servicio.consultar(
+                            xml_firmado,
+                            clave_acceso,
                         )
-
-                    xml_para_ride = resultado.xml_autorizado or xml_firmado
-                    if (
-                        resultado.numero_autorizacion
-                        and resultado.fecha_autorizacion
-                    ):
-                        datos_ride = (
-                            xml_para_ride,
-                            resultado.numero_autorizacion,
-                            resultado.fecha_autorizacion,
-                        )
-
-        # La transacción anterior ya confirmó la autorización.
-        # Un error de Storage no puede revertirla.
-        if datos_ride is not None and almacenamiento is not None:
-            try:
-                xml_ride, numero_autorizacion, fecha_autorizacion = datos_ride
-                ride = generar_ride(
-                    xml_ride,
-                    numero_autorizacion=numero_autorizacion,
-                    fecha_autorizacion=fecha_autorizacion,
-                )
-                ruta = almacenamiento.guardar(
-                    empresa_id,
-                    factura_id,
-                    ride,
-                )
-                _guardar_ruta_ride(
-                    session_factory,
-                    empresa_id,
-                    factura_id,
-                    ruta,
-                )
             except Exception as exc:
+                accion = (
+                    "enviar"
+                    if estado_anterior == EstadoEmision.POR_ENVIAR.value
+                    else "consultar"
+                )
                 logger.error(
-                    "No se pudo almacenar o registrar el RIDE de factura %s "
-                    "de empresa %s. tipo=%s",
+                    "Error al %s factura %s de empresa %s. tipo=%s",
+                    accion,
                     factura_id,
                     empresa_id,
                     type(exc).__name__,
                 )
+                return
+
+            datos_ride = None
+
+            # Segunda transacción: releer, verificar y persistir la respuesta.
+            with session_factory() as session:
+                with session.begin():
+                    factura = session.scalar(
+                        select(Factura)
+                        .where(
+                            Factura.id_empresa == empresa_id,
+                            Factura.id_factura == factura_id,
+                        )
+                        .with_for_update()
+                    )
+
+                    if (
+                        factura is None
+                        or factura.estado_autorizacion != estado_anterior
+                        or factura.clave_acceso != clave_acceso
+                        or factura.xml_firmado != xml_firmado_texto
+                    ):
+                        logger.warning(
+                            "La factura %s de empresa %s cambió durante "
+                            "la consulta al SRI; no se aplicará la respuesta.",
+                            factura_id,
+                            empresa_id,
+                        )
+                        return
+
+                    factura.estado_autorizacion = resultado.estado.value
+
+                    if resultado.mensajes:
+                        factura.mensajes_sri = _serializar_mensajes(
+                            resultado.mensajes
+                        )
+
+                    if resultado.estado == EstadoEmision.AUTORIZADA:
+                        factura.numero_autorizacion = (
+                            resultado.numero_autorizacion
+                        )
+                        factura.fecha_autorizacion = (
+                            resultado.fecha_autorizacion
+                        )
+
+                        if resultado.xml_autorizado:
+                            factura.xml_autorizado = (
+                                resultado.xml_autorizado.decode("utf-8")
+                            )
+
+                        xml_para_ride = (
+                            resultado.xml_autorizado or xml_firmado
+                        )
+                        if (
+                            resultado.numero_autorizacion
+                            and resultado.fecha_autorizacion
+                        ):
+                            datos_ride = (
+                                xml_para_ride,
+                                resultado.numero_autorizacion,
+                                resultado.fecha_autorizacion,
+                            )
+
+            # La autorización ya está confirmada. Un fallo de RIDE o Storage
+            # no puede revertirla.
+            if datos_ride is not None and almacenamiento is not None:
+                try:
+                    (
+                        xml_ride,
+                        numero_autorizacion,
+                        fecha_autorizacion,
+                    ) = datos_ride
+                    ride = generar_ride(
+                        xml_ride,
+                        numero_autorizacion=numero_autorizacion,
+                        fecha_autorizacion=fecha_autorizacion,
+                    )
+                    ruta = almacenamiento.guardar(
+                        empresa_id,
+                        factura_id,
+                        ride,
+                    )
+                    _guardar_ruta_ride(
+                        session_factory,
+                        empresa_id,
+                        factura_id,
+                        ruta,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "No se pudo almacenar o registrar el RIDE de factura "
+                        "%s de empresa %s. tipo=%s",
+                        factura_id,
+                        empresa_id,
+                        type(exc).__name__,
+                    )
 
     except Exception as exc:
         logger.error(

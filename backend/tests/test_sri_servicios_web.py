@@ -209,3 +209,29 @@ def test_una_respuesta_maliciosa_no_puede_leer_archivos_del_servidor(tmp_path):
     with pytest.raises(SriNoDisponibleError) as error:
         SriSimulado(ataque).cliente().enviar(b"<x/>")
     assert "SECRETO-IONDU" not in str(error.value)
+
+
+def test_cliente_sri_cierra_su_cliente_http_al_salir_del_contexto(monkeypatch):
+    cliente_http = httpx.Client()
+
+    monkeypatch.setattr(
+        "app.sri.servicios_web.httpx.Client",
+        lambda **kwargs: cliente_http,
+    )
+
+    with ClienteSri(Ambiente.PRUEBAS):
+        assert not cliente_http.is_closed
+
+    assert cliente_http.is_closed
+
+
+def test_cliente_sri_no_cierra_el_cliente_http_inyectado():
+    cliente_http = httpx.Client()
+
+    try:
+        with ClienteSri(Ambiente.PRUEBAS, http=cliente_http):
+            assert not cliente_http.is_closed
+
+        assert not cliente_http.is_closed
+    finally:
+        cliente_http.close()

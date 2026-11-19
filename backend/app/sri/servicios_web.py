@@ -127,7 +127,21 @@ def _sobre(espacio: str, operacion: str, parametro: str, valor: str) -> bytes:
 class ClienteSri:
     def __init__(self, ambiente: Ambiente, *, http: httpx.Client | None = None):
         self.ambiente = Ambiente(ambiente)
-        self._http = http or httpx.Client(timeout=_TIEMPO_ESPERA)
+        self._owns_http = http is None
+        self._http = http if http is not None else httpx.Client(timeout=_TIEMPO_ESPERA)
+
+    def close(self) -> None:
+        # Cierra únicamente el cliente HTTP creado por esta instancia.
+        if self._owns_http:
+            self._http.close()
+            self._owns_http = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+        return False
 
     def _llamar(self, url: str, sobre: bytes) -> etree._Element:
         try:

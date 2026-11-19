@@ -3,11 +3,11 @@
 import base64
 import logging
 from datetime import datetime
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -25,30 +25,34 @@ from app.repositories.venta import VentaRepository
 from app.schemas.configuracion_facturacion import ConfiguracionFacturacion
 from app.services.almacenamiento import AlmacenamientoRideService
 from app.services.secuencia_comprobante import SecuenciaComprobanteService
-from app.sri.certificado import CertificadoInvalidoError
 from app.sri.clave_acceso import Ambiente
-from app.sri.emision import ServicioEmision
+from app.sri.ride import generar_ride
+from app.sri.certificado import CertificadoInvalidoError
 from app.sri.factura_xml import (
     Comprador,
     DetalleFactura,
     Emisor,
+    Factura as FacturaSRI,
     Pago,
     generar_factura_xml,
 )
-from app.sri.factura_xml import (
-    Factura as FacturaSRI,
-)
 from app.sri.identificacion import TipoIdentificacion
-from app.sri.ride import generar_ride
-from app.sri.servicios_web import ClienteSri
-from app.sri.totales import Linea, TarifaIva, calcular_totales
+from app.sri.totales import (
+    Linea,
+    TarifaIva,
+    TarifaIvaAplicada,
+    calcular_totales,
+)
 from app.sri.xades import FirmadorXadesBes
 
 logger = logging.getLogger(__name__)
 
 TIMEZONE = ZoneInfo("America/Guayaquil")
 
-TARIFAS_IVA_POR_CODIGO = {tarifa.codigo: tarifa for tarifa in TarifaIva}
+TARIFAS_IVA_POR_CODIGO = {
+    tarifa.codigo: tarifa
+    for tarifa in TarifaIva
+}
 
 TIPOS_IDENTIFICACION = {
     "cedula": TipoIdentificacion.CEDULA,
@@ -92,14 +96,22 @@ class FacturaService:
         """Prepara, persiste y envía una factura sin perder el XML ante fallos del SRI."""
 
         try:
-            # Serializa la emisión concurrente de una misma venta.
+            # Serializa la emisión concurrente de una misma venta sin
+            # requerir privilegios UPDATE sobre la tabla venta.
+            self.db.execute(
+                select(
+                    func.pg_advisory_xact_lock(
+                        self.empresa_id,
+                        id_venta,
+                    )
+                )
+            )
+
             venta_bloqueada = self.db.scalar(
-                select(Venta)
-                .where(
+                select(Venta).where(
                     Venta.id_empresa == self.empresa_id,
                     Venta.id_venta == id_venta,
                 )
-                .with_for_update()
             )
 
             if venta_bloqueada is None:
@@ -140,12 +152,25 @@ class FacturaService:
             for detalle, producto in detalles_venta:
                 tarifa = TARIFAS_IVA_POR_CODIGO.get(detalle.codigo_porcentaje_iva)
                 if tarifa is None:
-                    raise UnprocessableError("La venta contiene un código de IVA no reconocido.")
+                    raise UnprocessableError(
+                        "La venta contiene un código de IVA no reconocido."
+                    )
+
+                porcentaje_guardado = getattr(detalle, "porcentaje_iva", None)
+                porcentaje = (
+                    _decimal(porcentaje_guardado)
+                    if porcentaje_guardado is not None
+                    else tarifa.porcentaje
+                )
+                tarifa_aplicada = TarifaIvaAplicada(
+                    codigo=detalle.codigo_porcentaje_iva,
+                    porcentaje=porcentaje,
+                )
 
                 linea = Linea(
                     cantidad=_decimal(detalle.cantidad),
                     precio_unitario=_decimal(detalle.precio_unitario),
-                    tarifa=tarifa,
+                    tarifa=tarifa_aplicada,
                     descuento=_decimal(detalle.descuento),
                 )
                 lineas.append(linea)
@@ -175,6 +200,21 @@ class FacturaService:
 
             totales = calcular_totales(lineas)
 
+            for (detalle, _producto), calculada in zip(
+                detalles_venta,
+                totales.lineas,
+            ):
+                valor_iva_guardado = getattr(detalle, "valor_iva", None)
+                if (
+                    valor_iva_guardado is not None
+                    and _dinero(_decimal(valor_iva_guardado))
+                    != _dinero(calculada.iva)
+                ):
+                    raise ConflictError(
+                        "El IVA almacenado en una línea no coincide con "
+                        "su cálculo histórico. No se emitió la factura."
+                    )
+
             if (
                 _dinero(totales.total_sin_impuestos) != _dinero(_decimal(venta.subtotal))
                 or _dinero(totales.total_iva) != _dinero(_decimal(venta.iva))
@@ -191,6 +231,7 @@ class FacturaService:
                 razon_social=empresa.razon_social,
                 dir_matriz=empresa.direccion,
                 nombre_comercial=empresa.nombre_comercial,
+                dir_establecimiento=configuracion.direccion_establecimiento,
                 obligado_contabilidad=configuracion.obligado_contabilidad,
                 contribuyente_especial=configuracion.contribuyente_especial,
                 contribuyente_rimpe=configuracion.contribuyente_rimpe,
@@ -234,10 +275,14 @@ class FacturaService:
                 generada = generar_factura_xml(factura_sri)
                 xml_firmado = firmador.firmar(generada.xml)
             except (ValueError, TypeError) as exc:
-                raise UnprocessableError(f"No se pudo generar el comprobante: {exc}") from exc
+                raise UnprocessableError(
+                    f"No se pudo generar el comprobante: {exc}"
+                ) from exc
 
             numero = (
-                f"{configuracion.establecimiento}-{configuracion.punto_emision}-{secuencial:09d}"
+                f"{configuracion.establecimiento}-"
+                f"{configuracion.punto_emision}-"
+                f"{secuencial:09d}"
             )
 
             factura = FacturaORM(
@@ -247,7 +292,7 @@ class FacturaService:
                 clave_acceso=generada.clave_acceso,
                 estado_autorizacion="por_enviar",
                 mensajes_sri=[],
-                intentos_envio=1,
+                intentos_envio=0,
                 subtotal=generada.totales.total_sin_impuestos,
                 impuestos=generada.totales.total_iva,
                 total=generada.totales.importe_total,
@@ -265,7 +310,8 @@ class FacturaService:
         except IntegrityError as exc:
             self.db.rollback()
             raise ConflictError(
-                "No se pudo registrar la factura porque existe un comprobante con datos duplicados."
+                "No se pudo registrar la factura porque existe un comprobante "
+                "con datos duplicados."
             ) from exc
         except Exception:
             self.db.rollback()
@@ -273,58 +319,6 @@ class FacturaService:
 
         # La factura ya está persistida. Un fallo de comunicación no debe
         # revertirla ni liberar el secuencial.
-        cliente_sri = ClienteSri(Ambiente(configuracion.ambiente))
-        servicio = ServicioEmision(cliente_sri, firmador)
-
-        resultado = servicio.enviar(xml_firmado, generada.clave_acceso)
-
-        factura.estado_autorizacion = resultado.estado.value
-        factura.numero_autorizacion = resultado.numero_autorizacion
-        factura.fecha_autorizacion = resultado.fecha_autorizacion
-        factura.xml_autorizado = (
-            resultado.xml_autorizado.decode("utf-8") if resultado.xml_autorizado else None
-        )
-        factura.mensajes_sri = [
-            {
-                "identificador": mensaje.identificador,
-                "mensaje": mensaje.mensaje,
-                "informacion_adicional": mensaje.informacion_adicional,
-                "tipo": mensaje.tipo,
-            }
-            for mensaje in resultado.mensajes
-        ]
-
-        self.db.commit()
-        self.db.refresh(factura)
-
-        # La autorización ya está confirmada. Un fallo de Storage no debe
-        # convertir una factura autorizada en un error de emisión.
-        if (
-            factura.estado_autorizacion == "autorizada"
-            and resultado.ride
-            and self.almacenamiento is not None
-        ):
-            try:
-                ruta_ride = self.almacenamiento.guardar(
-                    self.empresa_id,
-                    factura.id_factura,
-                    resultado.ride,
-                )
-                factura.pdf_ride_path = ruta_ride
-                self.db.commit()
-            except ServiceUnavailableError:
-                self.db.rollback()
-                logger.warning(
-                    "RIDE pendiente de almacenamiento para factura %s.",
-                    factura.id_factura,
-                )
-            except Exception:
-                self.db.rollback()
-                logger.exception(
-                    "No se pudo registrar la ruta del RIDE de la factura %s.",
-                    factura.id_factura,
-                )
-
         return factura
 
     def obtener_ride(self, id_venta: int) -> bytes:
@@ -340,7 +334,10 @@ class FacturaService:
         if factura is None:
             raise NotFoundError("No existe una factura para la venta solicitada.")
 
-        if factura.estado_autorizacion != "autorizada" or not factura.xml_autorizado:
+        if (
+            factura.estado_autorizacion != "autorizada"
+            or not factura.xml_autorizado
+        ):
             raise ConflictError(
                 "La factura todavía no está autorizada y no tiene un RIDE disponible."
             )
@@ -350,7 +347,7 @@ class FacturaService:
                 return self.almacenamiento.descargar(factura.pdf_ride_path)
             except (NotFoundError, ServiceUnavailableError):
                 logger.warning(
-                    "No se pudo descargar el RIDE de la factura %s; se reconstruir?.",
+                    "No se pudo descargar el RIDE de la factura %s; se reconstruirá.",
                     factura.id_factura,
                 )
 
@@ -416,8 +413,13 @@ class FacturaService:
         return configuracion
 
     def _obtener_firmador(self, empresa: Empresa) -> FirmadorXadesBes:
-        if not empresa.certificado_p12_cifrado or not empresa.certificado_password_cifrada:
-            raise UnprocessableError("La empresa no tiene un certificado electrónico configurado.")
+        if (
+            not empresa.certificado_p12_cifrado
+            or not empresa.certificado_password_cifrada
+        ):
+            raise UnprocessableError(
+                "La empresa no tiene un certificado electrónico configurado."
+            )
 
         try:
             cifrador = get_cifrador()
@@ -467,3 +469,5 @@ class FacturaService:
             direccion=cliente.direccion,
             correo=cliente.correo_electronico,
         )
+
+

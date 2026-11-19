@@ -35,16 +35,18 @@ class Settings(BaseSettings):
 
     # Supabase: conexión por Session Pooler (puerto 5432).
     database_url: str | None = None
+    worker_database_url: str | None = None
     supabase_url: str | None = None
     supabase_service_role_key: str | None = None
 
     master_encryption_key: SecretStr | None = None
 
     worker_heartbeat_file: str = "/tmp/worker-heartbeat"
-    worker_tick_seconds: int = 30
+    worker_tick_seconds: int = Field(default=30, gt=0)
 
     @field_validator(
         "database_url",
+        "worker_database_url",
         "supabase_url",
         "supabase_service_role_key",
         mode="before",

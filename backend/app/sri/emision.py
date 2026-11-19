@@ -21,7 +21,6 @@ from enum import StrEnum
 
 from app.sri.factura_xml import Factura, generar_factura_xml
 from app.sri.firma import Firmador
-from app.sri.ride import generar_ride
 from app.sri.servicios_web import (
     ClienteSri,
     EstadoAutorizacion,
@@ -60,7 +59,7 @@ class ServicioEmision:
     def __init__(
         self,
         cliente: ClienteSri,
-        firmador: Firmador,
+        firmador: Firmador | None = None,
         *,
         intentos_autorizacion: int = 3,
         pausa_segundos: float = 3.0,
@@ -77,6 +76,9 @@ class ServicioEmision:
 
         Lanza ValueError si los datos de la factura no son válidos (antes de contactar al SRI).
         """
+        if self._firmador is None:
+            raise RuntimeError("Se necesita un firmador para emitir una factura.")
+
         generada = generar_factura_xml(factura)
         firmado = self._firmador.firmar(generada.xml)
         return self.enviar(firmado, generada.clave_acceso)
@@ -124,11 +126,7 @@ class ServicioEmision:
                     numero_autorizacion=autorizacion.numero_autorizacion,
                     fecha_autorizacion=autorizacion.fecha_autorizacion,
                     xml_autorizado=xml_autorizado,
-                    ride=generar_ride(
-                        xml_autorizado,
-                        numero_autorizacion=autorizacion.numero_autorizacion,
-                        fecha_autorizacion=autorizacion.fecha_autorizacion,
-                    ),
+                    ride=None,
                     mensajes=autorizacion.mensajes,
                 )
             if autorizacion.estado == EstadoAutorizacion.NO_AUTORIZADO:

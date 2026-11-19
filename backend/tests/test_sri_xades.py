@@ -167,4 +167,5 @@ def test_el_flujo_de_emision_envia_la_factura_firmada():
     assert resultado.estado == EstadoEmision.AUTORIZADA
     assert sri.enviado == resultado.xml_firmado
     _verificar(sri.enviado)  # lo que recibe el SRI tiene una firma válida
-    assert resultado.ride.startswith(b"%PDF")
+    assert resultado.ride is None
+    assert resultado.xml_autorizado is not None

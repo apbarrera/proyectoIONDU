@@ -409,6 +409,14 @@
   días y movimientos) **pasando por la API**, con las mismas reglas que producción. Solo acepta la base local
   `iondu` y no se repite si ya hay productos.
 
+### 2.29 Dashboard calculado en vivo
+- **Decisión (20/11/2026):** `GET /api/dashboard` calcula los indicadores **en cada consulta** con `SUM`/`GROUP BY`
+  en PostgreSQL, sin usar la tabla `dashboard_financiero`.
+- **Por qué:** RF-5.4 pide que se actualice al confirmar cada operación; con una tabla de resumen habría que
+  recalcularla en cada venta, gasto y ajuste, y podría quedar desfasada. Para el volumen de una PyME la consulta
+  es inmediata. `dashboard_financiero` queda para guardar cierres mensuales si luego se necesitan.
+- Los ingresos son las ventas completadas **con IVA**; los días se agrupan en hora de Ecuador.
+
 ## 3. Producto
 
 ### 3.1 Ventas y Facturación son un solo módulo

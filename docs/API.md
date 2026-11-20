@@ -505,3 +505,38 @@ Objeto `StockAdjustment` (respuesta del ajuste):
 ```
 
 - Las alertas de stock bajo (RF-4.6) ya existen: `GET /api/products?lowStock=true` (sección 4).
+
+## 13. Dashboard financiero
+
+**Solo el Administrador** (RF-5.5): cualquier otro rol recibe `403 FORBIDDEN`. Los indicadores se calculan **en vivo**
+en cada consulta, así reflejan al instante cada venta, gasto o movimiento (RF-5.4).
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/dashboard?from=&to=` | Indicadores del período (fechas `YYYY-MM-DD` de Ecuador). Sin fechas: el mes en curso hasta hoy. Máximo 366 días; `from` posterior a `to` → `422` | `200` con `DashboardSummary` |
+
+Para RF-5.3 el frontend calcula el rango: hoy (`from = to = hoy`), semana, mes o personalizado.
+
+```json
+{
+  "from": "2026-11-01", "to": "2026-11-20",
+  "income": 2240.8, "expenses": 910, "profit": 1330.8,
+  "salesCount": 125, "expensesCount": 9, "averageTicket": 17.93,
+  "topProducts": [ { "productId": 1, "name": "Café en grano 500 g", "unitsSold": 98, "revenue": 833 } ],
+  "dailySeries": [ { "date": "2026-11-01", "income": 74.5, "expenses": 0 } ],
+  "expensesByCategory": [ { "categoryId": 6, "name": "Arriendo", "total": 450 } ],
+  "inventory": {
+    "activeProducts": 7, "lowStockCount": 2, "inventoryValue": 691.5,
+    "lowStockProducts": [ { "productId": 5, "name": "Agua sin gas 500 ml", "unit": "UNIDAD", "currentStock": 6, "minStock": 12 } ]
+  }
+}
+```
+
+- `income`: total de las ventas **completadas** del período, **con IVA** (lo que entró a caja). Las anuladas no cuentan.
+- `expenses`: gastos **confirmados**. `profit` = `income − expenses` (utilidad estimada, RF-5.2).
+- `topProducts`: los 5 productos con más ingreso; `revenue` es el subtotal **sin IVA** de sus líneas.
+- `dailySeries`: **un punto por cada día** del período, también los días en 0, listo para el gráfico.
+- `inventory` es el estado **actual** (no depende del período): productos activos, cuántos tienen stock bajo,
+  valor del inventario (stock × costo) y los 10 más críticos.
+- Mismos nombres que `DashboardSummary` del frontend, más `expenses`, `expensesCount`, `expensesByCategory`,
+  `inventory` y `dailySeries[].expenses`. Los ids pasan de `string` a `number`.

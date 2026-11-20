@@ -6,6 +6,7 @@ Uso en un endpoint:
     def dashboard(contexto: SoloAdministrador): ...
 """
 
+import uuid
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Annotated
@@ -83,6 +84,10 @@ def get_contexto(
     verificador: Annotated[VerificadorTokens | None, Depends(get_verificador)],
     authorization: Annotated[str | None, Header()] = None,
     x_empresa_id: Annotated[int | None, Header(gt=0)] = None,
+    x_usuario_id: Annotated[
+        uuid.UUID | None,
+        Header(description="Solo desarrollo: actuar como este usuario (con X-Empresa-Id)."),
+    ] = None,
 ) -> Contexto:
     """Obtiene el contexto validando la pertenencia activa a la empresa."""
 
@@ -146,9 +151,30 @@ def get_contexto(
         )
 
     if get_settings().app_env == "development" and x_empresa_id is not None:
+        if x_usuario_id is not None:
+            return _contexto_usuario_demo(db, x_usuario_id, x_empresa_id)
         return Contexto(empresa_id=x_empresa_id, rol=ADMINISTRADOR)
 
     raise UnauthenticatedError("Inicia sesión para continuar.")
+
+
+def _contexto_usuario_demo(db: Session, id_usuario: uuid.UUID, id_empresa: int) -> Contexto:
+    """Solo desarrollo: actuar como un usuario sin Supabase (para Swagger y demos).
+
+    Usa su pertenencia REAL en la base: mismo rol y nombre, así los permisos se respetan.
+    """
+    pertenencia = obtener_pertenencia_activa(db, id_usuario, id_empresa)
+    if pertenencia is None:
+        raise ForbiddenError(
+            "Ese usuario no tiene una pertenencia activa a la empresa.",
+            code="COMPANY_ACCESS_DENIED",
+        )
+    return Contexto(
+        empresa_id=pertenencia.id_empresa,
+        rol=pertenencia.rol,
+        usuario=UsuarioAutenticado(id=id_usuario, email=None),
+        nombre=pertenencia.nombre,
+    )
 
 
 ContextoActual = Annotated[Contexto, Depends(get_contexto)]

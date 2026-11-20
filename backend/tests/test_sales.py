@@ -305,7 +305,7 @@ def test_detalle_rechaza_producto_de_otra_empresa(client, db, empresas, catalogo
 
     categoria_b = client.post(
         "/api/product-categories",
-        json={"name": "Categor?a B"},
+        json={"name": "Categoría B"},
         headers=_h(b),
     )
     assert categoria_b.status_code == 201, categoria_b.text

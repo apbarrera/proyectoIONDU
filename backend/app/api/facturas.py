@@ -77,7 +77,7 @@ def download_invoice_ride(
 
     if contexto.usuario is None:
         raise ForbiddenError(
-            "Para descargar facturas debes iniciar sesi?n con tu usuario.",
+            "Para descargar facturas debes iniciar sesión con tu usuario.",
             code="USER_SESSION_REQUIRED",
         )
 

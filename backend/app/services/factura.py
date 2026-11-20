@@ -297,8 +297,8 @@ class FacturaService:
         self.db.commit()
         self.db.refresh(factura)
 
-        # La autorizaci?n ya est? confirmada. Un fallo de Storage no debe
-        # convertir una factura autorizada en un error de emisi?n.
+        # La autorización ya está confirmada. Un fallo de Storage no debe
+        # convertir una factura autorizada en un error de emisión.
         if (
             factura.estado_autorizacion == "autorizada"
             and resultado.ride
@@ -342,7 +342,7 @@ class FacturaService:
 
         if factura.estado_autorizacion != "autorizada" or not factura.xml_autorizado:
             raise ConflictError(
-                "La factura todav?a no est? autorizada y no tiene un RIDE disponible."
+                "La factura todavía no está autorizada y no tiene un RIDE disponible."
             )
 
         if factura.pdf_ride_path and self.almacenamiento is not None:
@@ -381,7 +381,7 @@ class FacturaService:
             except ServiceUnavailableError:
                 self.db.rollback()
                 logger.warning(
-                    "El RIDE de la factura %s se entregar? sin almacenarlo.",
+                    "El RIDE de la factura %s se entregará sin almacenarlo.",
                     factura.id_factura,
                 )
             except Exception:

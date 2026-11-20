@@ -239,7 +239,7 @@ def main() -> None:
 
             if existing_functions:
                 raise RuntimeError(
-                    "Instalaci?n cancelada: ya existen funciones objetivo: "
+                    "Instalación cancelada: ya existen funciones objetivo: "
                     + ", ".join(existing_functions)
                 )
 

@@ -31,6 +31,7 @@ from app.models.rol import ADMINISTRADOR, OPERATIVO  # noqa: E402
 from tests.tokens import crear_token, verificador_de_prueba  # noqa: E402
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
+SERVIDORES_DE_PRUEBA = {"127.0.0.1", "localhost", "db"}
 
 
 def validar_url_pruebas(database_url: str) -> None:
@@ -44,8 +45,13 @@ def validar_url_pruebas(database_url: str) -> None:
         pytest.fail("TEST_DATABASE_URL debe usar postgresql+psycopg")
     if url.database != "iondu_test":
         pytest.fail("TEST_DATABASE_URL debe apuntar exactamente a iondu_test")
-    if url.host not in {"127.0.0.1", "localhost"} or url.port != 15432:
-        pytest.fail("TEST_DATABASE_URL debe usar localhost o 127.0.0.1 en el puerto 15432")
+    # Solo servidores locales: tu Docker (127.0.0.1:15432), el contenedor "db" (Docker
+    # Compose) o el PostgreSQL temporal del CI (127.0.0.1:5432). Nunca Supabase.
+    if url.host not in SERVIDORES_DE_PRUEBA:
+        pytest.fail(
+            "TEST_DATABASE_URL debe apuntar a un PostgreSQL local "
+            f"({', '.join(sorted(SERVIDORES_DE_PRUEBA))})"
+        )
     if url.username != "iondu":
         pytest.fail("TEST_DATABASE_URL debe conectarse con el usuario iondu")
 
@@ -72,9 +78,7 @@ def engine():
                 ).one()
 
                 if identidad[0] != "iondu_test" or identidad[1] != "iondu":
-                    pytest.fail(
-                        "La conexión real no corresponde a iondu_test con el usuario iondu"
-                    )
+                    pytest.fail("La conexión real no corresponde a iondu_test con el usuario iondu")
 
                 if identidad[2] or identidad[3]:
                     warnings.warn(

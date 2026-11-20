@@ -7,7 +7,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client
 from supabase.lib.client_options import SyncClientOptions
 
-from app.api import certificados, company, customers, facturas, health, me, products, sales
+from app.api import (
+    certificados,
+    company,
+    customers,
+    expenses,
+    facturas,
+    health,
+    me,
+    products,
+    sales,
+)
 from app.core.config import get_settings
 from app.core.errors import register_error_handlers
 
@@ -89,3 +99,4 @@ app.include_router(facturas.router, prefix="/api")
 app.include_router(me.router, prefix="/api")
 app.include_router(certificados.router, prefix="/api")
 app.include_router(company.router, prefix="/api")
+app.include_router(expenses.router, prefix="/api")

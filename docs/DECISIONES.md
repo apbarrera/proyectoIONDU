@@ -381,6 +381,24 @@
 - Solo se venden productos activos de tipo `venta` o `ambos`. Las líneas de concepto libre esperan la columna de
   tarifa de IVA en `detalle_venta`.
 
+### 2.26 Gastos
+- **Decisión (20/11/2026):** las 7 categorías de RF-3.5 se **crean solas** la primera vez que la empresa las pide
+  (`origen = PREDEFINIDA`); las del usuario quedan con `origen = USUARIO`. No hace falta un script por empresa.
+- El RUC o la cédula del proveedor se validan con `app/sri/identificacion.py`, igual que los clientes.
+- Registrar o editar un gasto exige **sesión de usuario** (`gasto.id_usuario` es obligatorio). El monto debe ser
+  mayor a 0. **Pendiente con Ariana:** `gasto` no tiene columna de IVA (el frontend envía `ivaAmount`).
+
+### 2.27 Inventario: tipos de movimiento y stock resultante
+- **Decisión (20/11/2026):** `movimiento_inventario.cantidad` siempre es positiva (restricción de la base); el
+  **tipo dice la dirección**: `ENTRADA` y `AJUSTE_ENTRADA` suman; `SALIDA`, `VENTA` y `AJUSTE_SALIDA` restan.
+  En la API la cantidad sale con signo y los dos ajustes se muestran como `ajuste`.
+- El **stock resultante** de cada movimiento no se guarda: se calcula con una función de ventana de PostgreSQL,
+  hacia atrás desde el stock actual. **Por qué:** no hace falta otra columna ni que el stock inicial del
+  producto se haya registrado como movimiento.
+- El ajuste recibe el **stock contado**, no la diferencia, y es **solo del Administrador** (RF-4.8). Las entradas
+  y salidas manuales las puede hacer cualquier usuario con sesión. Todo bloquea el producto con
+  `SELECT … FOR UPDATE`, igual que las ventas.
+
 ## 3. Producto
 
 ### 3.1 Ventas y Facturación son un solo módulo

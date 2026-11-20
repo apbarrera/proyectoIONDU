@@ -459,3 +459,45 @@ Objeto `Expense`:
 - `source`: `manual` o `correo` (cuando lo lea el worker desde una factura recibida, RF-3.2).
 - La base todavía no guarda el IVA del gasto por separado: el `ivaAmount` del frontend no tiene dónde
   guardarse (pendiente con Ariana).
+
+## 12. Inventario: historial, entradas, salidas y ajustes
+
+El stock de un producto **solo cambia junto con un movimiento** (ventas, entradas, salidas y ajustes), así el
+historial siempre cuadra con el stock (DECISIONES 2.15). Registrar un movimiento **exige iniciar sesión**
+(`403 USER_SESSION_REQUIRED`) porque guarda quién lo hizo.
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/inventory/movements` | Historial paginado, el más reciente primero. Filtros: `productId`, `type` (`entrada`, `salida`, `ajuste`, `venta`), `from`, `to` (fechas de Ecuador) | `200` con `Page<InventoryMovement>` |
+| ✅ | `GET /api/inventory/movements/{id}` | Un movimiento | `200` o `404` |
+| ✅ | `POST /api/inventory/movements` | Entrada o salida manual (RF-4.3): `{ "productId", "type": "entrada" \| "salida", "quantity" (> 0), "reason" }` | `201` con `InventoryMovement` |
+| ✅ | `POST /api/inventory/adjustments` | **Solo Administrador** (RF-4.8). Ajuste al conteo físico: `{ "productId", "newStock" (≥ 0), "reason" }`. Se envía el stock real, no la diferencia | `201` con `StockAdjustment` |
+
+Errores: producto que no es de la empresa → `422 PRODUCT_NOT_FOUND`; salida mayor al stock →
+`409 INSUFFICIENT_STOCK`; ajuste al mismo stock que ya tiene → `422 NO_STOCK_CHANGE`; motivo vacío → `422`.
+
+Objeto `InventoryMovement` (igual que el modelo del frontend):
+
+```json
+{
+  "id": 31, "productId": 5, "productName": "Café molido 250 g", "unit": "UNIDAD", "type": "salida",
+  "quantity": -2.5, "resultingStock": 12.5, "reason": "Merma", "date": "2026-11-20T10:30:00-05:00",
+  "createdBy": "Ana Torres"
+}
+```
+
+- `quantity` lleva signo: **positiva si entra** al inventario, **negativa si sale** (ventas, salidas y ajustes a la baja).
+- `resultingStock`: stock del producto justo después de ese movimiento.
+- Para la pantalla de ajustes: `GET /api/inventory/movements?type=ajuste`.
+
+Objeto `StockAdjustment` (respuesta del ajuste):
+
+```json
+{
+  "id": 32, "productId": 5, "productName": "Café molido 250 g", "previousStock": 10, "newStock": 7,
+  "quantityDelta": -3, "reason": "Conteo de fin de mes", "date": "2026-11-20T18:00:00-05:00",
+  "createdBy": "Ana Torres"
+}
+```
+
+- Las alertas de stock bajo (RF-4.6) ya existen: `GET /api/products?lowStock=true` (sección 4).

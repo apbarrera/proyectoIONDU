@@ -112,7 +112,7 @@
 | 1. Usuarios, roles y empresa | 70 % | Token de Supabase, varias empresas por usuario y selector, rol y permiso de Administrador, `/api/me`, subir el certificado, datos y configuración de facturación de la empresa | Gestión de usuarios |
 | 2. Facturación y ventas | 85 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión, cifrado del `.p12` y firma XAdES-BES, clientes, registrar ventas, facturar la venta y descargar el RIDE | Reintentos del worker, anular ventas, prueba real con el SRI (`.p12`) |
 | 3. Gastos | 60 % | Categorías (7 predefinidas y propias), proveedores con RUC/cédula validados, registrar, filtrar y editar gastos | Lectura de facturas por correo (IMAP), anular gastos |
-| 4. Productos e inventario | 60 % | Categorías, productos y movimientos por venta | Desactivar, movimientos, ajustes, alertas |
+| 4. Productos e inventario | 80 % | Categorías, productos (activar/desactivar, filtro de stock bajo), movimientos por venta, entradas y salidas manuales, ajustes del Administrador, historial con stock resultante | Compra que suma inventario (RF-4.4), recetas y producción |
 | 5. Dashboard | 0 % | — | Indicadores (necesita ventas y gastos) |
 | 6. Agente IA | 0 % | — | Todo (Sprint 4) |
 | 7. Recomendaciones | 0 % | — | Todo (Sprint 5) |

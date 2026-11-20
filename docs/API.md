@@ -381,3 +381,81 @@ Objeto `Company` (mismos nombres que `Tenant` del frontend):
 - `billing` es `null` mientras la empresa no configure su facturación; sin ella no se puede emitir.
 - `environment`: `pruebas` (SRI de pruebas, sin validez legal) o `produccion`. `establishment` y `emissionPoint`:
   3 dígitos. `specialTaxpayer`: número de resolución de contribuyente especial, o `null`.
+
+## 11. Gastos, categorías de gasto y proveedores
+
+Cualquier usuario de la empresa puede consultarlos y registrarlos. **Registrar o editar un gasto exige
+iniciar sesión** (`403 USER_SESSION_REQUIRED`): el gasto guarda qué usuario lo registró.
+
+### Categorías de gasto
+
+La primera vez que se piden se crean solas las 7 de RF-3.5: Materia prima, Servicios, Transporte,
+Empaque, Mantenimiento, Arriendo y Otros gastos operativos (`predefined: true`).
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/expense-categories` | Lista las categorías por nombre (sin paginar) | `200` con `ExpenseCategory[]` |
+| ✅ | `POST /api/expense-categories` | Crea una propia: `{ "name", "description"? }`. Nombre repetido (sin importar mayúsculas) → `409 CATEGORY_EXISTS` | `201` con `ExpenseCategory` |
+
+```json
+{ "id": 3, "name": "Servicios", "description": null, "predefined": true }
+```
+
+### Proveedores
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/suppliers?page=&pageSize=&search=` | Lista paginada; `search` busca en identificación y nombre | `200` con `Page<Supplier>` |
+| ✅ | `GET /api/suppliers/lookup?identification=` | Busca por RUC o cédula exactos (para autocompletar) | `200` o `404` |
+| ✅ | `GET /api/suppliers/{id}` | Un proveedor | `200` o `404` |
+| ✅ | `POST /api/suppliers` | Crea: `identification`, `name`, `phone`?, `email`?, `address`? | `201` con `Supplier` |
+| ✅ | `PATCH /api/suppliers/{id}` | Edita solo los campos enviados | `200` con `Supplier` |
+
+```json
+{
+  "id": 4, "identification": "1790016919001", "name": "Corporación Favorita", "phone": "022345678",
+  "email": "compras@favorita.ec", "address": "Quito", "identificationWarning": null
+}
+```
+
+- `identification`: RUC (13 dígitos) o cédula (10), validados con las reglas del SRI; si no →
+  `422 INVALID_IDENTIFICATION`. Repetida en la empresa → `409 SUPPLIER_EXISTS`.
+- `identificationWarning`: aviso (no error) para RUC de sociedades cuyo dígito verificador no cuadra.
+
+### Gastos
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/expenses` | Lista paginada, el más reciente primero. Filtros: `from`, `to` (fechas `YYYY-MM-DD` de Ecuador), `categoryId`, `supplierId`, `paymentMethod`, `minTotal`, `maxTotal` | `200` con `Page<Expense>` |
+| ✅ | `GET /api/expenses/{id}` | Un gasto | `200` o `404` |
+| ✅ | `POST /api/expenses` | Registra un gasto manual | `201` con `Expense` |
+| ✅ | `PATCH /api/expenses/{id}` | Edita solo los campos enviados (`supplierId: null` quita el proveedor) | `200` con `Expense` |
+
+Cuerpo de `POST /api/expenses`:
+
+```json
+{
+  "categoryId": 3, "supplierId": 4, "total": 25.50, "description": "Pago de internet",
+  "paymentMethod": "transferencia", "date": "2026-11-20T10:30:00-05:00", "receiptNumber": "001-001-000000123"
+}
+```
+
+- Obligatorios: `categoryId`, `total` (mayor a 0), `description`, `paymentMethod`
+  (`efectivo`, `tarjeta_debito`, `tarjeta_credito`, `transferencia`, `cheque`).
+- `date` es opcional: sin ella se usa la hora actual; sin zona horaria se toma como hora de Ecuador.
+- Categoría o proveedor que no son de la empresa → `422 CATEGORY_NOT_FOUND` / `422 SUPPLIER_NOT_FOUND`.
+
+Objeto `Expense`:
+
+```json
+{
+  "id": 12, "date": "2026-11-20T10:30:00-05:00", "categoryId": 3, "categoryName": "Servicios",
+  "supplierId": 4, "supplierName": "Corporación Favorita", "supplierIdentification": "1790016919001",
+  "total": 25.5, "description": "Pago de internet", "paymentMethod": "transferencia",
+  "receiptNumber": "001-001-000000123", "status": "confirmado", "source": "manual"
+}
+```
+
+- `source`: `manual` o `correo` (cuando lo lea el worker desde una factura recibida, RF-3.2).
+- La base todavía no guarda el IVA del gasto por separado: el `ivaAmount` del frontend no tiene dónde
+  guardarse (pendiente con Ariana).

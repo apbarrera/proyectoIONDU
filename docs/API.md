@@ -16,6 +16,10 @@
     elegida, y el backend comprueba que el usuario pertenezca a ella. Ver sección 5.
   - **Sin sesión, solo desarrollo:** encabezado `X-Empresa-Id: <número>`, con rol Administrador, para probar sin
     login. En cualquier otro entorno se responde `401`.
+  - **Usuario demo, solo desarrollo:** además de `X-Empresa-Id`, el encabezado `X-Usuario-Id: <uuid>` actúa como
+    ese usuario con su pertenencia real (rol y nombre), así se pueden registrar ventas, gastos y movimientos desde
+    Swagger sin Supabase. `backend/scripts/cargar_datos_demo.py` crea el Administrador
+    `11111111-1111-1111-1111-111111111111` y el Operativo `22222222-2222-2222-2222-222222222222`. En producción se ignora.
 - **IDs:** números enteros (`"id": 12`). *En el frontend hoy son texto (`id: string`); hay que cambiarlos a `number`.*
 - **Montos y cantidades:** números con hasta 2 decimales (`"salePrice": 2.5`).
 - **Fechas:** texto ISO 8601 con zona horaria de Ecuador (`"2026-10-25T14:30:00-05:00"`).

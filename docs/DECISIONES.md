@@ -399,6 +399,16 @@
   y salidas manuales las puede hacer cualquier usuario con sesión. Todo bloquea el producto con
   `SELECT … FOR UPDATE`, igual que las ventas.
 
+### 2.28 Usuario demo y datos demo (solo desarrollo)
+- **Decisión (20/11/2026):** con `APP_ENV=development`, el encabezado `X-Usuario-Id` (junto con `X-Empresa-Id`)
+  actúa como ese usuario **usando su pertenencia real** en `usuario_empresa`: mismo rol y nombre, así los permisos
+  de Administrador y Operativo se respetan. En cualquier otro entorno se ignora y se responde `401`.
+- **Por qué:** registrar ventas, gastos y movimientos exige un usuario, y sin Supabase configurado no había forma
+  de probarlo en Swagger ni de presentar el sistema.
+- `scripts/cargar_datos_demo.py` carga una cafetería demo (productos, clientes, proveedores, gastos, ventas de 30
+  días y movimientos) **pasando por la API**, con las mismas reglas que producción. Solo acepta la base local
+  `iondu` y no se repite si ya hay productos.
+
 ## 3. Producto
 
 ### 3.1 Ventas y Facturación son un solo módulo

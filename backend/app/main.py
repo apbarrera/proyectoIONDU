@@ -14,6 +14,7 @@ from app.api import (
     expenses,
     facturas,
     health,
+    inventory,
     me,
     products,
     sales,
@@ -100,3 +101,4 @@ app.include_router(me.router, prefix="/api")
 app.include_router(certificados.router, prefix="/api")
 app.include_router(company.router, prefix="/api")
 app.include_router(expenses.router, prefix="/api")
+app.include_router(inventory.router, prefix="/api")

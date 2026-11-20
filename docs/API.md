@@ -328,7 +328,8 @@ Sin cliente: `customerId` y `customerIdentification` son `null` y `customerName`
 | ✅ | `POST /api/sales` | Registra la venta (arriba) | `201` con `Sale` |
 | ✅ | `GET /api/sales` | Historial, de la más reciente a la más antigua. Filtros: `from` y `to` (fechas `AAAA-MM-DD`, en hora de Ecuador), `customerId`, `paymentMethod` | `200` con `PageResult<Sale>` |
 | ✅ | `GET /api/sales/{id}` | Una venta | `200` con `Sale`, o `404` |
-| ⏳ | Factura de la venta | Emitir, reintentar y ver su estado | Fase 2: requiere cambios en la tabla `factura` |
+| ✅ | `POST /api/sales/{id}/invoice` | **Emite la factura electrónica** de la venta: XML, firma con el `.p12` de la empresa, envío al SRI y RIDE. Exige sesión | `201` con `Invoice` |
+| ✅ | `GET /api/sales/{id}/invoice/ride` | Descarga el PDF (RIDE) de la factura. Exige sesión | `200` con `application/pdf` |
 
 Pendiente: anular ventas (RF-2.7) y completar la integración para emitir facturas electrónicas desde una venta.
 
@@ -351,3 +352,32 @@ Pendiente: anular ventas (RF-2.7) y completar la integración para emitir factur
     `POST /api/customers` lo crea. El consumidor final debe ser `9999999999999` (13 nueves), no `9999999999`.
 11. `SalesService.createSale` envía `customerId` (no el nombre), `items` con `productId` y `quantity` (sin precio)
     y `paymentMethod` con tarjeta separada en `tarjeta_debito` / `tarjeta_credito` (sección 8).
+
+## 10. Empresa y configuración de facturación
+
+Cualquier usuario de la empresa puede consultarlas; **solo el Administrador las modifica** (`403 FORBIDDEN`).
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/company` | Datos de la empresa, estado de la firma y configuración de facturación | `200` con `Company` |
+| ✅ | `PUT /api/company` | Edita solo los campos enviados: `businessName`, `tradeName`, `economicActivity`, `address`, `email`. **El RUC no se edita** (va dentro de cada clave de acceso) | `200` con `Company` |
+| ✅ | `PUT /api/company/billing-settings` | Guarda la configuración del emisor (objeto `BillingSettings` completo) | `200` con `Company` |
+
+Objeto `Company` (mismos nombres que `Tenant` del frontend):
+
+```json
+{
+  "id": 7, "ruc": "1790010937001", "businessName": "CAFETERÍA DEMO S.A.", "tradeName": "Café Demo",
+  "economicActivity": "Venta de café", "address": "Av. Amazonas N12-34, Quito", "email": "demo@iondu.ec",
+  "electronicSignature": { "configured": true, "expiresAt": "2027-03-01", "expiresSoon": false, "expired": false },
+  "billing": {
+    "environment": "pruebas", "establishment": "001", "emissionPoint": "001",
+    "requiredToKeepAccounts": false, "rimpe": true, "specialTaxpayer": null
+  }
+}
+```
+
+- `electronicSignature.expiresSoon` es `true` cuando faltan 30 días o menos (alerta de RNF-25).
+- `billing` es `null` mientras la empresa no configure su facturación; sin ella no se puede emitir.
+- `environment`: `pruebas` (SRI de pruebas, sin validez legal) o `produccion`. `establishment` y `emissionPoint`:
+  3 dígitos. `specialTaxpayer`: número de resolución de contribuyente especial, o `null`.

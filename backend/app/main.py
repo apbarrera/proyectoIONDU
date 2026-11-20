@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from contextlib import asynccontextmanager
 
 import httpx
@@ -47,9 +47,7 @@ async def lifespan(app: FastAPI):
                 http_client.close()
                 http_client = None
     else:
-        logger.warning(
-            "Supabase no está configurado; el almacenamiento RIDE no estará disponible."
-        )
+        logger.warning("Supabase no está configurado; el almacenamiento RIDE no estará disponible.")
 
     try:
         yield

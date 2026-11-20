@@ -1,4 +1,4 @@
-﻿"""Configuración tributaria de una empresa para emitir facturas SRI."""
+"""Configuración tributaria de una empresa para emitir facturas SRI."""
 
 from typing import Literal
 

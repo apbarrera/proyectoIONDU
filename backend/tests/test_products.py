@@ -176,43 +176,29 @@ def test_el_mismo_codigo_puede_existir_en_empresas_distintas(client, empresas, c
 
 # ---------- Código de porcentaje IVA ----------
 @pytest.mark.parametrize("codigo", ["0", "4", "5", "6", "7"])
-def test_crear_producto_acepta_codigos_tributarios(
-    client, empresas, categoria_a, codigo
-):
+def test_crear_producto_acepta_codigos_tributarios(client, empresas, categoria_a, codigo):
     a, _ = empresas
-    response = _crear_producto(
-        client, a, categoria_a, vatPercentageCode=codigo
-    )
+    response = _crear_producto(client, a, categoria_a, vatPercentageCode=codigo)
 
     assert response.status_code == 201
     assert response.json()["vatPercentageCode"] == codigo
 
 
-def test_crear_producto_rechaza_codigo_tributario_invalido(
-    client, empresas, categoria_a
-):
+def test_crear_producto_rechaza_codigo_tributario_invalido(client, empresas, categoria_a):
     a, _ = empresas
-    response = _crear_producto(
-        client, a, categoria_a, vatPercentageCode="15"
-    )
+    response = _crear_producto(client, a, categoria_a, vatPercentageCode="15")
 
     assert response.status_code == 422
 
 
-def test_crear_producto_no_acepta_applies_vat_como_entrada(
-    client, empresas, categoria_a
-):
+def test_crear_producto_no_acepta_applies_vat_como_entrada(client, empresas, categoria_a):
     a, _ = empresas
-    response = _crear_producto(
-        client, a, categoria_a, appliesVat=False
-    )
+    response = _crear_producto(client, a, categoria_a, appliesVat=False)
 
     assert response.status_code == 422
 
 
-def test_editar_codigo_tributario(
-    client, empresas, categoria_a
-):
+def test_editar_codigo_tributario(client, empresas, categoria_a):
     a, _ = empresas
     producto = _crear_producto(client, a, categoria_a).json()
 
@@ -225,15 +211,14 @@ def test_editar_codigo_tributario(
     assert response.status_code == 200
     assert response.json()["vatPercentageCode"] == "5"
 
+
 # ---------- Activacion y desactivacion ----------
 def test_desactivar_y_reactivar_producto(client, empresas, categoria_a):
     a, _ = empresas
     producto = _crear_producto(client, a, categoria_a).json()
     url = f"/api/products/{producto['id']}"
 
-    desactivado = client.patch(
-        url, json={"active": False}, headers=_h(a)
-    )
+    desactivado = client.patch(url, json={"active": False}, headers=_h(a))
     assert desactivado.status_code == 200
     assert desactivado.json()["active"] is False
 
@@ -245,9 +230,7 @@ def test_desactivar_y_reactivar_producto(client, empresas, categoria_a):
     encontrado = next(p for p in listado["items"] if p["id"] == producto["id"])
     assert encontrado["active"] is False
 
-    reactivado = client.patch(
-        url, json={"active": True}, headers=_h(a)
-    )
+    reactivado = client.patch(url, json={"active": True}, headers=_h(a))
     assert reactivado.status_code == 200
     assert reactivado.json()["active"] is True
 

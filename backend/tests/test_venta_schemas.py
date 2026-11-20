@@ -1,9 +1,14 @@
-﻿"""Pruebas unitarias de los esquemas de ventas, sin acceso a PostgreSQL."""
+"""Pruebas unitarias de los esquemas de ventas, sin acceso a PostgreSQL."""
+
+from datetime import UTC, datetime
+from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
 from app.schemas.venta import SaleItemCreate
+from app.services.venta import _a_sale
 
 
 def test_linea_producto_valida():
@@ -64,15 +69,10 @@ def test_linea_producto_rechaza_datos_manuales(campo, valor):
 def test_linea_rechaza_ausencia_de_producto_y_datos_de_servicio():
     with pytest.raises(ValidationError):
         SaleItemCreate(quantity=1)
-from datetime import datetime, timezone
-from decimal import Decimal
-from types import SimpleNamespace
-
-from app.services.venta import _a_sale
 
 
 def test_a_sale_reconstruye_venta_mixta_y_conserva_iva_por_linea():
-    fecha = datetime(2026, 11, 9, 15, 0, tzinfo=timezone.utc)
+    fecha = datetime(2026, 11, 9, 15, 0, tzinfo=UTC)
 
     venta = SimpleNamespace(
         id_venta=10,

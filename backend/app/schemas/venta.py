@@ -1,4 +1,4 @@
-﻿"""Datos de entrada y salida de ventas (docs/API.md, sección 8)."""
+"""Datos de entrada y salida de ventas (docs/API.md, sección 8)."""
 
 from datetime import datetime
 from decimal import Decimal

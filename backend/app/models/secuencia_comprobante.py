@@ -1,9 +1,8 @@
-﻿from sqlalchemy import (
+from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     ForeignKey,
     Identity,
-    Integer,
     String,
     UniqueConstraint,
     text,

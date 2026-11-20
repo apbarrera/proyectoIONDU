@@ -1,7 +1,10 @@
-﻿import pytest
+from concurrent.futures import ThreadPoolExecutor
+
+import pytest
+from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError, UnprocessableError
-from app.models import SecuenciaComprobante
+from app.models import Empresa, SecuenciaComprobante
 from app.services.secuencia_comprobante import SecuenciaComprobanteService
 
 
@@ -89,11 +92,6 @@ def test_rechaza_empresa_no_valida(db):
 
     with pytest.raises(UnprocessableError):
         _reservar(servicio, 0)
-from concurrent.futures import ThreadPoolExecutor
-
-from sqlalchemy.orm import Session
-
-from app.models import Empresa
 
 
 def test_reservas_concurrentes_no_generan_secuenciales_duplicados(engine):

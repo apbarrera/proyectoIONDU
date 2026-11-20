@@ -70,9 +70,7 @@ def catalogo(client, empresas) -> dict[str, int]:
     return {
         "cafe": producto("CAF-250", "Café molido 250 g", 4.5, True, 10),
         "azucar": producto("AZU-1K", "Azúcar 1 kg", 1.1, False, 5),
-        "harina": producto(
-            "HAR-INS", "Harina (insumo)", 0.8, False, 50, tipo="insumo"
-        ),
+        "harina": producto("HAR-INS", "Harina (insumo)", 0.8, False, 50, tipo="insumo"),
         "cliente": cliente["id"],
     }
 
@@ -94,9 +92,7 @@ def _stock(db, id_producto) -> float:
 
 
 # ---------- Registrar ----------
-def test_venta_completa_calcula_totales_y_descuenta_stock(
-    client, db, catalogo, vendedor
-):
+def test_venta_completa_calcula_totales_y_descuenta_stock(client, db, catalogo, vendedor):
     response = _vender(
         client,
         vendedor,
@@ -109,36 +105,20 @@ def test_venta_completa_calcula_totales_y_descuenta_stock(
     )
     assert response.status_code == 201
     venta = response.json()
-    assert (venta["subtotal"], venta["ivaAmount"], venta["total"]) == (
-        12.3, 1.35, 13.65
-    )
-    assert (venta["customerName"], venta["customerIdentification"]) == (
-        "Juan Pérez", "1710000009"
-    )
-    assert (venta["paymentMethod"], venta["status"]) == (
-        "efectivo", "completada"
-    )
+    assert (venta["subtotal"], venta["ivaAmount"], venta["total"]) == (12.3, 1.35, 13.65)
+    assert (venta["customerName"], venta["customerIdentification"]) == ("Juan Pérez", "1710000009")
+    assert (venta["paymentMethod"], venta["status"]) == ("efectivo", "completada")
     assert venta["date"].endswith("-05:00")  # hora de Ecuador
-    assert [
-        (i["sku"], i["quantity"], i["unitPrice"], i["subtotal"])
-        for i in venta["items"]
-    ] == [
+    assert [(i["sku"], i["quantity"], i["unitPrice"], i["subtotal"]) for i in venta["items"]] == [
         ("CAF-250", 2.0, 4.5, 9.0),
         ("AZU-1K", 3.0, 1.1, 3.3),
     ]
 
-    assert (_stock(db, catalogo["cafe"]), _stock(db, catalogo["azucar"])) == (
-        8.0, 2.0
-    )
+    assert (_stock(db, catalogo["cafe"]), _stock(db, catalogo["azucar"])) == (8.0, 2.0)
     movimientos = db.scalars(
-        select(MovimientoInventario).order_by(
-            MovimientoInventario.id_movimiento
-        )
+        select(MovimientoInventario).order_by(MovimientoInventario.id_movimiento)
     ).all()
-    assert [
-        (m.tipo_movimiento, float(m.cantidad), m.id_usuario)
-        for m in movimientos
-    ] == [
+    assert [(m.tipo_movimiento, float(m.cantidad), m.id_usuario) for m in movimientos] == [
         ("VENTA", 2.0, vendedor),
         ("VENTA", 3.0, vendedor),
     ]
@@ -151,9 +131,7 @@ def test_sin_cliente_es_consumidor_final(client, catalogo, vendedor):
         vendedor,
         [{"productId": catalogo["cafe"], "quantity": 1}],
     ).json()
-    assert (venta["customerId"], venta["customerName"]) == (
-        None, "CONSUMIDOR FINAL"
-    )
+    assert (venta["customerId"], venta["customerName"]) == (None, "CONSUMIDOR FINAL")
 
 
 def test_el_descuento_se_resta_de_la_linea(client, catalogo, vendedor):
@@ -163,14 +141,10 @@ def test_el_descuento_se_resta_de_la_linea(client, catalogo, vendedor):
         [{"productId": catalogo["cafe"], "quantity": 2, "discount": 1}],
     ).json()
     # 2 x 4.50 - 1.00 = 8.00; IVA 15 % = 1.20
-    assert (venta["subtotal"], venta["ivaAmount"], venta["total"]) == (
-        8.0, 1.2, 9.2
-    )
+    assert (venta["subtotal"], venta["ivaAmount"], venta["total"]) == (8.0, 1.2, 9.2)
 
 
-def test_sin_sesion_de_usuario_no_se_puede_registrar(
-    client, empresas, catalogo
-):
+def test_sin_sesion_de_usuario_no_se_puede_registrar(client, empresas, catalogo):
     a, _ = empresas
     cuerpo = {
         "items": [{"productId": catalogo["cafe"], "quantity": 1}],
@@ -182,9 +156,7 @@ def test_sin_sesion_de_usuario_no_se_puede_registrar(
 
 
 # ---------- Stock ----------
-def test_sin_stock_suficiente_no_se_guarda_nada(
-    client, db, catalogo, vendedor
-):
+def test_sin_stock_suficiente_no_se_guarda_nada(client, db, catalogo, vendedor):
     response = _vender(
         client,
         vendedor,
@@ -202,15 +174,11 @@ def test_sin_stock_suficiente_no_se_guarda_nada(
             "message": "Stock disponible de Azúcar 1 kg: 5.",
         }
     ]
-    assert (_stock(db, catalogo["cafe"]), _stock(db, catalogo["azucar"])) == (
-        10.0, 5.0
-    )
+    assert (_stock(db, catalogo["cafe"]), _stock(db, catalogo["azucar"])) == (10.0, 5.0)
     assert db.scalar(select(Venta.id_venta).limit(1)) is None
 
 
-def test_se_puede_vender_exactamente_todo_el_stock(
-    client, db, catalogo, vendedor
-):
+def test_se_puede_vender_exactamente_todo_el_stock(client, db, catalogo, vendedor):
     assert (
         _vender(
             client,
@@ -245,10 +213,7 @@ def test_se_puede_vender_exactamente_todo_el_stock(
     ],
 )
 def test_productos_invalidos(client, catalogo, vendedor, items, code):
-    items = [
-        i | {"productId": catalogo.get(i["productId"], i["productId"])}
-        for i in items
-    ]
+    items = [i | {"productId": catalogo.get(i["productId"], i["productId"])} for i in items]
     response = _vender(client, vendedor, items)
     assert response.status_code == 422
     assert response.json()["error"]["code"] == code
@@ -265,17 +230,10 @@ def test_producto_desactivado_no_se_vende(client, db, catalogo, vendedor):
     assert response.json()["error"]["code"] == "PRODUCT_INACTIVE"
 
 
-def test_lista_vacia_y_metodo_de_pago_desconocido(
-    client, catalogo, vendedor
-):
+def test_lista_vacia_y_metodo_de_pago_desconocido(client, catalogo, vendedor):
     assert _vender(client, vendedor, []).status_code == 422
     item = [{"productId": catalogo["cafe"], "quantity": 1}]
-    assert (
-        _vender(
-            client, vendedor, item, paymentMethod="bitcoin"
-        ).status_code
-        == 422
-    )
+    assert _vender(client, vendedor, item, paymentMethod="bitcoin").status_code == 422
 
 
 # ---------- Consultar ----------
@@ -295,12 +253,7 @@ def test_historial_con_filtros(client, empresas, catalogo, vendedor):
     ).json()
 
     def ids(query: str = "") -> list[int]:
-        return [
-            v["id"]
-            for v in client.get(
-                f"/api/sales?{query}", headers=_h(a)
-            ).json()["items"]
-        ]
+        return [v["id"] for v in client.get(f"/api/sales?{query}", headers=_h(a)).json()["items"]]
 
     assert ids() == [segunda["id"], primera["id"]]  # la más reciente primero
     assert ids("paymentMethod=transferencia") == [segunda["id"]]
@@ -308,9 +261,7 @@ def test_historial_con_filtros(client, empresas, catalogo, vendedor):
     hoy = datetime.now(ZoneInfo("America/Guayaquil")).date()
     assert len(ids(f"from={hoy}&to={hoy}")) == 2
     assert ids(f"from={hoy + timedelta(days=1)}") == []
-    detalle = client.get(
-        f"/api/sales/{segunda['id']}", headers=_h(a)
-    ).json()
+    detalle = client.get(f"/api/sales/{segunda['id']}", headers=_h(a)).json()
     assert detalle == segunda
 
 
@@ -324,12 +275,8 @@ def test_una_empresa_no_ve_las_ventas_ni_usa_productos_o_clientes_de_otra(
         vendedor,
         [{"productId": catalogo["cafe"], "quantity": 1}],
     ).json()
-    assert client.get(
-        "/api/sales", headers=_h(b)
-    ).json()["total"] == 0
-    assert client.get(
-        f"/api/sales/{venta['id']}", headers=_h(b)
-    ).status_code == 404
+    assert client.get("/api/sales", headers=_h(b)).json()["total"] == 0
+    assert client.get(f"/api/sales/{venta['id']}", headers=_h(b)).status_code == 404
 
     vendedor_b = nuevo_usuario(b)
     con_producto_de_a = _vender(
@@ -347,9 +294,8 @@ def test_una_empresa_no_ve_las_ventas_ni_usa_productos_o_clientes_de_otra(
     )
     assert con_cliente_de_a.json()["error"]["code"] == "CUSTOMER_NOT_FOUND"
 
-def test_detalle_rechaza_producto_de_otra_empresa(
-    client, db, empresas, catalogo, vendedor
-):
+
+def test_detalle_rechaza_producto_de_otra_empresa(client, db, empresas, catalogo, vendedor):
     a, b = empresas
     venta = _vender(
         client,

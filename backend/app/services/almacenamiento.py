@@ -1,4 +1,4 @@
-﻿"""Almacenamiento privado de archivos RIDE en Supabase Storage."""
+"""Almacenamiento privado de archivos RIDE en Supabase Storage."""
 
 import logging
 from pathlib import PurePosixPath

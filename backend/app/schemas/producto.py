@@ -10,8 +10,8 @@ from app.schemas.common import (
     ApiInput,
     ApiModel,
     OptionalText255,
-    Text25,
     Text20,
+    Text25,
     Text100,
     Text150,
 )

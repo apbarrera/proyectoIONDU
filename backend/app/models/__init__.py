@@ -20,6 +20,6 @@ from app.models.producto import Producto  # noqa: F401
 from app.models.proveedor import Proveedor  # noqa: F401
 from app.models.recomendacion import Recomendacion  # noqa: F401
 from app.models.rol import Rol  # noqa: F401
+from app.models.secuencia_comprobante import SecuenciaComprobante  # noqa: F401
 from app.models.usuario_empresa import UsuarioEmpresa  # noqa: F401
 from app.models.venta import Venta  # noqa: F401
-from app.models.secuencia_comprobante import SecuenciaComprobante  # noqa: F401

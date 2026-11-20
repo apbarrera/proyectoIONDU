@@ -1,9 +1,9 @@
-﻿"""Orquestación de emisión y persistencia de facturas electrónicas."""
+"""Orquestación de emisión y persistencia de facturas electrónicas."""
 
 import base64
 import logging
 from datetime import datetime
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
@@ -25,19 +25,21 @@ from app.repositories.venta import VentaRepository
 from app.schemas.configuracion_facturacion import ConfiguracionFacturacion
 from app.services.almacenamiento import AlmacenamientoRideService
 from app.services.secuencia_comprobante import SecuenciaComprobanteService
-from app.sri.clave_acceso import Ambiente
-from app.sri.ride import generar_ride
 from app.sri.certificado import CertificadoInvalidoError
+from app.sri.clave_acceso import Ambiente
 from app.sri.emision import ServicioEmision
 from app.sri.factura_xml import (
     Comprador,
     DetalleFactura,
     Emisor,
-    Factura as FacturaSRI,
     Pago,
     generar_factura_xml,
 )
+from app.sri.factura_xml import (
+    Factura as FacturaSRI,
+)
 from app.sri.identificacion import TipoIdentificacion
+from app.sri.ride import generar_ride
 from app.sri.servicios_web import ClienteSri
 from app.sri.totales import Linea, TarifaIva, calcular_totales
 from app.sri.xades import FirmadorXadesBes
@@ -46,10 +48,7 @@ logger = logging.getLogger(__name__)
 
 TIMEZONE = ZoneInfo("America/Guayaquil")
 
-TARIFAS_IVA_POR_CODIGO = {
-    tarifa.codigo: tarifa
-    for tarifa in TarifaIva
-}
+TARIFAS_IVA_POR_CODIGO = {tarifa.codigo: tarifa for tarifa in TarifaIva}
 
 TIPOS_IDENTIFICACION = {
     "cedula": TipoIdentificacion.CEDULA,
@@ -141,9 +140,7 @@ class FacturaService:
             for detalle, producto in detalles_venta:
                 tarifa = TARIFAS_IVA_POR_CODIGO.get(detalle.codigo_porcentaje_iva)
                 if tarifa is None:
-                    raise UnprocessableError(
-                        "La venta contiene un código de IVA no reconocido."
-                    )
+                    raise UnprocessableError("La venta contiene un código de IVA no reconocido.")
 
                 linea = Linea(
                     cantidad=_decimal(detalle.cantidad),
@@ -237,14 +234,10 @@ class FacturaService:
                 generada = generar_factura_xml(factura_sri)
                 xml_firmado = firmador.firmar(generada.xml)
             except (ValueError, TypeError) as exc:
-                raise UnprocessableError(
-                    f"No se pudo generar el comprobante: {exc}"
-                ) from exc
+                raise UnprocessableError(f"No se pudo generar el comprobante: {exc}") from exc
 
             numero = (
-                f"{configuracion.establecimiento}-"
-                f"{configuracion.punto_emision}-"
-                f"{secuencial:09d}"
+                f"{configuracion.establecimiento}-{configuracion.punto_emision}-{secuencial:09d}"
             )
 
             factura = FacturaORM(
@@ -272,8 +265,7 @@ class FacturaService:
         except IntegrityError as exc:
             self.db.rollback()
             raise ConflictError(
-                "No se pudo registrar la factura porque existe un comprobante "
-                "con datos duplicados."
+                "No se pudo registrar la factura porque existe un comprobante con datos duplicados."
             ) from exc
         except Exception:
             self.db.rollback()
@@ -290,9 +282,7 @@ class FacturaService:
         factura.numero_autorizacion = resultado.numero_autorizacion
         factura.fecha_autorizacion = resultado.fecha_autorizacion
         factura.xml_autorizado = (
-            resultado.xml_autorizado.decode("utf-8")
-            if resultado.xml_autorizado
-            else None
+            resultado.xml_autorizado.decode("utf-8") if resultado.xml_autorizado else None
         )
         factura.mensajes_sri = [
             {
@@ -350,10 +340,7 @@ class FacturaService:
         if factura is None:
             raise NotFoundError("No existe una factura para la venta solicitada.")
 
-        if (
-            factura.estado_autorizacion != "autorizada"
-            or not factura.xml_autorizado
-        ):
+        if factura.estado_autorizacion != "autorizada" or not factura.xml_autorizado:
             raise ConflictError(
                 "La factura todav?a no est? autorizada y no tiene un RIDE disponible."
             )
@@ -429,13 +416,8 @@ class FacturaService:
         return configuracion
 
     def _obtener_firmador(self, empresa: Empresa) -> FirmadorXadesBes:
-        if (
-            not empresa.certificado_p12_cifrado
-            or not empresa.certificado_password_cifrada
-        ):
-            raise UnprocessableError(
-                "La empresa no tiene un certificado electrónico configurado."
-            )
+        if not empresa.certificado_p12_cifrado or not empresa.certificado_password_cifrada:
+            raise UnprocessableError("La empresa no tiene un certificado electrónico configurado.")
 
         try:
             cifrador = get_cifrador()
@@ -485,5 +467,3 @@ class FacturaService:
             direccion=cliente.direccion,
             correo=cliente.correo_electronico,
         )
-
-

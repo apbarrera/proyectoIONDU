@@ -16,6 +16,7 @@ empresa ya tiene productos, no hace nada.
 """
 
 import os
+import random
 import sys
 import uuid
 from datetime import datetime, timedelta
@@ -29,6 +30,26 @@ OPERADOR_DEMO = uuid.UUID("22222222-2222-2222-2222-222222222222")
 RUC_EMPRESA = "1790016919001"
 SERVIDORES_LOCALES = {"127.0.0.1", "localhost", "db"}
 ZONA = ZoneInfo("America/Guayaquil")
+# sku, nombre, categoría, precio, costo, código IVA, stock inicial, stock mínimo, extra
+PRODUCTOS = (
+    ("CAF-500", "Café en grano 500 g", "Cafés", 8.50, 5.00, "4", 150, 20, {}),
+    ("CAF-250", "Café molido 250 g", "Cafés", 4.50, 2.60, "4", 200, 25, {}),
+    ("PAN-CRO", "Croissant", "Panadería", 1.25, 0.45, "4", 400, 40, {}),
+    ("PAN-YUC", "Pan de yuca (6 u.)", "Panadería", 2.00, 0.80, "0", 250, 30, {}),
+    ("BEB-AGU", "Agua sin gas 500 ml", "Bebidas", 0.75, 0.30, "4", 14, 12, {}),
+    (
+        "INS-LEC",
+        "Leche entera 1 L",
+        "Insumos",
+        0,
+        1.10,
+        "0",
+        25,
+        10,
+        {"type": "insumo", "unit": "LITRO"},
+    ),
+    ("INS-AZU", "Azúcar 1 kg", "Insumos", 0, 1.10, "0", 4, 5, {"type": "insumo"}),
+)
 
 
 def _validar_destino() -> None:
@@ -137,25 +158,7 @@ def main() -> None:
         for nombre in ("Cafés", "Panadería", "Bebidas", "Insumos")
     }
     productos = {}
-    for sku, nombre, cat, precio, costo, iva, stock, minimo, extra in (
-        ("CAF-500", "Café en grano 500 g", "Cafés", 8.50, 5.00, "4", 40, 10, {}),
-        ("CAF-250", "Café molido 250 g", "Cafés", 4.50, 2.60, "4", 60, 15, {}),
-        ("PAN-CRO", "Croissant", "Panadería", 1.25, 0.45, "4", 50, 20, {}),
-        ("PAN-YUC", "Pan de yuca (6 u.)", "Panadería", 2.00, 0.80, "0", 30, 10, {}),
-        ("BEB-AGU", "Agua sin gas 500 ml", "Bebidas", 0.75, 0.30, "4", 14, 12, {}),
-        (
-            "INS-LEC",
-            "Leche entera 1 L",
-            "Insumos",
-            0,
-            1.10,
-            "0",
-            25,
-            10,
-            {"type": "insumo", "unit": "LITRO"},
-        ),
-        ("INS-AZU", "Azúcar 1 kg", "Insumos", 0, 1.10, "0", 4, 5, {"type": "insumo"}),
-    ):
+    for sku, nombre, cat, precio, costo, iva, stock, minimo, extra in PRODUCTOS:
         productos[sku] = post(
             "/products",
             {
@@ -227,29 +230,32 @@ def main() -> None:
         )
 
     # ---------- Ventas (se registran hoy y luego se mueven a su fecha) ----------
+    # De 3 a 5 ventas por día durante 30 días. La semilla fija hace que siempre salgan
+    # los mismos datos, y se lleva la cuenta del stock para no vender lo que no hay.
+    azar = random.Random(2026)
+    disponible = {sku: stock for sku, *_, stock, _, _ in PRODUCTOS}
+    cantidades = {"CAF-500": (1, 2), "CAF-250": (1, 3), "PAN-CRO": (2, 6), "PAN-YUC": (1, 4)}
+    metodos = ("efectivo", "efectivo", "tarjeta_debito", "tarjeta_credito", "transferencia")
     ventas = []
-    for dias, cliente, metodo, items in (
-        (27, None, "efectivo", [("CAF-250", 2), ("PAN-CRO", 4)]),
-        (24, 0, "tarjeta_debito", [("CAF-500", 1)]),
-        (20, None, "efectivo", [("PAN-YUC", 3), ("BEB-AGU", 2)]),
-        (17, 2, "transferencia", [("CAF-500", 4), ("CAF-250", 6)]),
-        (13, 1, "efectivo", [("PAN-CRO", 6), ("BEB-AGU", 1)]),
-        (9, None, "tarjeta_credito", [("CAF-250", 3)]),
-        (6, 0, "efectivo", [("PAN-YUC", 2), ("PAN-CRO", 2)]),
-        (3, 2, "transferencia", [("CAF-500", 2), ("BEB-AGU", 3)]),
-        (1, None, "efectivo", [("CAF-250", 1), ("PAN-CRO", 3)]),
-        (0, 1, "tarjeta_debito", [("CAF-500", 1), ("PAN-YUC", 1)]),
-    ):
-        venta = post(
-            "/sales",
-            {
-                "customerId": clientes[cliente] if cliente is not None else None,
-                "paymentMethod": metodo,
-                "items": [{"productId": productos[s], "quantity": q} for s, q in items],
-            },
-            headers=operador if dias % 3 else admin,
-        )
-        ventas.append((venta["id"], hoy - timedelta(days=dias, hours=-(dias % 6))))
+    ahora = datetime.now(ZONA)
+    for dias in range(29, -1, -1):
+        for _ in range(azar.randint(3, 5)):
+            items = []
+            for sku in azar.sample(sorted(cantidades), azar.randint(1, 3)):
+                cantidad = azar.randint(*cantidades[sku])
+                if disponible[sku] - cantidad >= 15:
+                    disponible[sku] -= cantidad
+                    items.append({"productId": productos[sku], "quantity": cantidad})
+            if not items:
+                continue
+            cliente = azar.choice([None, None, *clientes])
+            venta = post(
+                "/sales",
+                {"customerId": cliente, "paymentMethod": azar.choice(metodos), "items": items},
+                headers=azar.choice((admin, operador)),
+            )
+            hora = timedelta(hours=azar.randint(-2, 9), minutes=azar.randint(0, 59))
+            ventas.append((venta["id"], min(hoy - timedelta(days=dias) + hora, ahora)))
 
     with _session_factory()() as db:
         for id_venta, fecha in ventas:
@@ -292,7 +298,10 @@ def main() -> None:
         {"productId": productos["BEB-AGU"], "newStock": 6, "reason": "Conteo físico del viernes"},
     )
 
-    print("Datos demo cargados: 7 productos, 3 clientes, 3 proveedores, 9 gastos, 10 ventas.")
+    print(
+        "Datos demo cargados: 7 productos, 3 clientes, 3 proveedores, 9 gastos "
+        f"y {len(ventas)} ventas."
+    )
     _imprimir_ayuda(id_empresa)
 
 

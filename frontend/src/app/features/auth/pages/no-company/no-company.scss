@@ -1,0 +1,6 @@
+﻿@use '../auth-state';
+
+.auth-state__icon--warning {
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
+}

@@ -11,15 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import ConflictError, NotFoundError, UnprocessableError
 from app.models.empresa import Empresa
 from app.services.factura import FacturaService
-from app.sri.emision import ServicioEmision as ServicioEmisionReal
 from app.sri.firma import FirmadorSinFirma
-from app.sri.servicios_web import (
-    EstadoAutorizacion,
-    EstadoRecepcion,
-    RespuestaAutorizacion,
-    RespuestaRecepcion,
-    SriNoDisponibleError,
-)
 
 
 class FakeSession:
@@ -27,6 +19,10 @@ class FakeSession:
         self.resultados = iter(resultados)
         self.rollbacks = 0
         self.commits = 0
+        self.ejecutadas = []
+
+    def execute(self, consulta):
+        self.ejecutadas.append(consulta)
 
     def scalar(self, consulta):
         return next(self.resultados)
@@ -61,6 +57,7 @@ def test_venta_inexistente_no_emite_factura(monkeypatch):
     assert session.rollbacks == 1
     assert session.commits == 0
     assert reservas == []
+    assert len(session.ejecutadas) == 1
 
 
 def test_venta_ya_facturada_no_reserva_otro_secuencial(monkeypatch):
@@ -82,6 +79,7 @@ def test_venta_ya_facturada_no_reserva_otro_secuencial(monkeypatch):
     assert session.rollbacks == 1
     assert session.commits == 0
     assert reservas == []
+    assert len(session.ejecutadas) == 1
 
 
 def test_venta_anulada_no_emite_factura(monkeypatch):
@@ -99,6 +97,7 @@ def test_venta_anulada_no_emite_factura(monkeypatch):
     assert session.rollbacks == 1
     assert session.commits == 0
     assert reservas == []
+    assert len(session.ejecutadas) == 1
 
 
 def test_empresa_sin_configuracion_tributaria_no_puede_facturar(monkeypatch):
@@ -143,7 +142,11 @@ class FakeSessionCompleta:
         self.empresa = empresa
         self.rollbacks = 0
         self.commits = 0
+        self.ejecutadas = []
         self.added = []
+
+    def execute(self, consulta):
+        self.ejecutadas.append(consulta)
 
     def scalar(self, consulta):
         return next(self.resultados)
@@ -167,27 +170,7 @@ class FakeSessionCompleta:
         self.rollbacks += 1
 
 
-class SriAutorizadorFalso:
-    def __init__(self, session):
-        self.session = session
-        self.xml_enviado = None
-        self.clave_consultada = None
-
-    def enviar(self, xml):
-        assert self.session.commits == 1
-        self.xml_enviado = xml
-        return RespuestaRecepcion(EstadoRecepcion.RECIBIDA)
-
-    def autorizar(self, clave):
-        self.clave_consultada = clave
-        return RespuestaAutorizacion(
-            estado=EstadoAutorizacion.AUTORIZADO,
-            numero_autorizacion="1234567890",
-            fecha_autorizacion=datetime(2026, 11, 11, 20, 0, 0),
-        )
-
-
-def test_emision_autorizada_persiste_antes_de_enviar_al_sri(monkeypatch):
+def test_emision_persiste_factura_pendiente_para_worker(monkeypatch):
     venta = SimpleNamespace(
         id_venta=101,
         id_empresa=1,
@@ -197,7 +180,6 @@ def test_emision_autorizada_persiste_antes_de_enviar_al_sri(monkeypatch):
         monto_total=Decimal("11.50"),
         metodo_pago="EFECTIVO",
     )
-
     empresa = SimpleNamespace(
         datos_facturacion_electronica={
             "ambiente": "1",
@@ -206,13 +188,13 @@ def test_emision_autorizada_persiste_antes_de_enviar_al_sri(monkeypatch):
             "obligado_contabilidad": False,
             "contribuyente_especial": None,
             "contribuyente_rimpe": False,
+            "direccion_establecimiento": "Av. Amazonas 123, Quito",
         },
         ruc="1790010937001",
         razon_social="Empresa de prueba",
         nombre_comercial="Empresa de prueba",
         direccion="Quito, Ecuador",
     )
-
     detalle = SimpleNamespace(
         cantidad=Decimal("1"),
         precio_unitario=Decimal("10"),
@@ -228,8 +210,8 @@ def test_emision_autorizada_persiste_antes_de_enviar_al_sri(monkeypatch):
 
     session = FakeSessionCompleta([venta, None], empresa)
     servicio = FacturaService(cast(Session, session), empresa_id=1)
-
     reservas = []
+
     monkeypatch.setattr(
         servicio.secuencias,
         "reservar",
@@ -251,46 +233,25 @@ def test_emision_autorizada_persiste_antes_de_enviar_al_sri(monkeypatch):
         lambda ids: {101: [(detalle, producto)]},
     )
 
-    sri = SriAutorizadorFalso(session)
-    monkeypatch.setattr(
-        "app.services.factura.ClienteSri",
-        lambda ambiente: sri,
-    )
-    monkeypatch.setattr(
-        "app.services.factura.ServicioEmision",
-        lambda cliente, firmador: ServicioEmisionReal(
-            cliente,
-            firmador,
-            dormir=lambda segundos: None,
-        ),
-    )
-
     factura = servicio.emitir(101)
 
     assert len(session.added) == 1
-    assert session.commits == 2
+    assert session.commits == 1
     assert session.rollbacks == 0
     assert len(reservas) == 1
-
-    assert sri.xml_enviado is not None
-    assert b"<factura" in sri.xml_enviado
-    assert sri.clave_consultada == factura.clave_acceso
-
-    assert factura.estado_autorizacion == "autorizada"
-    assert factura.numero_autorizacion == "1234567890"
+    assert factura.estado_autorizacion == "por_enviar"
+    assert factura.intentos_envio == 0
+    assert factura.clave_acceso
     assert factura.xml_firmado is not None
-    assert factura.xml_autorizado is not None
+    assert "<factura" in factura.xml_firmado
+    assert "<dirEstablecimiento>Av. Amazonas 123, Quito</dirEstablecimiento>" in factura.xml_firmado
+    assert factura.xml_autorizado is None
+    assert factura.numero_autorizacion is None
     assert factura.numero_comprobante == "001-001-000000001"
     assert factura.total == Decimal("11.50")
 
 
-class SriSinConexion(SriAutorizadorFalso):
-    def enviar(self, xml):
-        assert self.session.commits == 1
-        raise SriNoDisponibleError("Sin conexión de prueba")
-
-
-def test_sri_sin_conexion_conserva_factura_pendiente(monkeypatch):
+def test_emision_pendiente_no_intenta_contactar_al_sri(monkeypatch):
     venta = SimpleNamespace(
         id_venta=102,
         id_empresa=1,
@@ -352,27 +313,14 @@ def test_sri_sin_conexion_conserva_factura_pendiente(monkeypatch):
         lambda ids: {102: [(detalle, producto)]},
     )
 
-    sri = SriSinConexion(session)
-    monkeypatch.setattr(
-        "app.services.factura.ClienteSri",
-        lambda ambiente: sri,
-    )
-    monkeypatch.setattr(
-        "app.services.factura.ServicioEmision",
-        lambda cliente, firmador: ServicioEmisionReal(
-            cliente,
-            firmador,
-            dormir=lambda segundos: None,
-        ),
-    )
-
     factura = servicio.emitir(102)
 
     assert len(session.added) == 1
-    assert session.commits == 2
+    assert session.commits == 1
     assert session.rollbacks == 0
     assert len(reservas) == 1
     assert factura.estado_autorizacion == "por_enviar"
+    assert factura.intentos_envio == 0
     assert factura.clave_acceso
     assert factura.xml_firmado
     assert factura.xml_autorizado is None
@@ -406,6 +354,7 @@ def test_venta_de_otra_empresa_no_emite_factura(monkeypatch):
     assert session.rollbacks == 1
     assert session.commits == 0
     assert reservas == []
+    assert len(session.ejecutadas) == 1
 
 
 def test_recupera_ride_desde_xml_autorizado_si_storage_falla(monkeypatch):
@@ -448,12 +397,6 @@ def test_recupera_ride_desde_xml_autorizado_si_storage_falla(monkeypatch):
     monkeypatch.setattr(
         "app.services.factura.generar_ride",
         generar_ride_falso,
-    )
-    monkeypatch.setattr(
-        "app.services.factura.ClienteSri",
-        lambda *args, **kwargs: pytest.fail(
-            "No debe realizarse una nueva comunicación con el SRI."
-        ),
     )
 
     servicio.almacenamiento = AlmacenamientoFalso()

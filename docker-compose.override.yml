@@ -1,13 +1,15 @@
 # Solo para desarrollo local: publica el puerto 8080 para abrir http://localhost:8080
-# Docker Compose carga este archivo automáticamente junto con docker-compose.yml.
+# Docker Compose carga este archivo automÃ¡ticamente junto con docker-compose.yml.
 # En Coolify NO se usa (Coolify solo lee docker-compose.yml).
 #
-# También agrega un PostgreSQL local ("db") para desarrollar sin depender de
-# Supabase. Si DATABASE_URL está definida en .env (por ejemplo, la de Supabase),
-# la API y el worker usan esa; si está vacía, usan este PostgreSQL local.
+# TambiÃ©n agrega un PostgreSQL local ("db") para desarrollar sin depender de
+# Supabase. Si DATABASE_URL estÃ¡ definida en .env (por ejemplo, la de Supabase),
+# la API y el worker usan esa; si estÃ¡ vacÃ­a, usan este PostgreSQL local.
 
 x-local-db-url: &local-db-url
-  DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://iondu:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env (ver .env.example)}@db:5432/iondu}
+  DATABASE_URL: ${DATABASE_URL:?Define DATABASE_URL con el usuario de API}
+  WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:?Define WORKER_DATABASE_URL con el usuario del worker}
+  MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:?Define MIGRATION_DATABASE_URL con el usuario de migraciones}
 
 services:
   web:
@@ -28,7 +30,7 @@ services:
       db:
         condition: service_healthy
 
-  # Misma versión mayor de PostgreSQL que Supabase.
+  # Misma versiÃ³n mayor de PostgreSQL que Supabase.
   db:
     image: postgres:17-alpine
     restart: unless-stopped

@@ -12,6 +12,7 @@ import warnings
 
 # Las pruebas simulan el entorno de desarrollo (encabezado X-Empresa-Id habilitado).
 os.environ["APP_ENV"] = "development"
+os.environ["DEV_USER_ID"] = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 
 import uuid  # noqa: E402
 
@@ -145,11 +146,27 @@ def client(db):
 
 
 @pytest.fixture
-def empresas(db) -> tuple[int, int]:
-    """Dos empresas para probar el aislamiento: (id_a, id_b)."""
+def empresas(db, roles) -> tuple[int, int]:
+    """Dos empresas aisladas y un usuario demo con membres?a expl?cita en ambas."""
     a = Empresa(razon_social="Empresa A", ruc="0990000000001", correo_electronico="a@test.ec")
     b = Empresa(razon_social="Empresa B", ruc="0990000000002", correo_electronico="b@test.ec")
     db.add_all([a, b])
+    db.flush()
+
+    usuario_demo = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+    db.execute(auth_users.insert().values(id=usuario_demo))
+    db.add_all(
+        [
+            UsuarioEmpresa(
+                id_usuario=usuario_demo,
+                id_empresa=empresa.id_empresa,
+                id_rol=roles[ADMINISTRADOR],
+                nombre_visible="Usuario Demo",
+                estado="ACTIVO",
+            )
+            for empresa in (a, b)
+        ]
+    )
     db.flush()
     return a.id_empresa, b.id_empresa
 

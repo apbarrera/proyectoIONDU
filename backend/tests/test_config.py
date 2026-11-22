@@ -12,3 +12,19 @@ def test_variables_vacias_usan_el_valor_por_defecto(monkeypatch):
     settings = Settings()
     assert settings.cors_origins == []
     assert settings.database_url is None
+
+
+def test_urls_independientes_de_worker_y_migraciones(monkeypatch):
+    monkeypatch.setenv(
+        "WORKER_DATABASE_URL",
+        "postgresql+psycopg://worker:fake@localhost/iondu",
+    )
+    monkeypatch.setenv(
+        "MIGRATION_DATABASE_URL",
+        "postgresql+psycopg://migrator:fake@localhost/iondu",
+    )
+
+    settings = Settings()
+
+    assert settings.worker_database_url.startswith("postgresql+psycopg://worker:")
+    assert settings.migration_database_url.startswith("postgresql+psycopg://migrator:")

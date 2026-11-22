@@ -35,7 +35,7 @@ class Recomendacion(Base):
         ForeignKey(
             "empresa.id_empresa",
             name="recomendacion_id_empresa_fkey",
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
         ),
         nullable=False,
     )

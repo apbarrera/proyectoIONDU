@@ -282,6 +282,8 @@ class VentaService:
                     descuento=item.discount,
                     codigo_porcentaje_iva=codigo_iva,
                     subtotal=calculada.precio_total_sin_impuesto,
+                    porcentaje_iva=calculada.linea.tarifa.porcentaje,
+                    valor_iva=calculada.iva,
                 )
             )
 

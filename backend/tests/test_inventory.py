@@ -2,6 +2,7 @@
 
 import pytest
 
+from app.core.config import get_settings
 from app.models.rol import OPERATIVO
 from tests.conftest import con_token
 
@@ -120,14 +121,19 @@ def test_solo_el_administrador_ajusta(client, empresas, nuevo_usuario):
     assert _mover(client, operador, cafe, "entrada", 1).status_code == 201
 
 
-def test_mover_exige_sesion(client, empresas):
+def test_mover_exige_sesion(client, empresas, monkeypatch):
     a, _ = empresas
     cafe = _producto(client, a)
     cuerpo = {"productId": cafe, "type": "entrada", "quantity": 1, "reason": "X"}
-    response = client.post("/api/inventory/movements", json=cuerpo, headers=_h(a))
+    monkeypatch.setenv("APP_ENV", "production")
+    get_settings.cache_clear()
+    try:
+        response = client.post("/api/inventory/movements", json=cuerpo, headers=_h(a))
+    finally:
+        get_settings.cache_clear()
     assert (response.status_code, response.json()["error"]["code"]) == (
-        403,
-        "USER_SESSION_REQUIRED",
+        401,
+        "UNAUTHENTICATED",
     )
 
 

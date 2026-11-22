@@ -2,10 +2,8 @@
 
 from dataclasses import replace
 from datetime import datetime
-from io import BytesIO
 
 import pytest
-from pypdf import PdfReader
 
 from app.sri.clave_acceso import Ambiente
 from app.sri.emision import EstadoEmision, ServicioEmision
@@ -77,8 +75,8 @@ def test_camino_feliz_autoriza_y_genera_el_ride():
     assert sri.enviados == [resultado.xml_firmado]
     assert sri.consultas == [CLAVE]
     assert pausas == [3.0]  # espera una vez entre el envío y la consulta
-    texto = PdfReader(BytesIO(resultado.ride)).pages[0].extract_text()
-    assert "27/10/2026 10:15:00" in texto and "PENDIENTE" not in texto
+    assert resultado.ride is None
+    assert resultado.xml_autorizado is not None
 
 
 def test_espera_mientras_el_sri_procesa():

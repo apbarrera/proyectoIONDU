@@ -34,7 +34,7 @@ class CategoriaGasto(Base):
     id_empresa: Mapped[int] = mapped_column(
         ForeignKey(
             "empresa.id_empresa",
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
             name="categoria_gasto_id_empresa_fkey",
         ),
         nullable=False,

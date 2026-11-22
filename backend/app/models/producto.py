@@ -23,10 +23,11 @@ class Producto(Base):
     __tablename__ = "producto"
 
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "producto_codigo_empresa_lower_uq",
             "id_empresa",
-            "codigo_principal",
-            name="producto_codigo_empresa_uq",
+            text("lower(codigo_principal)"),
+            unique=True,
         ),
         UniqueConstraint(
             "id_empresa",
@@ -74,7 +75,7 @@ class Producto(Base):
     id_empresa: Mapped[int] = mapped_column(
         ForeignKey(
             "empresa.id_empresa",
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
             name="producto_id_empresa_fkey",
         ),
         nullable=False,

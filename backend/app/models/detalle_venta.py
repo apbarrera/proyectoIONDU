@@ -23,7 +23,7 @@ class DetalleVenta(Base):
         ForeignKeyConstraint(
             ["id_empresa", "id_venta"],
             ["venta.id_empresa", "venta.id_venta"],
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
             name="detalle_venta_empresa_venta_fk",
         ),
         ForeignKeyConstraint(
@@ -56,8 +56,25 @@ class DetalleVenta(Base):
             "subtotal >= 0",
             name=conv("detalle_venta_subtotal_check"),
         ),
-        Index("idx_detalle_venta_producto", "id_producto"),
-        Index("idx_detalle_venta_venta", "id_venta"),
+        CheckConstraint(
+            "porcentaje_iva >= 0 AND porcentaje_iva <= 100",
+            name=conv("detalle_venta_porcentaje_iva_rango_ck"),
+        ),
+        CheckConstraint(
+            "valor_iva >= 0",
+            name=conv("detalle_venta_valor_iva_check"),
+        ),
+        Index(
+            "idx_detalle_venta_empresa_venta",
+            "id_empresa",
+            "id_venta",
+            "id_detalle_venta",
+        ),
+        Index(
+            "idx_detalle_venta_empresa_producto",
+            "id_empresa",
+            "id_producto",
+        ),
     )
 
     id_detalle_venta: Mapped[int] = mapped_column(
@@ -95,6 +112,16 @@ class DetalleVenta(Base):
     )
 
     subtotal: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
+        nullable=False,
+    )
+
+    porcentaje_iva: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        nullable=False,
+    )
+
+    valor_iva: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,
     )

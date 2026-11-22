@@ -61,4 +61,9 @@ jobs:
       - uses: actions/checkout@v4
       # Solo el archivo de producción (el que lee Coolify); el override es para
       # desarrollo local y exige variables (.env) que el CI no tiene.
-      - run: docker compose -f docker-compose.yml build
+      - name: Build production images
+        env:
+          DATABASE_URL: postgresql+psycopg://iondu:ci_only@localhost:5432/iondu_test
+          WORKER_DATABASE_URL: postgresql+psycopg://iondu_worker:ci_only@localhost:5432/iondu_test
+          MIGRATION_DATABASE_URL: postgresql+psycopg://iondu_migrator:ci_only@localhost:5432/iondu_test
+        run: docker compose -f docker-compose.yml build

@@ -241,3 +241,25 @@ def test_usuario_demo_no_existe_en_produccion(client, empresas, nuevo_usuario, m
     finally:
         get_settings.cache_clear()
     assert response.status_code == 401
+
+
+def test_lista_empresas_establece_contexto_rls_del_usuario(
+    client, empresas, nuevo_usuario, monkeypatch
+):
+    a, _ = empresas
+    usuario = nuevo_usuario(a)
+    llamadas = []
+
+    def registrar_contexto(db, *, usuario_id, empresa_id):
+        llamadas.append((usuario_id, empresa_id))
+
+    monkeypatch.setattr(
+        "app.api.me.establecer_contexto_rls",
+        registrar_contexto,
+        raising=False,
+    )
+
+    response = client.get("/api/me/companies", headers=_con_token(usuario))
+
+    assert response.status_code == 200
+    assert llamadas == [(str(usuario), None)]

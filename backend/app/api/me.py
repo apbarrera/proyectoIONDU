@@ -7,6 +7,7 @@ from fastapi import APIRouter
 
 from app.api.deps import ContextoActual, DbSession, UsuarioActual
 from app.core.errors import UnauthenticatedError
+from app.db.session import establecer_contexto_rls
 from app.models.rol import ADMINISTRADOR
 from app.repositories.usuario_empresa import obtener_empresas_activas
 from app.schemas.common import ApiModel
@@ -28,6 +29,7 @@ class EmpresaDelUsuario(ApiModel):
 def mis_empresas(usuario: UsuarioActual, db: DbSession):
     """Empresas con pertenencia activa del usuario. No exige haber elegido empresa:
     con más de una, el frontend muestra el selector y envía X-Empresa-Id."""
+    establecer_contexto_rls(db, usuario_id=str(usuario.id), empresa_id=None)
     return [
         EmpresaDelUsuario(
             id=e.id_empresa,

@@ -155,16 +155,18 @@ def empresas(db, roles) -> tuple[int, int]:
 
     usuario_demo = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
     db.execute(auth_users.insert().values(id=usuario_demo))
-    db.add_all([
-        UsuarioEmpresa(
-            id_usuario=usuario_demo,
-            id_empresa=empresa.id_empresa,
-            id_rol=roles[ADMINISTRADOR],
-            nombre_visible="Usuario Demo",
-            estado="ACTIVO",
-        )
-        for empresa in (a, b)
-    ])
+    db.add_all(
+        [
+            UsuarioEmpresa(
+                id_usuario=usuario_demo,
+                id_empresa=empresa.id_empresa,
+                id_rol=roles[ADMINISTRADOR],
+                nombre_visible="Usuario Demo",
+                estado="ACTIVO",
+            )
+            for empresa in (a, b)
+        ]
+    )
     db.flush()
     return a.id_empresa, b.id_empresa
 

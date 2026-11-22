@@ -1,11 +1,11 @@
 from contextlib import contextmanager
+from datetime import UTC
 from types import SimpleNamespace
 
 import pytest
 
 from app.sri.emision import EstadoEmision, ResultadoEmision
 from app.worker import __main__ as worker
-
 
 XML = "<factura>firmada</factura>"
 CLAVE = "1234567890123456789012345678901234567890123456789"
@@ -127,10 +127,7 @@ def factura_falsa(estado="por_enviar"):
 
 
 def empresa_falsa():
-    return SimpleNamespace(
-        id_empresa=7,
-        datos_facturacion_electronica={"ambiente": "1"}
-    )
+    return SimpleNamespace(id_empresa=7, datos_facturacion_electronica={"ambiente": "1"})
 
 
 def instalar_sri_falso(monkeypatch, servicio):
@@ -373,9 +370,7 @@ def test_fallo_al_generar_ride_no_revierte_autorizacion(monkeypatch):
         CLAVE,
         XML.encode("utf-8"),
         numero_autorizacion=CLAVE,
-        fecha_autorizacion=SimpleNamespace(
-            isoformat=lambda: "2026-11-18T10:00:00"
-        ),
+        fecha_autorizacion=SimpleNamespace(isoformat=lambda: "2026-11-18T10:00:00"),
         xml_autorizado=b"<autorizado/>",
     )
     servicio = ServicioSriFalso(resultado_consulta=resultado)
@@ -419,9 +414,7 @@ def test_fallo_de_storage_no_revierte_autorizacion(monkeypatch):
         CLAVE,
         XML.encode("utf-8"),
         numero_autorizacion=CLAVE,
-        fecha_autorizacion=SimpleNamespace(
-            isoformat=lambda: "2026-11-18T10:00:00"
-        ),
+        fecha_autorizacion=SimpleNamespace(isoformat=lambda: "2026-11-18T10:00:00"),
         xml_autorizado=b"<autorizado/>",
     )
     servicio = ServicioSriFalso(resultado_consulta=resultado)
@@ -456,6 +449,7 @@ def test_fallo_de_storage_no_revierte_autorizacion(monkeypatch):
     assert factura.xml_autorizado == "<autorizado/>"
     assert factura.pdf_ride_path is None
 
+
 def test_error_al_enviar_conserva_por_enviar_y_aumenta_intentos(monkeypatch):
     factura = factura_falsa("por_enviar")
 
@@ -469,9 +463,7 @@ def test_error_al_enviar_conserva_por_enviar_y_aumenta_intentos(monkeypatch):
     instalar_sri_falso(monkeypatch, ServicioConError())
     sesion = SesionFalsa([factura], empresa=empresa_falsa())
 
-    worker._procesar_factura(
-        FabricaSesionesFalsa(sesion), 7, 15, None
-    )
+    worker._procesar_factura(FabricaSesionesFalsa(sesion), 7, 15, None)
 
     assert sesion.transaccion_confirmada
     assert factura.estado_autorizacion == "por_enviar"
@@ -494,9 +486,7 @@ def test_error_al_consultar_conserva_por_autorizar_y_no_aumenta_intentos(
     instalar_sri_falso(monkeypatch, ServicioConError())
     sesion = SesionFalsa([factura], empresa=empresa_falsa())
 
-    worker._procesar_factura(
-        FabricaSesionesFalsa(sesion), 7, 15, None
-    )
+    worker._procesar_factura(FabricaSesionesFalsa(sesion), 7, 15, None)
 
     assert sesion.transaccion_confirmada
     assert factura.estado_autorizacion == "por_autorizar"
@@ -504,9 +494,9 @@ def test_error_al_consultar_conserva_por_autorizar_y_no_aumenta_intentos(
 
 
 def test_rotacion_de_lotes_avanza_y_vuelve_al_inicio():
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    fecha = datetime(2026, 11, 18, tzinfo=timezone.utc)
+    fecha = datetime(2026, 11, 18, tzinfo=UTC)
 
     class ResultadoConsulta:
         def __init__(self, filas):
@@ -534,13 +524,17 @@ def test_rotacion_de_lotes_avanza_y_vuelve_al_inicio():
 
     # Primer lote: dos facturas. Segundo ciclo: no quedan filas después
     # del cursor y la consulta circular recupera la primera.
-    sesion_primera = SesionConsulta([
-        [(fecha, 7, 15), (fecha, 7, 16)],
-    ])
-    sesion_segunda = SesionConsulta([
-        [],
-        [(fecha, 7, 15)],
-    ])
+    sesion_primera = SesionConsulta(
+        [
+            [(fecha, 7, 15), (fecha, 7, 16)],
+        ]
+    )
+    sesion_segunda = SesionConsulta(
+        [
+            [],
+            [(fecha, 7, 15)],
+        ]
+    )
 
     fabrica = FabricaSesionesFalsa(sesion_primera, sesion_segunda)
 

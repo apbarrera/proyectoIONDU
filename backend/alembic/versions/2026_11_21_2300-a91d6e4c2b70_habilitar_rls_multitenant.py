@@ -282,38 +282,20 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("DROP POLICY IF EXISTS empresa_worker_select ON public.empresa")
+    op.execute("DROP POLICY IF EXISTS factura_worker_update ON public.factura")
+    op.execute("DROP POLICY IF EXISTS factura_worker_select ON public.factura")
     op.execute(
-        "DROP POLICY IF EXISTS empresa_worker_select ON public.empresa"
-    )
-    op.execute(
-        "DROP POLICY IF EXISTS factura_worker_update ON public.factura"
-    )
-    op.execute(
-        "DROP POLICY IF EXISTS factura_worker_select ON public.factura"
-    )
-    op.execute(
-        "DROP POLICY IF EXISTS dashboard_financiero_app_admin "
-        "ON public.dashboard_financiero"
+        "DROP POLICY IF EXISTS dashboard_financiero_app_admin ON public.dashboard_financiero"
     )
 
     for tabla in reversed(TABLAS_TENANT):
-        op.execute(
-            f'DROP POLICY IF EXISTS {tabla}_app_tenant ON public."{tabla}"'
-        )
+        op.execute(f'DROP POLICY IF EXISTS {tabla}_app_tenant ON public."{tabla}"')
 
-    op.execute(
-        "DROP POLICY IF EXISTS empresa_app_update ON public.empresa"
-    )
-    op.execute(
-        "DROP POLICY IF EXISTS empresa_app_select ON public.empresa"
-    )
-    op.execute(
-        "DROP POLICY IF EXISTS rol_app_select ON public.rol"
-    )
-    op.execute(
-        "DROP POLICY IF EXISTS usuario_empresa_app_select "
-        "ON public.usuario_empresa"
-    )
+    op.execute("DROP POLICY IF EXISTS empresa_app_update ON public.empresa")
+    op.execute("DROP POLICY IF EXISTS empresa_app_select ON public.empresa")
+    op.execute("DROP POLICY IF EXISTS rol_app_select ON public.rol")
+    op.execute("DROP POLICY IF EXISTS usuario_empresa_app_select ON public.usuario_empresa")
 
     for tabla in reversed(TABLAS_RLS):
         op.execute(f'ALTER TABLE public."{tabla}" NO FORCE ROW LEVEL SECURITY')

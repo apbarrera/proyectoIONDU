@@ -47,9 +47,7 @@ def test_sin_empresa_o_inactivo_responde_403(client, empresas, nuevo_usuario, es
     assert response.json()["error"]["code"] == "NO_COMPANY"
 
 
-def test_me_sin_token_no_sirve_con_el_encabezado_de_desarrollo(
-    client, empresas, monkeypatch
-):
+def test_me_sin_token_no_sirve_con_el_encabezado_de_desarrollo(client, empresas, monkeypatch):
     a, _ = empresas
     monkeypatch.setenv("APP_ENV", "production")
     get_settings.cache_clear()

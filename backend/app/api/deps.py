@@ -59,9 +59,7 @@ def get_usuario_actual(
     if not token:
         raise UnauthenticatedError("Inicia sesión para continuar.")
     if verificador is None:
-        raise UnauthenticatedError(
-            "El inicio de sesión no está configurado (falta SUPABASE_URL)."
-        )
+        raise UnauthenticatedError("El inicio de sesión no está configurado (falta SUPABASE_URL).")
     return verificador.verificar(token)
 
 
@@ -99,11 +97,7 @@ def _contexto_con_membresia(
 
     if x_empresa_id is not None:
         empresa_seleccionada = next(
-            (
-                empresa
-                for empresa in empresas
-                if empresa.id_empresa == x_empresa_id
-            ),
+            (empresa for empresa in empresas if empresa.id_empresa == x_empresa_id),
             None,
         )
 
@@ -183,11 +177,7 @@ def get_contexto(
     settings = get_settings()
 
     # El acceso sin token solo existe en desarrollo y exige un usuario real.
-    if (
-        settings.app_env == "development"
-        and not authorization
-        and x_empresa_id is not None
-    ):
+    if settings.app_env == "development" and not authorization and x_empresa_id is not None:
         id_usuario = x_usuario_id or settings.dev_user_id
 
         if id_usuario is None:

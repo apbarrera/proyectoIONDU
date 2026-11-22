@@ -23,9 +23,7 @@ target_metadata = Base.metadata
 def _database_url() -> str:
     url = get_settings().migration_database_url
     if not url:
-        raise RuntimeError(
-            "Define MIGRATION_DATABASE_URL para ejecutar las migraciones"
-        )
+        raise RuntimeError("Define MIGRATION_DATABASE_URL para ejecutar las migraciones")
     return url
 
 

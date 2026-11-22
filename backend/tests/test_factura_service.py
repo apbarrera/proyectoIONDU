@@ -1,13 +1,15 @@
 """Pruebas unitarias de la orquestación de facturas sin PostgreSQL."""
 
+from datetime import datetime
+from decimal import Decimal
 from types import SimpleNamespace
 from typing import cast
 
-from sqlalchemy.orm import Session
-from app.models.empresa import Empresa
 import pytest
+from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError, NotFoundError, UnprocessableError
+from app.models.empresa import Empresa
 from app.services.factura import FacturaService
 from app.sri.firma import FirmadorSinFirma
 
@@ -79,6 +81,7 @@ def test_venta_ya_facturada_no_reserva_otro_secuencial(monkeypatch):
     assert reservas == []
     assert len(session.ejecutadas) == 1
 
+
 def test_venta_anulada_no_emite_factura(monkeypatch):
     venta = SimpleNamespace(
         id_venta=101,
@@ -104,6 +107,7 @@ def test_empresa_sin_configuracion_tributaria_no_puede_facturar(monkeypatch):
     with pytest.raises(UnprocessableError, match="configurada su facturación electrónica"):
         servicio._obtener_configuracion(cast(Empresa, empresa))
 
+
 def test_configuracion_tributaria_incompleta_no_puede_facturar(monkeypatch):
     servicio, _, _ = _servicio(monkeypatch, [])
     empresa = SimpleNamespace(
@@ -120,6 +124,7 @@ def test_configuracion_tributaria_incompleta_no_puede_facturar(monkeypatch):
     with pytest.raises(UnprocessableError, match="incompleta o es inválida"):
         servicio._obtener_configuracion(cast(Empresa, empresa))
 
+
 def test_empresa_sin_certificado_no_puede_facturar(monkeypatch):
     servicio, _, _ = _servicio(monkeypatch, [])
     empresa = SimpleNamespace(
@@ -129,10 +134,6 @@ def test_empresa_sin_certificado_no_puede_facturar(monkeypatch):
 
     with pytest.raises(UnprocessableError, match="no tiene un certificado electrónico"):
         servicio._obtener_firmador(cast(Empresa, empresa))
-
-from datetime import datetime
-from decimal import Decimal
-
 
 
 class FakeSessionCompleta:
@@ -169,31 +170,41 @@ class FakeSessionCompleta:
         self.rollbacks += 1
 
 
-
-
 def test_emision_persiste_factura_pendiente_para_worker(monkeypatch):
     venta = SimpleNamespace(
-        id_venta=101, id_empresa=1, estado="COMPLETADA",
-        subtotal=Decimal("10.00"), iva=Decimal("1.50"),
-        monto_total=Decimal("11.50"), metodo_pago="EFECTIVO",
+        id_venta=101,
+        id_empresa=1,
+        estado="COMPLETADA",
+        subtotal=Decimal("10.00"),
+        iva=Decimal("1.50"),
+        monto_total=Decimal("11.50"),
+        metodo_pago="EFECTIVO",
     )
     empresa = SimpleNamespace(
         datos_facturacion_electronica={
-            "ambiente": "1", "establecimiento": "001",
-            "punto_emision": "001", "obligado_contabilidad": False,
-            "contribuyente_especial": None, "contribuyente_rimpe": False,
+            "ambiente": "1",
+            "establecimiento": "001",
+            "punto_emision": "001",
+            "obligado_contabilidad": False,
+            "contribuyente_especial": None,
+            "contribuyente_rimpe": False,
             "direccion_establecimiento": "Av. Amazonas 123, Quito",
         },
-        ruc="1790010937001", razon_social="Empresa de prueba",
-        nombre_comercial="Empresa de prueba", direccion="Quito, Ecuador",
+        ruc="1790010937001",
+        razon_social="Empresa de prueba",
+        nombre_comercial="Empresa de prueba",
+        direccion="Quito, Ecuador",
     )
     detalle = SimpleNamespace(
-        cantidad=Decimal("1"), precio_unitario=Decimal("10"),
-        descuento=Decimal("0"), codigo_porcentaje_iva="4",
+        cantidad=Decimal("1"),
+        precio_unitario=Decimal("10"),
+        descuento=Decimal("0"),
+        codigo_porcentaje_iva="4",
         descripcion_libre=None,
     )
     producto = SimpleNamespace(
-        codigo_principal="PROD-001", nombre="Producto de prueba",
+        codigo_principal="PROD-001",
+        nombre="Producto de prueba",
         unidad_medida="UNIDAD",
     )
 
@@ -202,19 +213,23 @@ def test_emision_persiste_factura_pendiente_para_worker(monkeypatch):
     reservas = []
 
     monkeypatch.setattr(
-        servicio.secuencias, "reservar",
+        servicio.secuencias,
+        "reservar",
         lambda **kwargs: reservas.append(kwargs) or 1,
     )
     monkeypatch.setattr(
-        servicio, "_obtener_firmador",
+        servicio,
+        "_obtener_firmador",
         lambda empresa: FirmadorSinFirma(),
     )
     monkeypatch.setattr(
-        servicio.ventas, "obtener",
+        servicio.ventas,
+        "obtener",
         lambda id_venta: (venta, None),
     )
     monkeypatch.setattr(
-        servicio.ventas, "detalles",
+        servicio.ventas,
+        "detalles",
         lambda ids: {101: [(detalle, producto)]},
     )
 
@@ -229,41 +244,47 @@ def test_emision_persiste_factura_pendiente_para_worker(monkeypatch):
     assert factura.clave_acceso
     assert factura.xml_firmado is not None
     assert "<factura" in factura.xml_firmado
-    assert (
-        "<dirEstablecimiento>Av. Amazonas 123, Quito</dirEstablecimiento>"
-        in factura.xml_firmado
-    )
+    assert "<dirEstablecimiento>Av. Amazonas 123, Quito</dirEstablecimiento>" in factura.xml_firmado
     assert factura.xml_autorizado is None
     assert factura.numero_autorizacion is None
     assert factura.numero_comprobante == "001-001-000000001"
     assert factura.total == Decimal("11.50")
 
 
-
-
-
 def test_emision_pendiente_no_intenta_contactar_al_sri(monkeypatch):
     venta = SimpleNamespace(
-        id_venta=102, id_empresa=1, estado="COMPLETADA",
-        subtotal=Decimal("10.00"), iva=Decimal("1.50"),
-        monto_total=Decimal("11.50"), metodo_pago="EFECTIVO",
+        id_venta=102,
+        id_empresa=1,
+        estado="COMPLETADA",
+        subtotal=Decimal("10.00"),
+        iva=Decimal("1.50"),
+        monto_total=Decimal("11.50"),
+        metodo_pago="EFECTIVO",
     )
     empresa = SimpleNamespace(
         datos_facturacion_electronica={
-            "ambiente": "1", "establecimiento": "001",
-            "punto_emision": "001", "obligado_contabilidad": False,
-            "contribuyente_especial": None, "contribuyente_rimpe": False,
+            "ambiente": "1",
+            "establecimiento": "001",
+            "punto_emision": "001",
+            "obligado_contabilidad": False,
+            "contribuyente_especial": None,
+            "contribuyente_rimpe": False,
         },
-        ruc="1790010937001", razon_social="Empresa de prueba",
-        nombre_comercial="Empresa de prueba", direccion="Quito, Ecuador",
+        ruc="1790010937001",
+        razon_social="Empresa de prueba",
+        nombre_comercial="Empresa de prueba",
+        direccion="Quito, Ecuador",
     )
     detalle = SimpleNamespace(
-        cantidad=Decimal("1"), precio_unitario=Decimal("10"),
-        descuento=Decimal("0"), codigo_porcentaje_iva="4",
+        cantidad=Decimal("1"),
+        precio_unitario=Decimal("10"),
+        descuento=Decimal("0"),
+        codigo_porcentaje_iva="4",
         descripcion_libre=None,
     )
     producto = SimpleNamespace(
-        codigo_principal="PROD-001", nombre="Producto de prueba",
+        codigo_principal="PROD-001",
+        nombre="Producto de prueba",
         unidad_medida="UNIDAD",
     )
 
@@ -272,19 +293,23 @@ def test_emision_pendiente_no_intenta_contactar_al_sri(monkeypatch):
     reservas = []
 
     monkeypatch.setattr(
-        servicio.secuencias, "reservar",
+        servicio.secuencias,
+        "reservar",
         lambda **kwargs: reservas.append(kwargs) or 2,
     )
     monkeypatch.setattr(
-        servicio, "_obtener_firmador",
+        servicio,
+        "_obtener_firmador",
         lambda empresa: FirmadorSinFirma(),
     )
     monkeypatch.setattr(
-        servicio.ventas, "obtener",
+        servicio.ventas,
+        "obtener",
         lambda id_venta: (venta, None),
     )
     monkeypatch.setattr(
-        servicio.ventas, "detalles",
+        servicio.ventas,
+        "detalles",
         lambda ids: {102: [(detalle, producto)]},
     )
 
@@ -330,6 +355,7 @@ def test_venta_de_otra_empresa_no_emite_factura(monkeypatch):
     assert session.commits == 0
     assert reservas == []
     assert len(session.ejecutadas) == 1
+
 
 def test_recupera_ride_desde_xml_autorizado_si_storage_falla(monkeypatch):
     from app.core.errors import ServiceUnavailableError
@@ -383,6 +409,7 @@ def test_recupera_ride_desde_xml_autorizado_si_storage_falla(monkeypatch):
     assert llamadas_generador[0][1]["numero_autorizacion"] == "1234567890"
     assert session.commits == 0
 
+
 def test_descarga_ride_existente_sin_reconstruirlo(monkeypatch):
     factura = SimpleNamespace(
         id_factura=50,
@@ -418,8 +445,6 @@ def test_descarga_ride_existente_sin_reconstruirlo(monkeypatch):
     resultado = servicio.obtener_ride(101)
 
     assert resultado == pdf_guardado
-    assert rutas_descargadas == [
-        "empresas/1/facturas/50/ride.pdf"
-    ]
+    assert rutas_descargadas == ["empresas/1/facturas/50/ride.pdf"]
     assert session.commits == 0
     assert session.rollbacks == 0

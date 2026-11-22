@@ -6,7 +6,6 @@ import pytest
 from app.api import deps
 from app.core.errors import ForbiddenError, UnauthenticatedError
 
-
 USER_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 
 
@@ -17,8 +16,9 @@ def clear_settings_cache():
     deps.get_settings.cache_clear()
 
 
-def preparar(monkeypatch, *, app_env="development", dev_user_id=str(USER_ID),
-             empresas=None, pertenencia=None):
+def preparar(
+    monkeypatch, *, app_env="development", dev_user_id=str(USER_ID), empresas=None, pertenencia=None
+):
     monkeypatch.setenv("APP_ENV", app_env)
     if dev_user_id is None:
         monkeypatch.delenv("DEV_USER_ID", raising=False)
@@ -27,21 +27,25 @@ def preparar(monkeypatch, *, app_env="development", dev_user_id=str(USER_ID),
 
     llamadas_rls = []
     monkeypatch.setattr(
-        deps, "establecer_contexto_rls",
-        lambda db, usuario_id, empresa_id: llamadas_rls.append(
-            (usuario_id, empresa_id)
+        deps,
+        "establecer_contexto_rls",
+        lambda db, usuario_id, empresa_id: llamadas_rls.append((usuario_id, empresa_id)),
+    )
+    monkeypatch.setattr(
+        deps,
+        "obtener_empresas_activas",
+        lambda db, usuario_id: (
+            empresas if empresas is not None else [SimpleNamespace(id_empresa=7)]
         ),
     )
     monkeypatch.setattr(
-        deps, "obtener_empresas_activas",
-        lambda db, usuario_id: empresas if empresas is not None else [
-            SimpleNamespace(id_empresa=7)
-        ],
-    )
-    monkeypatch.setattr(
-        deps, "obtener_pertenencia_activa",
-        lambda db, usuario_id, empresa_id: pertenencia if pertenencia is not None
-        else SimpleNamespace(id_empresa=7, rol="Usuario operativo", nombre="Local"),
+        deps,
+        "obtener_pertenencia_activa",
+        lambda db, usuario_id, empresa_id: (
+            pertenencia
+            if pertenencia is not None
+            else SimpleNamespace(id_empresa=7, rol="Usuario operativo", nombre="Local")
+        ),
     )
     deps.get_settings.cache_clear()
     return llamadas_rls
@@ -94,7 +98,8 @@ def test_desarrollo_no_permite_empresa_de_otro_usuario(monkeypatch):
 def test_desarrollo_rechaza_membresia_que_dejo_de_estar_activa(monkeypatch):
     llamadas = preparar(monkeypatch)
     monkeypatch.setattr(
-        deps, "obtener_pertenencia_activa",
+        deps,
+        "obtener_pertenencia_activa",
         lambda db, usuario_id, empresa_id: None,
     )
     with pytest.raises(ForbiddenError) as error:

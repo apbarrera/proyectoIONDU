@@ -2,10 +2,8 @@
 
 from dataclasses import replace
 from datetime import datetime
-from io import BytesIO
 
 import pytest
-from pypdf import PdfReader
 
 from app.sri.clave_acceso import Ambiente
 from app.sri.emision import EstadoEmision, ServicioEmision

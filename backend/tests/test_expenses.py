@@ -3,7 +3,6 @@
 import pytest
 
 from app.core.config import get_settings
-
 from app.services.gasto import CATEGORIAS_PREDEFINIDAS
 from tests.conftest import con_token
 

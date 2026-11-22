@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import TIMEZONE, get_settings
 
-
 # Claves privadas utilizadas para conservar el contexto entre transacciones.
 _RLS_USER_KEY = "rls_usuario_id"
 _RLS_COMPANY_KEY = "rls_empresa_id"
@@ -77,9 +76,7 @@ def establecer_contexto_rls(
         """),
         {
             "usuario_id": session.info[_RLS_USER_KEY] or "",
-            "empresa_id": (
-                str(empresa_id) if empresa_id is not None else ""
-            ),
+            "empresa_id": (str(empresa_id) if empresa_id is not None else ""),
         },
     )
 

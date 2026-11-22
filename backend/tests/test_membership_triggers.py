@@ -176,10 +176,13 @@ def test_movimiento_rechaza_producto_de_otra_empresa(db, empresas, nuevo_usuario
     db.add(producto_b)
     db.flush()
 
-    with pytest.raises(
-        IntegrityError,
-        match="movimiento_inventario_empresa_producto_fkey",
-    ), db.begin_nested():
+    with (
+        pytest.raises(
+            IntegrityError,
+            match="movimiento_inventario_empresa_producto_fkey",
+        ),
+        db.begin_nested(),
+    ):
         db.add(
             MovimientoInventario(
                 id_empresa=empresa_a,

@@ -59,10 +59,10 @@ class Settings(BaseSettings):
             return value
 
         if value.startswith("postgres://"):
-            return "postgresql+psycopg://" + value[len("postgres://"):]
+            return "postgresql+psycopg://" + value[len("postgres://") :]
 
         if value.startswith("postgresql://"):
-            return "postgresql+psycopg://" + value[len("postgresql://"):]
+            return "postgresql+psycopg://" + value[len("postgresql://") :]
 
         return value
 

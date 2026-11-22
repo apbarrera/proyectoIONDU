@@ -1,8 +1,10 @@
 from app.core.config import Settings
 
+
 def test_cors_origins_se_lee_separado_por_comas(monkeypatch):
     monkeypatch.setenv("CORS_ORIGINS", "http://localhost:4200, https://app.iondu.org")
     assert Settings().cors_origins == ["http://localhost:4200", "https://app.iondu.org"]
+
 
 def test_variables_vacias_usan_el_valor_por_defecto(monkeypatch):
     monkeypatch.setenv("CORS_ORIGINS", "")
@@ -24,9 +26,5 @@ def test_urls_independientes_de_worker_y_migraciones(monkeypatch):
 
     settings = Settings()
 
-    assert settings.worker_database_url.startswith(
-        "postgresql+psycopg://worker:"
-    )
-    assert settings.migration_database_url.startswith(
-        "postgresql+psycopg://migrator:"
-    )
+    assert settings.worker_database_url.startswith("postgresql+psycopg://worker:")
+    assert settings.migration_database_url.startswith("postgresql+psycopg://migrator:")

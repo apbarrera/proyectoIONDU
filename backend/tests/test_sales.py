@@ -144,9 +144,7 @@ def test_el_descuento_se_resta_de_la_linea(client, catalogo, vendedor):
     assert (venta["subtotal"], venta["ivaAmount"], venta["total"]) == (8.0, 1.2, 9.2)
 
 
-def test_sin_sesion_de_usuario_no_se_puede_registrar(
-    client, empresas, catalogo, monkeypatch
-):
+def test_sin_sesion_de_usuario_no_se_puede_registrar(client, empresas, catalogo, monkeypatch):
     from app.core.config import get_settings
 
     a, _ = empresas

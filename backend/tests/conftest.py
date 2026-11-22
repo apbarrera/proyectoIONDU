@@ -225,3 +225,10 @@ def nuevo_usuario(db, agregar_pertenencia):
 def con_token(usuario: uuid.UUID, **extra: str) -> dict[str, str]:
     """Encabezados de una petición con la sesión de ese usuario."""
     return {"Authorization": f"Bearer {crear_token(usuario)}"} | extra
+
+
+@pytest.fixture
+def usuarios_empresa(empresas, nuevo_usuario):
+    """Un usuario autenticado con pertenencia activa para cada empresa de prueba."""
+    a, b = empresas
+    return {a: nuevo_usuario(a), b: nuevo_usuario(b)}

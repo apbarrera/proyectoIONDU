@@ -40,7 +40,33 @@ def test_factura_completa_es_valida_y_tiene_los_valores_esperados():
     assert len(etree.fromstring(xml).xpath("//detalle")) == 3
     assert _texto(xml, "//campoAdicional[@nombre='Email']") == ["juan@example.com"]
     assert xml.startswith(b"<?xml version='1.0' encoding='UTF-8'?>")
-    assert "Café molido".encode() in xml  # UTF-8, sin entidades
+    assert "Caf\u00e9 molido".encode() in xml  # UTF-8, sin entidades
+
+
+def test_xml_separa_iva_individual_del_iva_agrupado():
+    detalles = [
+        DetalleFactura(
+            f"ITEM-{indice}",
+            f"Producto {indice}",
+            Linea(D("1"), D("0.10"), TarifaIva.IVA_15),
+        )
+        for indice in range(1, 4)
+    ]
+    factura = replace(
+        FACTURA,
+        detalles=detalles,
+        pagos=[Pago(FormaPago.SIN_SISTEMA_FINANCIERO, D("0.35"))],
+    )
+
+    generada = generar_factura_xml(factura)
+
+    assert validar_factura_xml(generada.xml) == []
+    assert _texto(generada.xml, "//totalImpuesto/baseImponible") == ["0.30"]
+    assert _texto(generada.xml, "//totalImpuesto/valor") == ["0.05"]
+    assert _texto(
+        generada.xml,
+        "//detalle/impuestos/impuesto/valor",
+    ) == ["0.02", "0.02", "0.02"]
 
 
 def test_consumidor_final_es_valido():
@@ -64,7 +90,7 @@ def test_varias_formas_de_pago_que_suman_el_total():
     [
         (
             {"comprador": Comprador(TipoIdentificacion.CEDULA, "1710000008", "X")},
-            "Identificación del comprador inválida",
+            "Identificaci\u00f3n del comprador inv\u00e1lida",
         ),
         ({"pagos": [Pago(FormaPago.SIN_SISTEMA_FINANCIERO, D("23.99"))]}, "pagos suman 23.99"),
         ({"pagos": []}, "al menos una forma de pago"),
@@ -77,7 +103,7 @@ def test_errores_detectados_antes_de_armar_el_xml(cambios, error):
 
 
 def test_nunca_devuelve_un_xml_que_el_esquema_rechace():
-    # codigoPrincipal admite máximo 25 caracteres en el esquema.
+    # codigoPrincipal admite como maximo 25 caracteres en el esquema.
     largo = DetalleFactura("X" * 26, "Producto", Linea(D("1"), D("24.00"), TarifaIva.IVA_0))
     with pytest.raises(ValueError, match="no cumple el esquema"):
         generar_factura_xml(replace(FACTURA, detalles=[largo]))

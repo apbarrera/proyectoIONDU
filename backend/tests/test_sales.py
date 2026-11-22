@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.models import DetalleVenta, MovimientoInventario, Producto, Venta
-from tests.conftest import con_token
+from tests.tokens import crear_token
 
 
 @pytest.fixture(autouse=True)
@@ -20,18 +20,34 @@ def _sesion(supabase_falso):
     """Las ventas exigen un usuario con sesión: se usa el "Supabase falso"."""
 
 
-def _h(empresa_id: int) -> dict[str, str]:
+def _h(usuario, empresa_id: int | None = None) -> dict[str, str]:
+    """Genera encabezados autenticados para el usuario indicado."""
+    headers = {"Authorization": f"Bearer {crear_token(usuario)}"}
+    if empresa_id is not None:
+        headers["X-Empresa-Id"] = str(empresa_id)
+    return headers
+
+
+def _h_sin_sesion(empresa_id: int) -> dict[str, str]:
+    """Encabezados de desarrollo sin JWT, para probar el rechazo de sesión."""
     return {"X-Empresa-Id": str(empresa_id)}
 
 
 @pytest.fixture
-def catalogo(client, empresas) -> dict[str, int]:
+def vendedor(empresas, nuevo_usuario):
+    """Usuario de la empresa A."""
+    a, _ = empresas
+    return nuevo_usuario(a)
+
+
+@pytest.fixture
+def catalogo(client, empresas, vendedor) -> dict[str, int]:
     """Categoría, productos y un cliente en la empresa A (creados por la API)."""
     a, _ = empresas
     cat = client.post(
         "/api/product-categories",
         json={"name": "Abarrotes"},
-        headers=_h(a),
+        headers=_h(vendedor, a),
     ).json()
 
     def producto(
@@ -54,7 +70,7 @@ def catalogo(client, empresas) -> dict[str, int]:
         respuesta = client.post(
             "/api/products",
             json=cuerpo,
-            headers=_h(a),
+            headers=_h(vendedor, a),
         )
         assert respuesta.status_code == 201, respuesta.text
         return respuesta.json()["id"]
@@ -62,7 +78,7 @@ def catalogo(client, empresas) -> dict[str, int]:
     cliente_response = client.post(
         "/api/customers",
         json={"identification": "1710000009", "name": "Juan Pérez"},
-        headers=_h(a),
+        headers=_h(vendedor, a),
     )
     assert cliente_response.status_code == 201, cliente_response.text
     cliente = cliente_response.json()
@@ -75,15 +91,9 @@ def catalogo(client, empresas) -> dict[str, int]:
     }
 
 
-@pytest.fixture
-def vendedor(empresas, nuevo_usuario):
-    a, _ = empresas
-    return nuevo_usuario(a)
-
-
 def _vender(client, usuario, items, **extra):
     cuerpo = {"items": items, "paymentMethod": "efectivo"} | extra
-    return client.post("/api/sales", json=cuerpo, headers=con_token(usuario))
+    return client.post("/api/sales", json=cuerpo, headers=_h(usuario))
 
 
 def _stock(db, id_producto) -> float:
@@ -144,7 +154,18 @@ def test_el_descuento_se_resta_de_la_linea(client, catalogo, vendedor):
     assert (venta["subtotal"], venta["ivaAmount"], venta["total"]) == (8.0, 1.2, 9.2)
 
 
-def test_sin_sesion_de_usuario_no_se_puede_registrar(client, empresas, catalogo, monkeypatch):
+def test_sin_sesion_de_usuario_no_se_puede_registrar(client, empresas, catalogo):
+    a, _ = empresas
+    cuerpo = {
+        "items": [{"productId": catalogo["cafe"], "quantity": 1}],
+        "paymentMethod": "efectivo",
+    }
+    response = client.post("/api/sales", json=cuerpo, headers=_h_sin_sesion(a))
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "USER_SESSION_REQUIRED"
+
+
+def test_sin_sesion_en_produccion_responde_no_autenticado(client, empresas, catalogo, monkeypatch):
     from app.core.config import get_settings
 
     a, _ = empresas
@@ -152,12 +173,18 @@ def test_sin_sesion_de_usuario_no_se_puede_registrar(client, empresas, catalogo,
         "items": [{"productId": catalogo["cafe"], "quantity": 1}],
         "paymentMethod": "efectivo",
     }
+
     monkeypatch.setenv("APP_ENV", "production")
     get_settings.cache_clear()
     try:
-        response = client.post("/api/sales", json=cuerpo, headers=_h(a))
+        response = client.post(
+            "/api/sales",
+            json=cuerpo,
+            headers=_h_sin_sesion(a),
+        )
     finally:
         get_settings.cache_clear()
+
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "UNAUTHENTICATED"
 
@@ -260,7 +287,10 @@ def test_historial_con_filtros(client, empresas, catalogo, vendedor):
     ).json()
 
     def ids(query: str = "") -> list[int]:
-        return [v["id"] for v in client.get(f"/api/sales?{query}", headers=_h(a)).json()["items"]]
+        return [
+            v["id"]
+            for v in client.get(f"/api/sales?{query}", headers=_h(vendedor, a)).json()["items"]
+        ]
 
     assert ids() == [segunda["id"], primera["id"]]  # la más reciente primero
     assert ids("paymentMethod=transferencia") == [segunda["id"]]
@@ -268,7 +298,7 @@ def test_historial_con_filtros(client, empresas, catalogo, vendedor):
     hoy = datetime.now(ZoneInfo("America/Guayaquil")).date()
     assert len(ids(f"from={hoy}&to={hoy}")) == 2
     assert ids(f"from={hoy + timedelta(days=1)}") == []
-    detalle = client.get(f"/api/sales/{segunda['id']}", headers=_h(a)).json()
+    detalle = client.get(f"/api/sales/{segunda['id']}", headers=_h(vendedor, a)).json()
     assert detalle == segunda
 
 
@@ -277,15 +307,17 @@ def test_una_empresa_no_ve_las_ventas_ni_usa_productos_o_clientes_de_otra(
     client, empresas, catalogo, vendedor, nuevo_usuario
 ):
     a, b = empresas
+    vendedor_b = nuevo_usuario(b)
+
     venta = _vender(
         client,
         vendedor,
         [{"productId": catalogo["cafe"], "quantity": 1}],
     ).json()
-    assert client.get("/api/sales", headers=_h(b)).json()["total"] == 0
-    assert client.get(f"/api/sales/{venta['id']}", headers=_h(b)).status_code == 404
 
-    vendedor_b = nuevo_usuario(b)
+    assert client.get("/api/sales", headers=_h(vendedor_b, b)).json()["total"] == 0
+    assert client.get(f"/api/sales/{venta['id']}", headers=_h(vendedor_b, b)).status_code == 404
+
     con_producto_de_a = _vender(
         client,
         vendedor_b,
@@ -302,8 +334,12 @@ def test_una_empresa_no_ve_las_ventas_ni_usa_productos_o_clientes_de_otra(
     assert con_cliente_de_a.json()["error"]["code"] == "CUSTOMER_NOT_FOUND"
 
 
-def test_detalle_rechaza_producto_de_otra_empresa(client, db, empresas, catalogo, vendedor):
+def test_detalle_rechaza_producto_de_otra_empresa(
+    client, db, empresas, catalogo, vendedor, nuevo_usuario
+):
     a, b = empresas
+    vendedor_b = nuevo_usuario(b)
+
     venta = _vender(
         client,
         vendedor,
@@ -313,7 +349,7 @@ def test_detalle_rechaza_producto_de_otra_empresa(client, db, empresas, catalogo
     categoria_b = client.post(
         "/api/product-categories",
         json={"name": "Categoría B"},
-        headers=_h(b),
+        headers=_h(vendedor_b, b),
     )
     assert categoria_b.status_code == 201, categoria_b.text
 
@@ -328,7 +364,7 @@ def test_detalle_rechaza_producto_de_otra_empresa(client, db, empresas, catalogo
             "currentStock": 5,
             "type": "venta",
         },
-        headers=_h(b),
+        headers=_h(vendedor_b, b),
     )
     assert producto_b.status_code == 201, producto_b.text
 
@@ -399,7 +435,7 @@ def test_eliminar_producto_conserva_nombre_en_detalle_historico(
 
     respuesta = client.get(
         f"/api/sales/{id_venta}",
-        headers=_h(a),
+        headers=_h(vendedor, a),
     )
     assert respuesta.status_code == 200, respuesta.text
     assert respuesta.json()["items"][0]["productId"] is None

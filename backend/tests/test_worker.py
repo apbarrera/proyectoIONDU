@@ -546,3 +546,79 @@ def test_rotacion_de_lotes_avanza_y_vuelve_al_inicio():
     assert len(sesion_primera.sentencias) == 1
     assert len(sesion_segunda.sentencias) == 2
     assert worker._ultimo_pendiente == (fecha, 7, 15)
+
+
+def test_rechazo_sri_persiste_estado_y_mensajes_sin_datos_de_autorizacion(
+    monkeypatch,
+):
+    factura = factura_falsa("por_autorizar")
+    factura.intentos_envio = 2
+
+    mensaje = SimpleNamespace(
+        identificador="43",
+        mensaje="Comprobante rechazado",
+        informacion_adicional="Validación tributaria",
+        tipo="ERROR",
+    )
+    resultado = ResultadoEmision(
+        EstadoEmision.RECHAZADA,
+        CLAVE,
+        XML.encode("utf-8"),
+        mensajes=[mensaje],
+    )
+    servicio = ServicioSriFalso(resultado_consulta=resultado)
+    instalar_sri_falso(monkeypatch, servicio)
+
+    sesion_inicio = SesionFalsa([factura], empresa=empresa_falsa())
+    sesion_respuesta = SesionFalsa([factura])
+
+    worker._procesar_factura(
+        FabricaSesionesFalsa(sesion_inicio, sesion_respuesta),
+        7,
+        15,
+        None,
+    )
+
+    assert servicio.envios == []
+    assert servicio.consultas == [(XML.encode("utf-8"), CLAVE)]
+    assert factura.estado_autorizacion == "rechazada"
+    assert factura.mensajes_sri == [
+        {
+            "identificador": "43",
+            "mensaje": "Comprobante rechazado",
+            "informacion_adicional": "Validación tributaria",
+            "tipo": "ERROR",
+        }
+    ]
+    assert factura.intentos_envio == 2
+    assert factura.numero_autorizacion is None
+    assert factura.fecha_autorizacion is None
+    assert factura.xml_autorizado is None
+
+
+def test_respuesta_sri_sin_mensajes_limpia_mensajes_anteriores(monkeypatch):
+    factura = factura_falsa("por_autorizar")
+    factura.mensajes_sri = [{"mensaje": "error anterior"}]
+
+    resultado = ResultadoEmision(
+        EstadoEmision.POR_AUTORIZAR,
+        CLAVE,
+        XML.encode("utf-8"),
+        mensajes=[],
+    )
+    servicio = ServicioSriFalso(resultado_consulta=resultado)
+    instalar_sri_falso(monkeypatch, servicio)
+
+    sesion_inicio = SesionFalsa([factura], empresa=empresa_falsa())
+    sesion_respuesta = SesionFalsa([factura])
+
+    worker._procesar_factura(
+        FabricaSesionesFalsa(sesion_inicio, sesion_respuesta),
+        7,
+        15,
+        None,
+    )
+
+    assert factura.estado_autorizacion == "por_autorizar"
+    assert factura.mensajes_sri == []
+    assert factura.intentos_envio == 0

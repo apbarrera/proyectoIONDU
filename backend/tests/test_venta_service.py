@@ -123,6 +123,8 @@ def test_venta_solo_servicios_no_modifica_inventario(monkeypatch):
     assert repo.lineas[0].id_producto is None
     assert repo.lineas[0].descripcion_libre == "Consultoría"
     assert repo.lineas[0].codigo_porcentaje_iva == "5"
+    assert repo.lineas[0].porcentaje_iva == Decimal("5")
+    assert repo.lineas[0].valor_iva == Decimal("1.25")
     assert resultado.items[0].product_name == "Consultoría"
     assert resultado.items[0].vat_percentage_code == "5"
     assert repo.movimientos == []
@@ -147,6 +149,8 @@ def test_venta_de_producto_descuenta_stock_y_registra_movimiento(monkeypatch):
     assert repo.lineas[0].descripcion_libre == producto.nombre
     assert repo.lineas[0].precio_unitario == Decimal("10.00")
     assert repo.lineas[0].codigo_porcentaje_iva == "4"
+    assert repo.lineas[0].porcentaje_iva == Decimal("15")
+    assert repo.lineas[0].valor_iva == Decimal("3.00")
     assert len(repo.movimientos) == 1
     assert repo.movimientos[0].tipo_movimiento == "VENTA"
     assert repo.movimientos[0].cantidad == Decimal("2")

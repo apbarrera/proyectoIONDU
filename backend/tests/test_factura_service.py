@@ -170,6 +170,159 @@ class FakeSessionCompleta:
         self.rollbacks += 1
 
 
+def _preparar_emision_con_detalle(
+    monkeypatch,
+    detalle,
+    *,
+    subtotal,
+    iva,
+    total,
+    sin_producto=False,
+):
+    venta = SimpleNamespace(
+        id_venta=103,
+        id_empresa=1,
+        estado="COMPLETADA",
+        subtotal=subtotal,
+        iva=iva,
+        monto_total=total,
+        metodo_pago="EFECTIVO",
+    )
+    empresa = SimpleNamespace(
+        datos_facturacion_electronica={
+            "ambiente": "1",
+            "establecimiento": "001",
+            "punto_emision": "001",
+            "obligado_contabilidad": False,
+            "contribuyente_especial": None,
+            "contribuyente_rimpe": False,
+            "direccion_establecimiento": "Av. Amazonas 123, Quito",
+        },
+        ruc="1790010937001",
+        razon_social="Empresa de prueba",
+        nombre_comercial="Empresa de prueba",
+        direccion="Quito, Ecuador",
+    )
+    producto = SimpleNamespace(
+        codigo_principal="PROD-001",
+        nombre="Producto de prueba",
+        unidad_medida="UNIDAD",
+    )
+
+    session = FakeSessionCompleta([venta, None], empresa)
+    servicio = FacturaService(cast(Session, session), empresa_id=1)
+    reservas = []
+
+    monkeypatch.setattr(
+        servicio.secuencias,
+        "reservar",
+        lambda **kwargs: reservas.append(kwargs) or 3,
+    )
+    monkeypatch.setattr(
+        servicio,
+        "_obtener_firmador",
+        lambda empresa: FirmadorSinFirma(),
+    )
+    monkeypatch.setattr(
+        servicio.ventas,
+        "obtener",
+        lambda id_venta: (venta, None),
+    )
+    monkeypatch.setattr(
+        servicio.ventas,
+        "detalles",
+        lambda ids: {103: [(detalle, None if sin_producto else producto)]},
+    )
+
+    return servicio, session, reservas
+
+
+def test_emision_conserva_porcentaje_historico_de_iva(monkeypatch):
+    detalle = SimpleNamespace(
+        cantidad=Decimal("1"),
+        precio_unitario=Decimal("10.00"),
+        descuento=Decimal("0"),
+        codigo_porcentaje_iva="4",
+        porcentaje_iva=Decimal("12.00"),
+        valor_iva=Decimal("1.20"),
+        descripcion_libre=None,
+    )
+    servicio, session, reservas = _preparar_emision_con_detalle(
+        monkeypatch,
+        detalle,
+        subtotal=Decimal("10.00"),
+        iva=Decimal("1.20"),
+        total=Decimal("11.20"),
+    )
+
+    factura = servicio.emitir(103)
+
+    assert factura.total == Decimal("11.20")
+    assert "<tarifa>12</tarifa>" in factura.xml_firmado
+    assert "<valor>1.20</valor>" in factura.xml_firmado
+    assert session.commits == 1
+    assert session.rollbacks == 0
+    assert len(reservas) == 1
+
+
+def test_emision_conserva_servicio_sin_producto_y_su_iva_historico(monkeypatch):
+    detalle = SimpleNamespace(
+        cantidad=Decimal("2"),
+        precio_unitario=Decimal("10.00"),
+        descuento=Decimal("0"),
+        codigo_porcentaje_iva="4",
+        porcentaje_iva=Decimal("12.00"),
+        valor_iva=Decimal("2.40"),
+        descripcion_libre="Servicio de consultoria",
+    )
+    servicio, session, reservas = _preparar_emision_con_detalle(
+        monkeypatch,
+        detalle,
+        subtotal=Decimal("20.00"),
+        iva=Decimal("2.40"),
+        total=Decimal("22.40"),
+        sin_producto=True,
+    )
+
+    factura = servicio.emitir(103)
+
+    assert "<codigoPrincipal>SIN-CODIGO</codigoPrincipal>" in factura.xml_firmado
+    assert "<descripcion>Servicio de consultoria</descripcion>" in factura.xml_firmado
+    assert "<tarifa>12</tarifa>" in factura.xml_firmado
+    assert "<valor>2.40</valor>" in factura.xml_firmado
+    assert factura.total == Decimal("22.40")
+    assert session.commits == 1
+    assert session.rollbacks == 0
+    assert len(reservas) == 1
+
+
+def test_emision_rechaza_iva_almacenado_distinto_del_historico(monkeypatch):
+    detalle = SimpleNamespace(
+        cantidad=Decimal("1"),
+        precio_unitario=Decimal("10.00"),
+        descuento=Decimal("0"),
+        codigo_porcentaje_iva="4",
+        porcentaje_iva=Decimal("12.00"),
+        valor_iva=Decimal("1.50"),
+        descripcion_libre=None,
+    )
+    servicio, session, reservas = _preparar_emision_con_detalle(
+        monkeypatch,
+        detalle,
+        subtotal=Decimal("10.00"),
+        iva=Decimal("1.20"),
+        total=Decimal("11.20"),
+    )
+
+    with pytest.raises(ConflictError, match="c\u00e1lculo hist\u00f3rico"):
+        servicio.emitir(103)
+
+    assert session.rollbacks == 1
+    assert session.commits == 0
+    assert session.added == []
+    assert reservas == []
+
+
 def test_emision_persiste_factura_pendiente_para_worker(monkeypatch):
     venta = SimpleNamespace(
         id_venta=101,

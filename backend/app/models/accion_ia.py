@@ -26,7 +26,7 @@ class AccionIA(Base):
 
     id_empresa: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("empresa.id_empresa", ondelete="CASCADE"),
+        ForeignKey("empresa.id_empresa", ondelete="RESTRICT"),
         nullable=False,
     )
 

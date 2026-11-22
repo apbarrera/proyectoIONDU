@@ -203,6 +203,7 @@ class FacturaService:
             for (detalle, _producto), calculada in zip(
                 detalles_venta,
                 totales.lineas,
+                strict=True,
             ):
                 valor_iva_guardado = getattr(detalle, "valor_iva", None)
                 if (

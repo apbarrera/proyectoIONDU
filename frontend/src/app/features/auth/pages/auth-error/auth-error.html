@@ -1,0 +1,27 @@
+<main class="auth-state">
+  <section class="auth-state__card">
+    <app-logo [size]="48" />
+    <div class="auth-state__icon auth-state__icon--error">
+      <app-icon name="warning-circle" [size]="28" />
+    </div>
+    <h1>No pudimos cargar tu cuenta</h1>
+    <p>
+      Tu sesión puede seguir activa, pero no fue posible recuperar
+      la información necesaria para ingresar a IONDU.
+    </p>
+
+    @if (errorMessage()) {
+      <p class="auth-state__error" role="alert">{{ errorMessage() }}</p>
+    }
+
+    <div class="auth-state__actions">
+      <app-button fullWidth [loading]="retrying()" (clicked)="retry()">
+        <app-icon name="arrow-right" [size]="16" />
+        Reintentar
+      </app-button>
+      <app-button fullWidth variant="secondary" (clicked)="logout()">
+        Cerrar sesión
+      </app-button>
+    </div>
+  </section>
+</main>

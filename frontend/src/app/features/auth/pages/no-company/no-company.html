@@ -1,0 +1,17 @@
+﻿<main class="auth-state">
+  <section class="auth-state__card">
+    <app-logo [size]="48" />
+    <div class="auth-state__icon auth-state__icon--warning">
+      <app-icon name="warning" [size]="28" />
+    </div>
+    <h1>No tienes una empresa asignada</h1>
+    <p>
+      Tu cuenta no tiene una membresía empresarial activa.
+      Contacta al administrador de tu empresa para solicitar acceso.
+    </p>
+    <app-button fullWidth (clicked)="logout()">
+      Cerrar sesión
+      <app-icon name="logout" [size]="16" />
+    </app-button>
+  </section>
+</main>

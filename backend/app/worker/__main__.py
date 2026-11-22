@@ -6,6 +6,7 @@ from pathlib import Path
 
 import httpx
 from sqlalchemy import and_, or_, select
+from sqlalchemy.orm import load_only
 from supabase import create_client
 from supabase.lib.client_options import SyncClientOptions
 
@@ -193,13 +194,22 @@ def _procesar_factura(
                             "La factura pendiente no tiene XML o clave de acceso."
                         )
 
-                    empresa = session.get(Empresa, empresa_id)
-                    if empresa is None:
+                    resultado_empresa = session.execute(
+                        select(
+                            Empresa.id_empresa,
+                            Empresa.datos_facturacion_electronica,
+                        ).where(
+                            Empresa.id_empresa == empresa_id
+                        )
+                    )
+                    fila_empresa = resultado_empresa.one_or_none()
+                    if fila_empresa is None:
                         raise ValueError(
                             "No existe la empresa asociada a la factura."
                         )
 
-                    configuracion = empresa.datos_facturacion_electronica or {}
+                    _, configuracion_empresa = fila_empresa
+                    configuracion = configuracion_empresa or {}
                     ambiente_configurado = configuracion.get("ambiente")
 
                     if ambiente_configurado not in ("1", "2"):
@@ -283,10 +293,9 @@ def _procesar_factura(
 
                     factura.estado_autorizacion = resultado.estado.value
 
-                    if resultado.mensajes:
-                        factura.mensajes_sri = _serializar_mensajes(
-                            resultado.mensajes
-                        )
+                    factura.mensajes_sri = _serializar_mensajes(
+                        resultado.mensajes or []
+                    )
 
                     if resultado.estado == EstadoEmision.AUTORIZADA:
                         factura.numero_autorizacion = (

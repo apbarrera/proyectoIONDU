@@ -58,13 +58,14 @@ class Venta(Base):
             ondelete="RESTRICT",
             name="venta_usuario_empresa_fk",
         ),
-        Index("idx_venta_cliente", "id_cliente"),
+        Index("idx_venta_empresa_cliente", "id_empresa", "id_cliente"),
         Index(
-            "idx_venta_empresa_fecha",
+            "idx_venta_empresa_fecha_id",
             "id_empresa",
             text("fecha DESC"),
+            "id_venta",
         ),
-        Index("idx_venta_usuario", "id_usuario"),
+        Index("idx_venta_usuario_empresa", "id_usuario", "id_empresa"),
     )
 
     id_venta: Mapped[int] = mapped_column(
@@ -76,7 +77,7 @@ class Venta(Base):
         Integer,
         ForeignKey(
             "empresa.id_empresa",
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
             name="venta_id_empresa_fkey",
         ),
         nullable=False,

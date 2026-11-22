@@ -45,7 +45,7 @@ class UsuarioEmpresa(Base):
     id_empresa: Mapped[int] = mapped_column(
         ForeignKey(
             "empresa.id_empresa",
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
         ),
         primary_key=True,
     )

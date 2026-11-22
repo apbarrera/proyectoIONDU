@@ -53,7 +53,7 @@ class DashboardFinanciero(Base):
         ForeignKey(
             "empresa.id_empresa",
             name="dashboard_financiero_id_empresa_fkey",
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
         ),
         nullable=False,
     )

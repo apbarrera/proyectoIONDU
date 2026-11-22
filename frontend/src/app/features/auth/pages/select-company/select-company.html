@@ -1,0 +1,59 @@
+<main class="company-selection">
+  <section class="company-selection__card" aria-labelledby="company-title">
+    <header class="company-selection__header">
+      <app-logo class="company-selection__logo" [size]="48" />
+      <p class="company-selection__eyebrow">IONDU</p>
+      <h1 id="company-title">Selecciona tu empresa</h1>
+      <p class="company-selection__description">
+        Elige la empresa con la que deseas trabajar en esta sesión.
+      </p>
+    </header>
+
+    <div class="company-selection__list" aria-label="Empresas disponibles">
+      @for (company of companies(); track company.id) {
+        <button
+          type="button"
+          class="company-option"
+          [disabled]="selectingCompanyId() !== null"
+          [attr.aria-busy]="selectingCompanyId() === company.id"
+          (click)="selectCompany(company.id)"
+        >
+          <span class="company-option__identity">
+            <span class="company-option__name">
+              {{ company.tradeName || company.name }}
+            </span>
+            @if (company.tradeName && company.tradeName !== company.name) {
+              <span class="company-option__legal-name">{{ company.name }}</span>
+            }
+            <span class="company-option__details">RUC: {{ company.ruc }}</span>
+            <span class="company-option__role">
+              {{ company.role === 'admin' ? 'Administrador' : 'Usuario operativo' }}
+            </span>
+          </span>
+
+          <span class="company-option__action" aria-hidden="true">
+            @if (selectingCompanyId() === company.id) {
+              <span class="company-option__spinner"></span>
+            } @else {
+              <app-icon name="arrow-right" [size]="20" />
+            }
+          </span>
+        </button>
+      }
+    </div>
+
+    @if (errorMessage()) {
+      <p class="company-selection__error" role="alert">
+        {{ errorMessage() }}
+      </p>
+    }
+
+    <footer class="company-selection__footer">
+      <span>¿No es tu cuenta?</span>
+      <app-button variant="ghost" size="sm" (clicked)="logout()">
+        Cerrar sesión
+        <app-icon name="logout" [size]="16" />
+      </app-button>
+    </footer>
+  </section>
+</main>

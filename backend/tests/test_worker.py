@@ -44,6 +44,15 @@ class SesionFalsa:
             raise AssertionError("Se solicitó un resultado inesperado a scalar().")
         return self.resultados.pop(0)
 
+    def execute(self, sentencia):
+        fila = None
+        if self.empresa is not None:
+            fila = (
+                self.empresa.id_empresa,
+                self.empresa.datos_facturacion_electronica,
+            )
+        return SimpleNamespace(one_or_none=lambda: fila)
+
     def get(self, modelo, identificador):
         return self.empresa
 
@@ -119,6 +128,7 @@ def factura_falsa(estado="por_enviar"):
 
 def empresa_falsa():
     return SimpleNamespace(
+        id_empresa=7,
         datos_facturacion_electronica={"ambiente": "1"}
     )
 

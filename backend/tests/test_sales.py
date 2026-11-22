@@ -144,15 +144,24 @@ def test_el_descuento_se_resta_de_la_linea(client, catalogo, vendedor):
     assert (venta["subtotal"], venta["ivaAmount"], venta["total"]) == (8.0, 1.2, 9.2)
 
 
-def test_sin_sesion_de_usuario_no_se_puede_registrar(client, empresas, catalogo):
+def test_sin_sesion_de_usuario_no_se_puede_registrar(
+    client, empresas, catalogo, monkeypatch
+):
+    from app.core.config import get_settings
+
     a, _ = empresas
     cuerpo = {
         "items": [{"productId": catalogo["cafe"], "quantity": 1}],
         "paymentMethod": "efectivo",
     }
-    response = client.post("/api/sales", json=cuerpo, headers=_h(a))
-    assert response.status_code == 403
-    assert response.json()["error"]["code"] == "USER_SESSION_REQUIRED"
+    monkeypatch.setenv("APP_ENV", "production")
+    get_settings.cache_clear()
+    try:
+        response = client.post("/api/sales", json=cuerpo, headers=_h(a))
+    finally:
+        get_settings.cache_clear()
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "UNAUTHENTICATED"
 
 
 # ---------- Stock ----------
@@ -337,6 +346,8 @@ def test_detalle_rechaza_producto_de_otra_empresa(client, db, empresas, catalogo
                 descuento=0,
                 codigo_porcentaje_iva="0",
                 subtotal=1,
+                porcentaje_iva=0,
+                valor_iva=0,
             )
         )
         db.flush()
@@ -372,6 +383,8 @@ def test_eliminar_producto_conserva_nombre_en_detalle_historico(
         descuento=0,
         codigo_porcentaje_iva="4",
         subtotal=4.50,
+        porcentaje_iva=15,
+        valor_iva=0.68,
     )
     db.add(detalle)
     db.flush()

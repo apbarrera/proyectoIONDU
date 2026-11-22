@@ -2,6 +2,8 @@
 
 import pytest
 
+from app.core.config import get_settings
+
 from app.services.gasto import CATEGORIAS_PREDEFINIDAS
 from tests.conftest import con_token
 
@@ -148,7 +150,7 @@ def test_registrar_un_gasto(client, empresas, usuario):
     assert client.get(f"/api/expenses/{gasto['id']}", headers=_h(a)).json() == gasto
 
 
-def test_registrar_gasto_exige_sesion(client, empresas):
+def test_registrar_gasto_exige_sesion(client, empresas, monkeypatch):
     a, _ = empresas
     cuerpo = {
         "categoryId": _categoria(client, a),
@@ -156,9 +158,14 @@ def test_registrar_gasto_exige_sesion(client, empresas):
         "description": "Gasolina",
         "paymentMethod": "efectivo",
     }
-    response = client.post("/api/expenses", json=cuerpo, headers=_h(a))
-    assert response.status_code == 403
-    assert response.json()["error"]["code"] == "USER_SESSION_REQUIRED"
+    monkeypatch.setenv("APP_ENV", "production")
+    get_settings.cache_clear()
+    try:
+        response = client.post("/api/expenses", json=cuerpo, headers=_h(a))
+    finally:
+        get_settings.cache_clear()
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "UNAUTHENTICATED"
 
 
 def test_gasto_invalido(client, empresas, usuario):
@@ -203,7 +210,7 @@ def test_filtrar_gastos(client, empresas, usuario):
     assert totales(minTotal=10, maxTotal=50) == [40]
 
 
-def test_editar_un_gasto(client, empresas, usuario):
+def test_editar_un_gasto(client, empresas, usuario, monkeypatch):
     a, _ = empresas
     proveedor = _proveedor(client, a)
     gasto = _gasto(client, usuario, _categoria(client, a), supplierId=proveedor["id"]).json()
@@ -217,7 +224,14 @@ def test_editar_un_gasto(client, empresas, usuario):
 
     for vacio in ({"description": None}, {"categoryId": None}, {"total": None}):
         assert client.patch(url, json=vacio, headers=con_token(usuario)).status_code == 422
-    assert client.patch(url, json={"total": 1}, headers=_h(a)).status_code == 403
+    monkeypatch.setenv("APP_ENV", "production")
+    get_settings.cache_clear()
+    try:
+        sin_sesion = client.patch(url, json={"total": 1}, headers=_h(a))
+    finally:
+        get_settings.cache_clear()
+    assert sin_sesion.status_code == 401
+    assert sin_sesion.json()["error"]["code"] == "UNAUTHENTICATED"
 
 
 def test_cada_empresa_ve_solo_sus_gastos(client, empresas, usuario):

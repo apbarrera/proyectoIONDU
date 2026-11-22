@@ -51,7 +51,7 @@ class ConsumoTokens(Base):
         ForeignKey(
             "empresa.id_empresa",
             name="consumo_tokens_id_empresa_fkey",
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
         ),
         nullable=False,
     )

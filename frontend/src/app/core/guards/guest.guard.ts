@@ -1,12 +1,27 @@
-import { inject } from '@angular/core';
+﻿import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 
-export const guestGuard: CanActivateFn = () => {
+export const guestGuard: CanActivateFn = async () => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
-  if (!auth.isAuthenticated()) return true;
+  try {
+    await auth.initialize();
+  } catch {
+    return router.createUrlTree(['/auth-error']);
+  }
 
-  return router.createUrlTree([auth.defaultRouteForCurrentUser()]);
+  switch (auth.status()) {
+    case 'authenticated':
+      return router.createUrlTree([auth.defaultRouteForCurrentUser()]);
+    case 'company-selection-required':
+      return router.createUrlTree(['/select-company']);
+    case 'no-company':
+      return router.createUrlTree(['/no-company']);
+    case 'error':
+      return router.createUrlTree(['/auth-error']);
+    default:
+      return true;
+  }
 };

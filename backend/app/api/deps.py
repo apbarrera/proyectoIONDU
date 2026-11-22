@@ -21,7 +21,7 @@ from app.core.errors import (
     UnauthenticatedError,
 )
 from app.core.seguridad import UsuarioAutenticado, VerificadorTokens
-from app.db.session import get_db
+from app.db.session import establecer_contexto_rls, get_db
 from app.models.rol import ADMINISTRADOR
 from app.repositories.usuario_empresa import (
     obtener_empresas_activas,
@@ -59,7 +59,9 @@ def get_usuario_actual(
     if not token:
         raise UnauthenticatedError("Inicia sesión para continuar.")
     if verificador is None:
-        raise UnauthenticatedError("El inicio de sesión no está configurado (falta SUPABASE_URL).")
+        raise UnauthenticatedError(
+            "El inicio de sesión no está configurado (falta SUPABASE_URL)."
+        )
     return verificador.verificar(token)
 
 
@@ -71,12 +73,88 @@ UsuarioActual = Annotated[UsuarioAutenticado, Depends(get_usuario_actual)]
 class Contexto:
     empresa_id: int
     rol: str
-    usuario: UsuarioAutenticado | None = None  # None solo con el encabezado de desarrollo
+    usuario: UsuarioAutenticado | None = None
     nombre: str | None = None
 
     @property
     def es_administrador(self) -> bool:
         return self.rol == ADMINISTRADOR
+
+
+def _contexto_con_membresia(
+    db: Session,
+    usuario: UsuarioAutenticado,
+    x_empresa_id: int | None,
+) -> Contexto:
+    """Resuelve y valida la empresa bajo el contexto RLS del usuario."""
+
+    # Primero se establece únicamente el usuario para consultar sus empresas.
+    establecer_contexto_rls(
+        db,
+        usuario_id=usuario.id,
+        empresa_id=None,
+    )
+
+    empresas = obtener_empresas_activas(db, usuario.id)
+
+    if x_empresa_id is not None:
+        empresa_seleccionada = next(
+            (
+                empresa
+                for empresa in empresas
+                if empresa.id_empresa == x_empresa_id
+            ),
+            None,
+        )
+
+        if empresa_seleccionada is None:
+            raise ForbiddenError(
+                "No tienes una pertenencia activa a la empresa seleccionada.",
+                code="COMPANY_ACCESS_DENIED",
+            )
+
+        id_empresa = empresa_seleccionada.id_empresa
+    else:
+        if not empresas:
+            raise ForbiddenError(
+                "Tu usuario no tiene una empresa asignada o está inactivo.",
+                code="NO_COMPANY",
+            )
+
+        if len(empresas) > 1:
+            raise ConflictError(
+                "Debes seleccionar una empresa para continuar.",
+                code="COMPANY_SELECTION_REQUIRED",
+            )
+
+        id_empresa = empresas[0].id_empresa
+
+    # Después se establece el contexto completo de usuario y empresa.
+    establecer_contexto_rls(
+        db,
+        usuario_id=usuario.id,
+        empresa_id=id_empresa,
+    )
+
+    # Se vuelve a comprobar la pertenencia bajo el contexto RLS seleccionado.
+    pertenencia = obtener_pertenencia_activa(
+        db,
+        usuario.id,
+        id_empresa,
+    )
+
+    if pertenencia is None:
+        raise ForbiddenError(
+            "No tienes una pertenencia activa a la empresa seleccionada.",
+            code="COMPANY_ACCESS_DENIED",
+        )
+
+    return Contexto(
+        empresa_id=pertenencia.id_empresa,
+        rol=pertenencia.rol,
+        usuario=usuario,
+        nombre=pertenencia.nombre,
+    )
 
 
 def get_contexto(
@@ -100,81 +178,28 @@ def get_contexto(
             )
 
         usuario = verificador.verificar(token)
-        empresas = obtener_empresas_activas(db, usuario.id)
+        return _contexto_con_membresia(db, usuario, x_empresa_id)
 
-        if not empresas:
-            raise ForbiddenError(
-                "Tu usuario no tiene una empresa asignada o está inactivo.",
-                code="NO_COMPANY",
+    settings = get_settings()
+
+    # El acceso sin token solo existe en desarrollo y exige un usuario real.
+    if (
+        settings.app_env == "development"
+        and not authorization
+        and x_empresa_id is not None
+    ):
+        id_usuario = x_usuario_id or settings.dev_user_id
+
+        if id_usuario is None:
+            raise UnauthenticatedError(
+                "Configura DEV_USER_ID o proporciona X-Usuario-Id para desarrollo."
             )
 
-        if x_empresa_id is not None:
-            empresa_seleccionada = next(
-                (empresa for empresa in empresas if empresa.id_empresa == x_empresa_id),
-                None,
-            )
+        usuario = UsuarioAutenticado(id=id_usuario, email=None)
 
-            if empresa_seleccionada is None:
-                raise ForbiddenError(
-                    "No tienes una pertenencia activa a la empresa seleccionada.",
-                    code="COMPANY_ACCESS_DENIED",
-                )
-
-            id_empresa = empresa_seleccionada.id_empresa
-
-        else:
-            if len(empresas) > 1:
-                raise ConflictError(
-                    "Debes seleccionar una empresa para continuar.",
-                    code="COMPANY_SELECTION_REQUIRED",
-                )
-
-            id_empresa = empresas[0].id_empresa
-
-        pertenencia = obtener_pertenencia_activa(
-            db,
-            usuario.id,
-            id_empresa,
-        )
-
-        if pertenencia is None:
-            raise ForbiddenError(
-                "No tienes una pertenencia activa a la empresa seleccionada.",
-                code="COMPANY_ACCESS_DENIED",
-            )
-
-        return Contexto(
-            empresa_id=pertenencia.id_empresa,
-            rol=pertenencia.rol,
-            usuario=usuario,
-            nombre=pertenencia.nombre,
-        )
-
-    if get_settings().app_env == "development" and x_empresa_id is not None:
-        if x_usuario_id is not None:
-            return _contexto_usuario_demo(db, x_usuario_id, x_empresa_id)
-        return Contexto(empresa_id=x_empresa_id, rol=ADMINISTRADOR)
+        return _contexto_con_membresia(db, usuario, x_empresa_id)
 
     raise UnauthenticatedError("Inicia sesión para continuar.")
-
-
-def _contexto_usuario_demo(db: Session, id_usuario: uuid.UUID, id_empresa: int) -> Contexto:
-    """Solo desarrollo: actuar como un usuario sin Supabase (para Swagger y demos).
-
-    Usa su pertenencia REAL en la base: mismo rol y nombre, así los permisos se respetan.
-    """
-    pertenencia = obtener_pertenencia_activa(db, id_usuario, id_empresa)
-    if pertenencia is None:
-        raise ForbiddenError(
-            "Ese usuario no tiene una pertenencia activa a la empresa.",
-            code="COMPANY_ACCESS_DENIED",
-        )
-    return Contexto(
-        empresa_id=pertenencia.id_empresa,
-        rol=pertenencia.rol,
-        usuario=UsuarioAutenticado(id=id_usuario, email=None),
-        nombre=pertenencia.nombre,
-    )
 
 
 ContextoActual = Annotated[Contexto, Depends(get_contexto)]

@@ -50,7 +50,7 @@ class SecuenciaComprobante(Base):
     id_empresa: Mapped[int] = mapped_column(
         ForeignKey(
             "empresa.id_empresa",
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
             name="secuencia_comprobante_id_empresa_fkey",
         ),
         nullable=False,

@@ -36,7 +36,7 @@ class Proveedor(Base):
     id_empresa: Mapped[int] = mapped_column(
         ForeignKey(
             "empresa.id_empresa",
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
             name="proveedor_id_empresa_fkey",
         ),
         nullable=False,

@@ -72,11 +72,8 @@
   `.env` que el CI no tiene; al principio eso dejó el CI en rojo.
 
 ### 1.9 PostgreSQL local para desarrollo
-- **Decisión (20/10/2026):** `docker-compose.override.yml` agrega un servicio `db` con PostgreSQL 17 (la misma
-  versión mayor que Supabase). Si `DATABASE_URL` está vacía en el `.env`, la API y el worker usan esta base; si
-  tiene la dirección de Supabase, usan Supabase.
-- **Por qué:** cada uno desarrolla y prueba sin depender de Supabase (que todavía no existe) ni de internet, y como
-  Supabase es PostgreSQL, lo que funciona aquí funciona allá cambiando una variable.
+- **Decisión (21/11/2026):** API, worker y Alembic utilizan conexiones PostgreSQL independientes mediante `DATABASE_URL`, `WORKER_DATABASE_URL` y `MIGRATION_DATABASE_URL`, respectivamente. Las tres deben configurarse explícitamente en el entorno, también en desarrollo local.
+- **Por qué:** se separan los privilegios de ejecución de la API, el worker y las migraciones. Esto permite aplicar RLS y el principio de mínimo privilegio sin compartir una cuenta administrativa.
 - Se publica solo en `127.0.0.1:15432` (no se ve desde la red). Se eligió 15432 porque en la máquina de desarrollo
   ya había PostgreSQL instalados en 5432, 5433 y 5434.
 - La contraseña no está en el repositorio: se lee de `POSTGRES_PASSWORD` en el `.env`, que es obligatoria.
@@ -184,7 +181,7 @@
 - **Por qué:** se aplica solo lo nuevo, sin borrar datos, y se sabe en qué versión está cada base (`alembic current`).
   En producción, con datos reales, es la única forma segura.
 - La primera migración será el esquema de `database/schema.sql` una vez corregido (ver `ESTADO.md`, sección 2.F).
-- `env.py` lee la dirección de `DATABASE_URL` (nunca de `alembic.ini`) y **nunca propone borrar una tabla que no tenga
+  `env.py` lee la dirección de `MIGRATION_DATABASE_URL` (nunca de `DATABASE_URL` ni de `alembic.ini`) y **nunca propone borrar una tabla que no tenga
   modelo**: el `--autogenerate` solo crea o modifica; un `DROP TABLE` se escribe a mano.
 - Los modelos heredan de `Base` (`app/db/base.py`), que fija los nombres de las restricciones con el mismo estilo de
   PostgreSQL (`producto_id_empresa_fkey`, `empresa_ruc_key`); sin eso, Alembic no puede modificarlas después.

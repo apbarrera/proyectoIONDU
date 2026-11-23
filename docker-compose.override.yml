@@ -3,8 +3,8 @@
 # En Coolify NO se usa (Coolify solo lee docker-compose.yml).
 #
 # También agrega un PostgreSQL local ("db") para desarrollar sin depender de
-# Supabase. Si DATABASE_URL está definida en .env (por ejemplo, la de Supabase),
-# la API y el worker usan esa; si está vacía, usan este PostgreSQL local.
+# Supabase. Las tres conexiones de .env son obligatorias; en local pueden apuntar
+# a este PostgreSQL (ver la nota de DATABASE_URL en .env.example).
 
 x-local-db-url: &local-db-url
   DATABASE_URL: ${DATABASE_URL:?Define DATABASE_URL con el usuario de API}
@@ -19,6 +19,8 @@ services:
   api:
     environment:
       <<: *local-db-url
+      # Usuario con el que actúa la API sin token (solo con APP_ENV=development).
+      DEV_USER_ID: ${DEV_USER_ID:-}
     depends_on:
       db:
         condition: service_healthy

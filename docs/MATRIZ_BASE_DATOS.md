@@ -485,37 +485,37 @@ Si se utilizan funciones `SECURITY DEFINER`, deberán contar con `search_path` f
 
 ### 8.6.1. Acceso transversal del worker
 
-El worker es un servicio t?cnico de confianza que procesa una cola global de
-facturas electr?nicas pertenecientes a distintas empresas. Por este motivo,
+El worker es un servicio técnico de confianza que procesa una cola global de
+facturas electrónicas pertenecientes a distintas empresas. Por este motivo,
 su acceso a los registros de `factura` no se limita al contexto de un ?nico
 `id_empresa`.
 
 - `factura_worker_access` permite al rol `iondu_worker` operar sobre las
   facturas que debe procesar, sin filtro por empresa (`USING (true)` y
   `WITH CHECK (true)`).
-- `empresa_worker_select` permite consultar los datos de configuraci?n
+- `empresa_worker_select` permite consultar los datos de configuración
   necesarios para procesar cada factura.
 - `iondu_worker` es un rol `LOGIN`, `NOSUPERUSER` y `NOBYPASSRLS`.
-  El acceso transversal se concede mediante sus pol?ticas RLS, no mediante
-  la omisi?n de RLS.
-- Los permisos de columnas del worker est?n restringidos. En `factura`,
+  El acceso transversal se concede mediante sus políticas RLS, no mediante
+  la omisión de RLS.
+- Los permisos de columnas del worker están restringidos. En `factura`,
   sus actualizaciones se limitan a los campos requeridos para registrar
   el resultado del procesamiento; no tiene permisos USAGE sobre las
   secuencias auditadas.
 - La API mantiene un modelo distinto: el acceso de sus usuarios se valida
   mediante JWT, pertenencia activa, empresa seleccionada y contexto RLS.
 
-**Implicaci?n de seguridad:** `iondu_worker` es una identidad t?cnica con
-confianza transversal entre empresas. Sus credenciales, conexi?n y ejecuci?n
+**Implicación de seguridad:** `iondu_worker` es una identidad técnica con
+confianza transversal entre empresas. Sus credenciales, conexión y ejecución
 deben protegerse como componentes privilegiados del sistema. No debe
 reutilizarse para peticiones de usuarios ni exponerse al frontend.
 
-**Alcance de la comprobaci?n:** la definici?n de las pol?ticas, los atributos
+**Alcance de la comprobación:** la definición de las políticas, los atributos
 del rol y los permisos de columnas se comprobaron en
-`iondu_fresh_install_test_v2`. Las pruebas automatizadas de l?gica y sesi?n
+`iondu_fresh_install_test_v2`. Las pruebas automatizadas de lógica y sesión
 del worker aprobaron (20 pruebas; 2 pruebas de bloqueo con fixture de base
-de datos fueron excluidas). La validaci?n integral de las operaciones SQL
-del worker con el rol real `iondu_worker` y la comprobaci?n en el entorno
+de datos fueron excluidas). La validación integral de las operaciones SQL
+del worker con el rol real `iondu_worker` y la comprobación en el entorno
 de despliegue permanecen pendientes.
 
 ### 8.7. Estado de la auditoría de seguridad

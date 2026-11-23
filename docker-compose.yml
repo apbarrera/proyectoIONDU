@@ -1,14 +1,14 @@
 # ============================================================
-# IONDU Â· docker-compose.yml
+# IONDU · docker-compose.yml
 # Funciona igual en local (docker compose up --build) y en Coolify
 # (Build Pack: Docker Compose, ruta /docker-compose.yml).
 #
 # Reglas:
-#  - NO usar "ports:" en producciÃ³n: Docker se salta el firewall del host.
+#  - NO usar "ports:" en producción: Docker se salta el firewall del host.
 #    Se usa "expose:"; el proxy inverso (Traefik/Coolify o el del cliente)
 #    enruta por dominio. Para local, ver docker-compose.override.yml.
-#  - Solo "web" es pÃºblico. "api" y "worker" son internos: se ven entre sÃ­
-#    por nombre de servicio (api:8000) y Nginx reenvÃ­a /api a "api".
+#  - Solo "web" es público. "api" y "worker" son internos: se ven entre sí
+#    por nombre de servicio (api:8000) y Nginx reenvía /api a "api".
 #  - No se declaran redes propias: Coolify crea una red aislada por stack.
 #  - Contenedores sin estado: archivos y certificados viven en Supabase.
 # ============================================================
@@ -27,7 +27,7 @@ x-backend-env: &backend-env
   MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY:-}
 
 services:
-  # ---------------- Frontend (pÃºblico) ----------------
+  # ---------------- Frontend (público) ----------------
   web:
     build:
       context: ./frontend
@@ -51,7 +51,7 @@ services:
         limits:
           memory: 128M
 
-  # ---------------- API (interna; se alcanza vÃ­a Nginx en /api) ----------------
+  # ---------------- API (interna; se alcanza vía Nginx en /api) ----------------
   api:
     build:
       context: ./backend
@@ -77,9 +77,9 @@ services:
 
   # ---------------- Worker (sin puertos, sin dominio) ----------------
   worker:
-    # Mismo Dockerfile que la API; la cachÃ© reutiliza todas sus capas.
+    # Mismo Dockerfile que la API; la caché reutiliza todas sus capas.
     # Sin "image:" propio: si dos servicios con "build" comparten nombre de
-    # imagen, la construcciÃ³n en paralelo falla con "already exists".
+    # imagen, la construcción en paralelo falla con "already exists".
     build:
       context: ./backend
       dockerfile: Dockerfile

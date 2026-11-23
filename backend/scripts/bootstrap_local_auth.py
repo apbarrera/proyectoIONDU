@@ -1,6 +1,6 @@
-"""Inicializa el esquema auth m?nimo para desarrollo local.
+"""Inicializa el esquema auth mínimo para desarrollo local.
 
-No sustituye Supabase Auth. No debe ejecutarse en producci?n.
+No sustituye Supabase Auth. No debe ejecutarse en producción.
 Solo permite crear auth.users(id UUID) en localhost, base iondu.
 """
 
@@ -19,7 +19,7 @@ from app.core.config import get_settings
 def main() -> None:
     url = make_url(get_settings().database_url)
 
-    # Protecci?n estricta: no ejecutar contra Supabase ni otra base.
+    # Protección estricta: no ejecutar contra Supabase ni otra base.
     if (
         url.get_backend_name() != "postgresql"
         or url.host not in {"localhost", "127.0.0.1", "::1"}
@@ -61,11 +61,11 @@ def main() -> None:
                 raise RuntimeError(
                     "auth.users existe, pero su columna id no tiene "
                     "la estructura UUID NOT NULL esperada. "
-                    "No se modific? la tabla existente."
+                    "No se modificó la tabla existente."
                 )
 
         print("OK: esquema auth local disponible y auth.users.id es UUID NOT NULL.")
-        print("Nota: esta tabla auxiliar no implementa autenticaci?n ni reemplaza Supabase Auth.")
+        print("Nota: esta tabla auxiliar no implementa autenticación ni reemplaza Supabase Auth.")
     finally:
         engine.dispose()
 

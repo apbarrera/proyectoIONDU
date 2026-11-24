@@ -36,6 +36,24 @@ $env:APP_ENV = "development"
 .venv\Scripts\python.exe -m scripts.cargar_datos_demo      # cafetería demo con un mes de datos
 ```
 
+## Pruebas del backend
+
+Corren con un usuario **restringido** (`iondu_test_runner`, sin SUPERUSER ni BYPASSRLS), igual que en
+el CI, para demostrar que las políticas RLS aíslan a cada empresa. Crearlo una vez (con Docker encendido),
+eligiendo una clave:
+
+```powershell
+docker exec proyectoiondu-db-1 psql -U iondu -d postgres -c "CREATE DATABASE iondu_test OWNER iondu" -c "CREATE ROLE iondu_test_runner LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<clave>'"
+docker exec proyectoiondu-db-1 psql -U iondu -d iondu_test -c "GRANT CONNECT, CREATE, TEMP ON DATABASE iondu_test TO iondu_test_runner" -c "GRANT USAGE, CREATE ON SCHEMA public TO iondu_test_runner"
+```
+
+Luego, desde `backend/`:
+
+```powershell
+$env:TEST_DATABASE_URL = "postgresql+psycopg://iondu_test_runner:<clave>@127.0.0.1:15432/iondu_test"
+.venv\Scripts\python.exe -m pytest -q
+```
+
 ## Ejecutar sin Docker (desarrollo del frontend)
 
 ```bash

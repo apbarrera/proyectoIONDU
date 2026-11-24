@@ -6,7 +6,18 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Cliente, DetalleVenta, MovimientoInventario, Producto, Venta
+from app.models import (
+    Cliente,
+    DetalleVenta,
+    Factura,
+    MovimientoInventario,
+    Producto,
+    UsuarioEmpresa,
+    Venta,
+)
+
+# Venta, su cliente, su factura y el nombre de quien la registró.
+FilaVenta = tuple[Venta, Cliente | None, Factura | None, str | None]
 
 
 class VentaRepository:
@@ -41,10 +52,19 @@ class VentaRepository:
     # ---------- lectura ----------
     def _con_cliente(self):
         return (
-            select(Venta, Cliente)
+            select(Venta, Cliente, Factura, UsuarioEmpresa.nombre_visible)
             .outerjoin(
                 Cliente,
                 (Cliente.id_cliente == Venta.id_cliente) & (Cliente.id_empresa == Venta.id_empresa),
+            )
+            .outerjoin(
+                Factura,
+                (Factura.id_venta == Venta.id_venta) & (Factura.id_empresa == Venta.id_empresa),
+            )
+            .outerjoin(
+                UsuarioEmpresa,
+                (UsuarioEmpresa.id_usuario == Venta.id_usuario)
+                & (UsuarioEmpresa.id_empresa == Venta.id_empresa),
             )
             .where(Venta.id_empresa == self._empresa_id)
         )
@@ -58,7 +78,7 @@ class VentaRepository:
         metodo_pago: str | None = None,
         offset: int = 0,
         limit: int = 20,
-    ) -> tuple[list[tuple[Venta, Cliente | None]], int]:
+    ) -> tuple[list[FilaVenta], int]:
         stmt = self._con_cliente()
         if desde is not None:
             stmt = stmt.where(Venta.fecha >= desde)
@@ -72,11 +92,11 @@ class VentaRepository:
         filas = self._db.execute(
             stmt.order_by(Venta.fecha.desc(), Venta.id_venta.desc()).offset(offset).limit(limit)
         ).all()
-        return [(fila[0], fila[1]) for fila in filas], total
+        return [tuple(fila) for fila in filas], total
 
-    def obtener(self, id_venta: int) -> tuple[Venta, Cliente | None] | None:
+    def obtener(self, id_venta: int) -> FilaVenta | None:
         fila = self._db.execute(self._con_cliente().where(Venta.id_venta == id_venta)).first()
-        return (fila[0], fila[1]) if fila else None
+        return tuple(fila) if fila else None
 
     def detalles(
         self, ids_venta: Sequence[int]

@@ -58,7 +58,7 @@ class FakeVentaRepository:
     def obtener(self, id_venta):
         if self.venta is None or self.venta.id_venta != id_venta:
             return None
-        return self.venta, None
+        return self.venta, None, None, None  # venta, cliente, factura, quién la registró
 
     def detalles(self, ids_venta):
         resultado = {id_venta: [] for id_venta in ids_venta}

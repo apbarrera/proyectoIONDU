@@ -317,9 +317,23 @@ Respuestas: `201` con `Sale`; `409 INSUFFICIENT_STOCK` si no alcanza el stock (c
   "total": 27.6,
   "paymentMethod": "efectivo",
   "status": "completada",
-  "observation": "Entrega a domicilio"
+  "observation": "Entrega a domicilio",
+  "createdById": "11111111-1111-1111-1111-111111111111",
+  "createdBy": "Ana Torres",
+  "invoice": {
+    "id": 9, "saleId": 31, "invoiceNumber": "001-001-000000007", "accessKey": "0311202601179001...",
+    "authorizationStatus": "rechazada", "authorizationNumber": null, "authorizationDate": null,
+    "messages": [ { "identifier": "45", "message": "ERROR SECUENCIAL REGISTRADO",
+                    "additionalInformation": null, "type": "ERROR" } ],
+    "issueDate": "2026-11-03T15:21:00-05:00", "subtotal": 24.0, "taxes": 3.6, "total": 27.6
+  }
 }
 ```
+
+- `createdBy`: nombre en la empresa de quien registró la venta (columna "Usuario" del historial).
+- `invoice`: la factura de la venta con su estado (`autorizada`, `rechazada`, `por_enviar`, `por_autorizar`)
+  y los mensajes del SRI; `null` si todavía no se facturó. El historial (`GET /api/sales`) ya la trae en cada
+  venta, sin una petición por fila.
 
 En la respuesta, `vatPercentageCode` representa el código de IVA guardado en cada detalle. Para las líneas de concepto libre, `productId` y `sku` son `null`, y `productName` contiene la descripción registrada.
 
@@ -333,9 +347,10 @@ Sin cliente: `customerId` y `customerIdentification` son `null` y `customerName`
 | ✅ | `GET /api/sales` | Historial, de la más reciente a la más antigua. Filtros: `from` y `to` (fechas `AAAA-MM-DD`, en hora de Ecuador), `customerId`, `paymentMethod` | `200` con `PageResult<Sale>` |
 | ✅ | `GET /api/sales/{id}` | Una venta | `200` con `Sale`, o `404` |
 | ✅ | `POST /api/sales/{id}/invoice` | **Emite la factura electrónica** de la venta: XML, firma con el `.p12` de la empresa, envío al SRI y RIDE. Exige sesión | `201` con `Invoice` |
+| ✅ | `GET /api/sales/{id}/invoice` | Estado actual de la factura de la venta, para seguirla mientras el worker la autoriza | `200` con `Invoice`; `404 INVOICE_NOT_FOUND` si no tiene |
 | ✅ | `GET /api/sales/{id}/invoice/ride` | Descarga el PDF (RIDE) de la factura. Exige sesión | `200` con `application/pdf` |
 
-Pendiente: anular ventas (RF-2.7) y completar la integración para emitir facturas electrónicas desde una venta.
+Pendiente: anular ventas (RF-2.7) y reintentar una factura rechazada.
 
 ## 9. Cambios que implica en el frontend
 

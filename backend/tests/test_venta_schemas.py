@@ -1,5 +1,6 @@
 """Pruebas unitarias de los esquemas de ventas, sin acceso a PostgreSQL."""
 
+import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
@@ -84,6 +85,7 @@ def test_a_sale_reconstruye_venta_mixta_y_conserva_iva_por_linea():
         metodo_pago="EFECTIVO",
         estado="COMPLETADA",
         observacion=None,
+        id_usuario=uuid.uuid4(),
     )
 
     detalle_producto = SimpleNamespace(

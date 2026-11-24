@@ -14,10 +14,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import TIMEZONE
 from app.core.errors import ConflictError, NotFoundError, UnprocessableError
-from app.models import Cliente, DetalleVenta, MovimientoInventario, Producto, Venta
+from app.models import DetalleVenta, MovimientoInventario, Producto, Venta
 from app.repositories.cliente import ClienteRepository
 from app.repositories.venta import VentaRepository
 from app.schemas.common import Page
+from app.schemas.factura import invoice_desde_factura
 from app.schemas.venta import (
     PaymentMethod,
     Sale,
@@ -72,7 +73,7 @@ def _error(campo: str, mensaje: str, code: str) -> UnprocessableError:
     )
 
 
-def _a_sale(venta: Venta, cliente: Cliente | None, lineas) -> Sale:
+def _a_sale(venta: Venta, cliente, lineas, factura=None, creado_por: str | None = None) -> Sale:
     return Sale(
         id=venta.id_venta,
         date=venta.fecha.astimezone(_ZONA),
@@ -98,6 +99,9 @@ def _a_sale(venta: Venta, cliente: Cliente | None, lineas) -> Sale:
         payment_method=_metodo_pago_desde_db(venta.metodo_pago),
         status=_estado_desde_db(venta.estado),
         observation=venta.observacion,
+        created_by_id=venta.id_usuario,
+        created_by=creado_por,
+        invoice=invoice_desde_factura(factura) if factura else None,
     )
 
 
@@ -137,10 +141,10 @@ class VentaService:
             offset=(page - 1) * page_size,
             limit=page_size,
         )
-        lineas = self._repo.detalles([venta.id_venta for venta, _ in filas])
+        lineas = self._repo.detalles([fila[0].id_venta for fila in filas])
 
         return Page[Sale](
-            items=[_a_sale(v, c, lineas.get(v.id_venta, [])) for v, c in filas],
+            items=[_a_sale(v, c, lineas.get(v.id_venta, []), f, u) for v, c, f, u in filas],
             total=total,
             page=page,
             page_size=page_size,
@@ -152,12 +156,9 @@ class VentaService:
         if encontrada is None:
             raise NotFoundError("La venta no existe.")
 
-        venta, cliente = encontrada
-        return _a_sale(
-            venta,
-            cliente,
-            self._repo.detalles([id_venta]).get(id_venta, []),
-        )
+        venta, cliente, factura, creado_por = encontrada
+        lineas = self._repo.detalles([id_venta]).get(id_venta, [])
+        return _a_sale(venta, cliente, lineas, factura, creado_por)
 
     # ---------- registrar ----------
     def crear(self, datos: SaleCreate, id_usuario: uuid.UUID) -> Sale:

@@ -451,3 +451,58 @@ def test_eliminar_producto_conserva_nombre_en_detalle_historico(
     assert respuesta.status_code == 200, respuesta.text
     assert respuesta.json()["items"][0]["productId"] is None
     assert respuesta.json()["items"][0]["productName"] == nombre_historico
+
+
+# ---------- Quién registró la venta y estado de su factura ----------
+def _factura(db, empresa_id: int, id_venta: int, estado: str, mensajes=None):
+    from decimal import Decimal
+
+    from app.models import Factura
+
+    factura = Factura(
+        id_empresa=empresa_id,
+        id_venta=id_venta,
+        numero_comprobante="001-001-000000007",
+        clave_acceso="1" * 49,
+        estado_autorizacion=estado,
+        mensajes_sri=mensajes or [],
+        subtotal=Decimal("4.50"),
+        impuestos=Decimal("0.68"),
+        total=Decimal("5.18"),
+        fecha_emision=datetime.now(ZoneInfo("America/Guayaquil")),
+    )
+    db.add(factura)
+    db.flush()
+    return factura
+
+
+def test_la_venta_dice_quien_la_registro_y_su_factura(client, db, empresas, catalogo, vendedor):
+    a, _ = empresas
+    venta = _vender(client, vendedor, [{"productId": catalogo["cafe"], "quantity": 1}]).json()
+    assert (venta["createdById"], venta["createdBy"]) == (str(vendedor), "Ana Torres")
+    assert venta["invoice"] is None
+    sin_factura = client.get(f"/api/sales/{venta['id']}/invoice", headers=_h(vendedor))
+    assert (sin_factura.status_code, sin_factura.json()["error"]["code"]) == (
+        404,
+        "INVOICE_NOT_FOUND",
+    )
+
+    rechazo = {
+        "identificador": "45",
+        "mensaje": "ERROR SECUENCIAL REGISTRADO",
+        "informacion_adicional": None,
+        "tipo": "ERROR",
+    }
+    _factura(db, a, venta["id"], "rechazada", [rechazo])
+
+    detalle = client.get(f"/api/sales/{venta['id']}", headers=_h(vendedor)).json()
+    factura = detalle["invoice"]
+    assert (factura["invoiceNumber"], factura["authorizationStatus"]) == (
+        "001-001-000000007",
+        "rechazada",
+    )
+    assert factura["messages"][0]["message"] == "ERROR SECUENCIAL REGISTRADO"
+    # El historial también la trae, sin una petición por venta.
+    historial = client.get("/api/sales", headers=_h(vendedor)).json()["items"]
+    assert historial[0]["invoice"]["authorizationStatus"] == "rechazada"
+    assert client.get(f"/api/sales/{venta['id']}/invoice", headers=_h(vendedor)).json() == factura

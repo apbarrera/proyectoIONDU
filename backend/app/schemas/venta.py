@@ -1,5 +1,6 @@
 """Datos de entrada y salida de ventas (docs/API.md, sección 8)."""
 
+import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
@@ -15,6 +16,7 @@ from app.schemas.common import (
     Text255,
     UnitPrice,
 )
+from app.schemas.factura import Invoice
 from app.schemas.producto import VatPercentageCode
 
 # La tarjeta se separa en débito y crédito porque el SRI las distingue.
@@ -88,3 +90,6 @@ class Sale(ApiModel):
     payment_method: PaymentMethod
     status: SaleStatus
     observation: str | None
+    created_by_id: uuid.UUID  # usuario que registró la venta
+    created_by: str | None  # su nombre en la empresa
+    invoice: Invoice | None  # None: la venta todavía no se factura

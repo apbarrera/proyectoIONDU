@@ -139,7 +139,7 @@ class FacturaService:
             if fila is None:
                 raise NotFoundError("La venta solicitada no existe.")
 
-            venta, cliente = fila
+            venta, cliente = fila[0], fila[1]
             detalles_venta = self.ventas.detalles([id_venta]).get(id_venta, [])
 
             if not detalles_venta:

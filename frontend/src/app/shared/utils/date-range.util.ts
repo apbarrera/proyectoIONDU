@@ -6,8 +6,11 @@ export interface DateRange {
   to: string;
 }
 
+/** Fecha `AAAA-MM-DD` del calendario local. `toISOString` usaría UTC y en Ecuador (UTC-5) cambia de día a las 19:00. */
 function toIsoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
 }
 
 export function resolveDateRange(option: PeriodOption, custom?: { from: string; to: string }): DateRange {

@@ -47,9 +47,15 @@ def test_sin_empresa_o_inactivo_responde_403(client, empresas, nuevo_usuario, es
     assert response.json()["error"]["code"] == "NO_COMPANY"
 
 
-def test_me_sin_token_no_sirve_con_el_encabezado_de_desarrollo(client, empresas):
+def test_me_sin_token_no_sirve_con_el_encabezado_de_desarrollo(client, empresas, monkeypatch):
     a, _ = empresas
-    assert client.get("/api/me", headers={"X-Empresa-Id": str(a)}).status_code == 401
+    monkeypatch.setenv("APP_ENV", "production")
+    get_settings.cache_clear()
+    try:
+        response = client.get("/api/me", headers={"X-Empresa-Id": str(a)})
+    finally:
+        get_settings.cache_clear()
+    assert response.status_code == 401
 
 
 # ---------- Selección de empresa ----------
@@ -198,3 +204,62 @@ def test_solo_el_administrador_pasa_requiere_administrador():
     assert requiere_administrador(Contexto(empresa_id=1, rol=ADMINISTRADOR)).es_administrador
     with pytest.raises(ForbiddenError, match="solo para administradores"):
         requiere_administrador(Contexto(empresa_id=1, rol=OPERATIVO))
+
+
+# ---------- Usuario demo (solo desarrollo, para Swagger) ----------
+def _demo(usuario, empresa_id: int) -> dict[str, str]:
+    return {"X-Empresa-Id": str(empresa_id), "X-Usuario-Id": str(usuario)}
+
+
+def test_usuario_demo_actua_con_su_rol_real(client, empresas, nuevo_usuario):
+    a, _ = empresas
+    operador = nuevo_usuario(a, rol=OPERATIVO)
+    perfil = client.get("/api/me", headers=_demo(operador, a))
+    assert perfil.status_code == 200
+    assert (perfil.json()["id"], perfil.json()["role"]) == (str(operador), "operator")
+    # Es Operativo de verdad: no entra a lo exclusivo del Administrador.
+    response = client.put("/api/company", json={"tradeName": "X"}, headers=_demo(operador, a))
+    assert response.status_code == 403
+
+
+def test_usuario_demo_sin_pertenencia_a_la_empresa(client, empresas, nuevo_usuario):
+    a, b = empresas
+    usuario = nuevo_usuario(a)
+    for headers in (_demo(usuario, b), _demo(uuid.uuid4(), a)):
+        response = client.get("/api/me", headers=headers)
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "COMPANY_ACCESS_DENIED"
+
+
+def test_usuario_demo_no_existe_en_produccion(client, empresas, nuevo_usuario, monkeypatch):
+    a, _ = empresas
+    usuario = nuevo_usuario(a)
+    monkeypatch.setenv("APP_ENV", "production")
+    get_settings.cache_clear()
+    try:
+        response = client.get("/api/me", headers=_demo(usuario, a))
+    finally:
+        get_settings.cache_clear()
+    assert response.status_code == 401
+
+
+def test_lista_empresas_establece_contexto_rls_del_usuario(
+    client, empresas, nuevo_usuario, monkeypatch
+):
+    a, _ = empresas
+    usuario = nuevo_usuario(a)
+    llamadas = []
+
+    def registrar_contexto(db, *, usuario_id, empresa_id):
+        llamadas.append((usuario_id, empresa_id))
+
+    monkeypatch.setattr(
+        "app.api.me.establecer_contexto_rls",
+        registrar_contexto,
+        raising=False,
+    )
+
+    response = client.get("/api/me/companies", headers=_con_token(usuario))
+
+    assert response.status_code == 200
+    assert llamadas == [(str(usuario), None)]

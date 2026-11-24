@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 
 from app.api import facturas as facturas_api
 from app.api.deps import Contexto, get_contexto
-from app.core.errors import ForbiddenError
 from app.main import app
 from app.models.rol import OPERATIVO
 
@@ -20,7 +19,7 @@ def _factura_falsa():
         clave_acceso="1234567890123456789012345678901234567890123456789",
         estado_autorizacion="autorizada",
         numero_autorizacion="1234567890",
-        fecha_autorizacion=datetime(2026, 11, 11, 20, 0, tzinfo=timezone.utc),
+        fecha_autorizacion=datetime(2026, 11, 11, 20, 0, tzinfo=UTC),
         mensajes_sri=[
             {
                 "identificador": "70",
@@ -29,7 +28,7 @@ def _factura_falsa():
                 "tipo": "INFORMATIVO",
             }
         ],
-        fecha_emision=datetime(2026, 11, 11, 19, 55, tzinfo=timezone.utc),
+        fecha_emision=datetime(2026, 11, 11, 19, 55, tzinfo=UTC),
         subtotal=Decimal("100.00"),
         impuestos=Decimal("15.00"),
         total=Decimal("115.00"),
@@ -146,6 +145,7 @@ def test_api_rechaza_id_de_venta_invalido(monkeypatch):
     assert respuesta.status_code == 422
     assert respuesta.json()["error"]["code"] == "VALIDATION_ERROR"
 
+
 def test_api_rechaza_descarga_ride_sin_usuario_autenticado(monkeypatch):
     contexto = Contexto(empresa_id=7, rol=OPERATIVO, usuario=None)
     app.dependency_overrides[get_contexto] = lambda: contexto
@@ -190,7 +190,5 @@ def test_api_descarga_ride_con_usuario_autenticado(monkeypatch):
     assert respuesta.status_code == 200
     assert respuesta.content == pdf
     assert respuesta.headers["content-type"] == "application/pdf"
-    assert respuesta.headers["content-disposition"] == (
-        'inline; filename="factura-101-ride.pdf"'
-    )
+    assert respuesta.headers["content-disposition"] == ('inline; filename="factura-101-ride.pdf"')
     assert llamadas == [{"empresa_id": 7, "id_venta": 101}]

@@ -38,12 +38,30 @@ class TarifaIva(Enum):
 
 
 @dataclass(frozen=True)
+class TarifaIvaAplicada:
+    """C?digo SRI y porcentaje realmente aplicado al registrar la l?nea."""
+
+    codigo: str
+    porcentaje: Decimal
+
+    def __post_init__(self):
+        if self.codigo not in {"0", "4", "5", "6", "7"}:
+            raise ValueError("C?digo de porcentaje de IVA no v?lido.")
+        if not isinstance(self.porcentaje, Decimal):
+            raise TypeError("El porcentaje de IVA debe ser Decimal.")
+        if not self.porcentaje.is_finite():
+            raise ValueError("El porcentaje de IVA debe ser finito.")
+        if self.porcentaje < 0 or self.porcentaje > 100:
+            raise ValueError("El porcentaje de IVA debe estar entre 0 y 100.")
+
+
+@dataclass(frozen=True)
 class Linea:
     """Una línea de la factura tal como la ingresa el usuario."""
 
     cantidad: Decimal
     precio_unitario: Decimal
-    tarifa: TarifaIva
+    tarifa: TarifaIva | TarifaIvaAplicada
     descuento: Decimal = Decimal("0")
 
     def __post_init__(self):
@@ -73,7 +91,7 @@ class LineaCalculada:
 
 @dataclass(frozen=True)
 class TotalPorTarifa:
-    tarifa: TarifaIva
+    tarifa: TarifaIva | TarifaIvaAplicada
     base_imponible: Decimal
     valor: Decimal
 
@@ -101,10 +119,23 @@ def calcular_totales(lineas: Iterable[Linea]) -> Totales:
         calculadas.append(LineaCalculada(linea, base, iva))
         bases[linea.tarifa] = bases.get(linea.tarifa, Decimal("0")) + base
 
+    orden_tarifas = {tarifa: indice for indice, tarifa in enumerate(TarifaIva)}
+
+    def clave_orden(tarifa):
+        if isinstance(tarifa, TarifaIva):
+            return (0, orden_tarifas[tarifa], Decimal("0"))
+        return (1, tarifa.codigo, tarifa.porcentaje)
+
     por_tarifa = [
-        TotalPorTarifa(tarifa, bases[tarifa], redondear(bases[tarifa] * tarifa.porcentaje / 100))
-        for tarifa in TarifaIva
-        if tarifa in bases
+        TotalPorTarifa(
+            tarifa,
+            base,
+            redondear(base * tarifa.porcentaje / 100),
+        )
+        for tarifa, base in sorted(
+            bases.items(),
+            key=lambda elemento: clave_orden(elemento[0]),
+        )
     ]
     total_sin_impuestos = sum((c.precio_total_sin_impuesto for c in calculadas), Decimal("0"))
     total_iva = sum((t.valor for t in por_tarifa), Decimal("0"))

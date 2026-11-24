@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import StringConstraints
 
-from app.schemas.common import (ApiInput, ApiModel, Text20, Text255)
+from app.schemas.common import ApiInput, ApiModel, Text20, Text255
 
 IdentificationType = Literal["cedula", "ruc", "pasaporte", "exterior"]
 

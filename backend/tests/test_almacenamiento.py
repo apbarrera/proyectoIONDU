@@ -1,4 +1,4 @@
-﻿"""Pruebas unitarias del almacenamiento privado de archivos RIDE."""
+"""Pruebas unitarias del almacenamiento privado de archivos RIDE."""
 
 import pytest
 
@@ -57,9 +57,7 @@ def test_construir_ruta_aislada_por_empresa_y_factura():
     ("empresa_id", "factura_id"),
     [(0, 1), (1, 0), (-1, 2), (2, -1)],
 )
-def test_construir_ruta_rechaza_identificadores_no_positivos(
-    empresa_id, factura_id
-):
+def test_construir_ruta_rechaza_identificadores_no_positivos(empresa_id, factura_id):
     with pytest.raises(ValueError):
         AlmacenamientoRideService.construir_ruta(empresa_id, factura_id)
 
@@ -116,9 +114,7 @@ def test_descargar_rechaza_archivo_no_disponible(servicio, cliente):
         servicio.descargar("empresas/12/facturas/34/ride.pdf")
 
 
-def test_error_de_subida_se_traduce_a_servicio_no_disponible(
-    servicio, cliente
-):
+def test_error_de_subida_se_traduce_a_servicio_no_disponible(servicio, cliente):
     cliente.storage.error = RuntimeError("error simulado")
 
     with pytest.raises(ServiceUnavailableError) as resultado:
@@ -127,9 +123,7 @@ def test_error_de_subida_se_traduce_a_servicio_no_disponible(
     assert resultado.value.code == "RIDE_STORAGE_UNAVAILABLE"
 
 
-def test_error_de_descarga_se_traduce_a_servicio_no_disponible(
-    servicio, cliente
-):
+def test_error_de_descarga_se_traduce_a_servicio_no_disponible(servicio, cliente):
     cliente.storage.error = RuntimeError("error simulado")
 
     with pytest.raises(ServiceUnavailableError) as resultado:

@@ -1,4 +1,4 @@
-﻿"""Endpoints de emisión de facturas electrónicas."""
+"""Endpoints de emisión de facturas electrónicas."""
 
 from typing import Annotated
 
@@ -66,7 +66,6 @@ def issue_invoice(
     )
 
 
-
 @router.get("/sales/{id}/invoice/ride")
 def download_invoice_ride(
     id: SaleId,
@@ -78,7 +77,7 @@ def download_invoice_ride(
 
     if contexto.usuario is None:
         raise ForbiddenError(
-            "Para descargar facturas debes iniciar sesi?n con tu usuario.",
+            "Para descargar facturas debes iniciar sesión con tu usuario.",
             code="USER_SESSION_REQUIRED",
         )
 
@@ -89,7 +88,5 @@ def download_invoice_ride(
     return Response(
         content=contenido,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'inline; filename="factura-{id}-ride.pdf"'
-        },
+        headers={"Content-Disposition": f'inline; filename="factura-{id}-ride.pdf"'},
     )

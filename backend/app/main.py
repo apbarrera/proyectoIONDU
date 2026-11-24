@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from contextlib import asynccontextmanager
 
 import httpx
@@ -7,7 +7,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client
 from supabase.lib.client_options import SyncClientOptions
 
-from app.api import certificados, customers, facturas, health, me, products, sales
+from app.api import (
+    certificados,
+    company,
+    configuracion_facturacion,
+    customers,
+    dashboard,
+    expenses,
+    facturas,
+    health,
+    inventory,
+    me,
+    products,
+    sales,
+)
 from app.core.config import get_settings
 from app.core.errors import register_error_handlers
 
@@ -47,9 +60,7 @@ async def lifespan(app: FastAPI):
                 http_client.close()
                 http_client = None
     else:
-        logger.warning(
-            "Supabase no está configurado; el almacenamiento RIDE no estará disponible."
-        )
+        logger.warning("Supabase no está configurado; el almacenamiento RIDE no estará disponible.")
 
     try:
         yield
@@ -90,3 +101,8 @@ app.include_router(sales.router, prefix="/api")
 app.include_router(facturas.router, prefix="/api")
 app.include_router(me.router, prefix="/api")
 app.include_router(certificados.router, prefix="/api")
+app.include_router(company.router, prefix="/api")
+app.include_router(expenses.router, prefix="/api")
+app.include_router(inventory.router, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
+app.include_router(configuracion_facturacion.router, prefix="/api")

@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -46,6 +46,10 @@ class Factura(Base):
             "intentos_envio >= 0",
             name=conv("factura_intentos_envio_check"),
         ),
+        CheckConstraint(
+            "estado_autorizacion IN ('autorizada', 'rechazada', 'por_enviar', 'por_autorizar')",
+            name=conv("factura_estado_autorizacion_check"),
+        ),
         UniqueConstraint(
             "id_venta",
             name=conv("factura_id_venta_key"),
@@ -62,7 +66,7 @@ class Factura(Base):
         ForeignKeyConstraint(
             ["id_empresa", "id_venta"],
             ["venta.id_empresa", "venta.id_venta"],
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
             name="factura_venta_empresa_fk",
         ),
         Index(
@@ -80,7 +84,7 @@ class Factura(Base):
     id_empresa: Mapped[int] = mapped_column(
         ForeignKey(
             "empresa.id_empresa",
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
             name="factura_id_empresa_fkey",
         ),
         nullable=False,

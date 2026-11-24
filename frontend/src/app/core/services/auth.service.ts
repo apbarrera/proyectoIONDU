@@ -1,72 +1,218 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, throwError } from 'rxjs';
-import { tap } from 'rxjs/operators';
-import { AuthSession, LoginCredentials } from '../models/auth.model';
+import type { Session } from '@supabase/auth-js';
+import { firstValueFrom } from 'rxjs';
+import { LoginCredentials } from '../models/auth.model';
+import { MeResponse } from '../models/company.model';
 import { User } from '../models/user.model';
-import { DEMO_PASSWORD } from '../../mocks/users.mock';
+import { CompanyContextService } from './company-context.service';
+import { MeApiService } from './me-api.service';
 import { StorageService } from './storage.service';
-import { UserDirectoryService } from './user-directory.service';
-import { generateId } from '../utils/id.util';
-import { simulateRequest } from './mock-http.util';
+import { SUPABASE_AUTH } from './supabase-auth.token';
 
-const STORAGE_KEY = 'iondu-session';
+export type AuthStatus =
+  | 'loading'
+  | 'unauthenticated'
+  | 'authenticated'
+  | 'no-company'
+  | 'company-selection-required'
+  | 'error';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private storage = inject(StorageService);
-  private userDirectory = inject(UserDirectoryService);
+  private readonly supabaseAuth = inject(SUPABASE_AUTH);
+  private readonly meApi = inject(MeApiService);
+  private readonly companyContext = inject(CompanyContextService);
+  private readonly storage = inject(StorageService);
 
-  #session = signal<AuthSession | null>(this.storage.get<AuthSession>(STORAGE_KEY));
+  #user = signal<User | null>(null);
+  #hasSession = signal(false);
+  #status = signal<AuthStatus>('loading');
+  #initialization: Promise<void> | null = null;
+  #accountCreatedAt = signal<string | null>(null);
 
-  readonly currentUser = computed<User | null>(() => this.#session()?.user ?? null);
-  readonly isAuthenticated = computed(() => !!this.#session());
+  readonly currentUser = this.#user.asReadonly();
+  readonly status = this.#status.asReadonly();
+  readonly isAuthenticated = computed(() => this.#hasSession());
   readonly isAdmin = computed(() => this.currentUser()?.role === 'admin');
 
-  login(credentials: LoginCredentials): Observable<AuthSession> {
-    const user = this.userDirectory.findByEmail(credentials.email.trim());
+  initialize(): Promise<void> {
+    if (this.#initialization) return this.#initialization;
 
-    if (!user || !user.active || credentials.password !== DEMO_PASSWORD) {
-      return throwError(() => new Error('Correo o contraseña incorrectos.'));
+    this.#initialization = this.#restoreSession().catch((error: unknown) => {
+      this.#status.set('error');
+      this.#initialization = null;
+      throw error;
+    });
+
+    return this.#initialization;
+  }
+
+  async login(credentials: LoginCredentials): Promise<void> {
+    this.#initialization = null;
+    this.#status.set('loading');
+    this.#user.set(null);
+    this.#hasSession.set(false);
+    this.#accountCreatedAt.set(null);
+
+    let result;
+
+    try {
+      result = await this.supabaseAuth.signInWithPassword({
+        email: credentials.email.trim().toLowerCase(),
+        password: credentials.password,
+      });
+    } catch {
+      this.#status.set('unauthenticated');
+      throw new Error(
+        'No se pudo conectar con el servicio de autenticación. Comprueba tu conexión e inténtalo nuevamente.',
+      );
     }
 
-    const session: AuthSession = {
-      user,
-      token: generateId(),
-      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 8).toISOString(),
-    };
+    const { data, error } = result;
 
-    return simulateRequest(session).pipe(
-      tap((s) => {
-        this.#session.set(s);
-        if (credentials.rememberSession) {
-          this.storage.set(STORAGE_KEY, s);
-        }
-      }),
-    );
+    if (error) {
+      this.#status.set('unauthenticated');
+      throw new Error(
+        error.message === 'Invalid login credentials'
+          ? 'Correo o contraseña incorrectos.'
+          : error.message,
+      );
+    }
+
+    if (!data.session) {
+      this.#status.set('unauthenticated');
+      throw new Error('Supabase no devolvió una sesión válida.');
+    }
+
+    this.#hasSession.set(true);
+    await this.#loadCompanyContext(data.session);
   }
 
-  /**
-   * Cierra la sesión y borra lo que haya quedado en el equipo: las PyMEs comparten computadoras,
-   * así que no deben quedar datos de una empresa para la siguiente persona.
-   */
-  logout(): void {
-    this.#session.set(null);
-    this.storage.clear();
-    void this.#clearOfflineCaches();
-  }
+  async selectCompany(companyId: number): Promise<void> {
+    if (!this.#hasSession()) {
+      throw new Error('Debes iniciar sesión para seleccionar una empresa.');
+    }
 
-  /** Vacía la caché del service worker de la PWA (Cache Storage). */
-  async #clearOfflineCaches(): Promise<void> {
-    if (typeof caches === 'undefined') return;
+    if (!this.companyContext.selectCompany(companyId)) {
+      throw new Error('No tienes acceso a la empresa seleccionada.');
+    }
+
+    this.#status.set('loading');
+    this.#user.set(null);
+
     try {
-      const names = await caches.keys();
-      await Promise.all(names.map((name) => caches.delete(name)));
-    } catch {
-      // El navegador puede bloquear el acceso a la caché (modo privado); no debe impedir cerrar sesión.
+      await this.#loadProfile();
+    } catch (error) {
+      this.#status.set('error');
+      throw error;
+    }
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await this.supabaseAuth.signOut();
+    } finally {
+      this.#user.set(null);
+      this.#hasSession.set(false);
+      this.#status.set('unauthenticated');
+      this.#initialization = null;
+      this.#accountCreatedAt.set(null);
+      this.companyContext.clear();
     }
   }
 
   defaultRouteForCurrentUser(): string {
     return this.currentUser()?.role === 'admin' ? '/dashboard' : '/sales';
   }
+
+  async #restoreSession(): Promise<void> {
+    this.#status.set('loading');
+
+    const { data, error } = await this.supabaseAuth.getSession();
+
+    if (error) throw error;
+
+    if (!data.session) {
+      this.#hasSession.set(false);
+      this.#user.set(null);
+      this.#accountCreatedAt.set(null);
+      this.#status.set('unauthenticated');
+      this.companyContext.clear();
+      return;
+    }
+
+    this.#hasSession.set(true);
+    await this.#loadCompanyContext(data.session);
+  }
+
+  async #loadCompanyContext(session: Session): Promise<void> {
+    this.#status.set('loading');
+    this.#user.set(null);
+    this.#accountCreatedAt.set(session.user.created_at ?? null);
+
+    try {
+      const companies = await firstValueFrom(this.meApi.getCompanies());
+      this.companyContext.setCompanies(companies);
+
+      if (companies.length === 0) {
+        this.companyContext.clear();
+        this.#status.set('no-company');
+        return;
+      }
+
+      if (this.companyContext.selectedCompanyId() === null) {
+        this.#status.set('company-selection-required');
+        return;
+      }
+
+      await this.#loadProfile();
+    } catch (error) {
+      this.#status.set('error');
+      throw error;
+    }
+  }
+
+  async #loadProfile(): Promise<void> {
+    const selectedCompanyId = this.companyContext.selectedCompanyId();
+
+    if (selectedCompanyId === null) {
+      this.#status.set('company-selection-required');
+      return;
+    }
+
+    const profile = await firstValueFrom(this.meApi.getMe());
+
+    if (profile.tenantId !== selectedCompanyId) {
+      throw new Error('El perfil recibido no corresponde a la empresa seleccionada.');
+    }
+
+    if (!profile.active) {
+      throw new Error('El usuario no tiene una membresía activa en esta empresa.');
+    }
+
+    this.#user.set(this.#mapUser(profile));
+    this.#status.set('authenticated');
+  }
+
+  #mapUser(profile: MeResponse): User {
+    const fullName = profile.fullName.trim();
+    const initials = fullName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join('');
+
+    return {
+      id: profile.id,
+      email: profile.email ?? '',
+      fullName,
+      role: profile.role,
+      tenantId: String(profile.tenantId),
+      active: profile.active,
+      avatarInitials: initials,
+      createdAt: this.#accountCreatedAt() ?? '',
+    };
+  }
+
 }

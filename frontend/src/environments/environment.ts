@@ -3,4 +3,6 @@
 export const environment = {
   production: false,
   apiUrl: '/api',
+  supabaseUrl: 'https://zalpxilruzwbsttkquul.supabase.co',
+  supabasePublishableKey: 'sb_publishable_0mDEmxj9Xc7LszqM0R9ESg_-VGGnt03',
 };

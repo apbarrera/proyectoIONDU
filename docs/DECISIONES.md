@@ -72,11 +72,8 @@
   `.env` que el CI no tiene; al principio eso dejó el CI en rojo.
 
 ### 1.9 PostgreSQL local para desarrollo
-- **Decisión (20/10/2026):** `docker-compose.override.yml` agrega un servicio `db` con PostgreSQL 17 (la misma
-  versión mayor que Supabase). Si `DATABASE_URL` está vacía en el `.env`, la API y el worker usan esta base; si
-  tiene la dirección de Supabase, usan Supabase.
-- **Por qué:** cada uno desarrolla y prueba sin depender de Supabase (que todavía no existe) ni de internet, y como
-  Supabase es PostgreSQL, lo que funciona aquí funciona allá cambiando una variable.
+- **Decisión (21/11/2026):** API, worker y Alembic utilizan conexiones PostgreSQL independientes mediante `DATABASE_URL`, `WORKER_DATABASE_URL` y `MIGRATION_DATABASE_URL`, respectivamente. Las tres deben configurarse explícitamente en el entorno, también en desarrollo local.
+- **Por qué:** se separan los privilegios de ejecución de la API, el worker y las migraciones. Esto permite aplicar RLS y el principio de mínimo privilegio sin compartir una cuenta administrativa.
 - Se publica solo en `127.0.0.1:15432` (no se ve desde la red). Se eligió 15432 porque en la máquina de desarrollo
   ya había PostgreSQL instalados en 5432, 5433 y 5434.
 - La contraseña no está en el repositorio: se lee de `POSTGRES_PASSWORD` en el `.env`, que es obligatoria.
@@ -184,7 +181,7 @@
 - **Por qué:** se aplica solo lo nuevo, sin borrar datos, y se sabe en qué versión está cada base (`alembic current`).
   En producción, con datos reales, es la única forma segura.
 - La primera migración será el esquema de `database/schema.sql` una vez corregido (ver `ESTADO.md`, sección 2.F).
-- `env.py` lee la dirección de `DATABASE_URL` (nunca de `alembic.ini`) y **nunca propone borrar una tabla que no tenga
+  `env.py` lee la dirección de `MIGRATION_DATABASE_URL` (nunca de `DATABASE_URL` ni de `alembic.ini`) y **nunca propone borrar una tabla que no tenga
   modelo**: el `--autogenerate` solo crea o modifica; un `DROP TABLE` se escribe a mano.
 - Los modelos heredan de `Base` (`app/db/base.py`), que fija los nombres de las restricciones con el mismo estilo de
   PostgreSQL (`producto_id_empresa_fkey`, `empresa_ruc_key`); sin eso, Alembic no puede modificarlas después.
@@ -380,6 +377,42 @@
   el SRI distingue débito y crédito). `tipo_origen` es `MANUAL` por ahora.
 - Solo se venden productos activos de tipo `venta` o `ambos`. Las líneas de concepto libre esperan la columna de
   tarifa de IVA en `detalle_venta`.
+
+### 2.26 Gastos
+- **Decisión (20/11/2026):** las 7 categorías de RF-3.5 se **crean solas** la primera vez que la empresa las pide
+  (`origen = PREDEFINIDA`); las del usuario quedan con `origen = USUARIO`. No hace falta un script por empresa.
+- El RUC o la cédula del proveedor se validan con `app/sri/identificacion.py`, igual que los clientes.
+- Registrar o editar un gasto exige **sesión de usuario** (`gasto.id_usuario` es obligatorio). El monto debe ser
+  mayor a 0. **Pendiente con Ariana:** `gasto` no tiene columna de IVA (el frontend envía `ivaAmount`).
+
+### 2.27 Inventario: tipos de movimiento y stock resultante
+- **Decisión (20/11/2026):** `movimiento_inventario.cantidad` siempre es positiva (restricción de la base); el
+  **tipo dice la dirección**: `ENTRADA` y `AJUSTE_ENTRADA` suman; `SALIDA`, `VENTA` y `AJUSTE_SALIDA` restan.
+  En la API la cantidad sale con signo y los dos ajustes se muestran como `ajuste`.
+- El **stock resultante** de cada movimiento no se guarda: se calcula con una función de ventana de PostgreSQL,
+  hacia atrás desde el stock actual. **Por qué:** no hace falta otra columna ni que el stock inicial del
+  producto se haya registrado como movimiento.
+- El ajuste recibe el **stock contado**, no la diferencia, y es **solo del Administrador** (RF-4.8). Las entradas
+  y salidas manuales las puede hacer cualquier usuario con sesión. Todo bloquea el producto con
+  `SELECT … FOR UPDATE`, igual que las ventas.
+
+### 2.28 Usuario demo y datos demo (solo desarrollo)
+- **Decisión (20/11/2026):** con `APP_ENV=development`, el encabezado `X-Usuario-Id` (junto con `X-Empresa-Id`)
+  actúa como ese usuario **usando su pertenencia real** en `usuario_empresa`: mismo rol y nombre, así los permisos
+  de Administrador y Operativo se respetan. En cualquier otro entorno se ignora y se responde `401`.
+- **Por qué:** registrar ventas, gastos y movimientos exige un usuario, y sin Supabase configurado no había forma
+  de probarlo en Swagger ni de presentar el sistema.
+- `scripts/cargar_datos_demo.py` carga una cafetería demo (productos, clientes, proveedores, gastos, ventas de 30
+  días y movimientos) **pasando por la API**, con las mismas reglas que producción. Solo acepta la base local
+  `iondu` y no se repite si ya hay productos.
+
+### 2.29 Dashboard calculado en vivo
+- **Decisión (20/11/2026):** `GET /api/dashboard` calcula los indicadores **en cada consulta** con `SUM`/`GROUP BY`
+  en PostgreSQL, sin usar la tabla `dashboard_financiero`.
+- **Por qué:** RF-5.4 pide que se actualice al confirmar cada operación; con una tabla de resumen habría que
+  recalcularla en cada venta, gasto y ajuste, y podría quedar desfasada. Para el volumen de una PyME la consulta
+  es inmediata. `dashboard_financiero` queda para guardar cierres mensuales si luego se necesitan.
+- Los ingresos son las ventas completadas **con IVA**; los días se agrupan en hora de Ecuador.
 
 ## 3. Producto
 

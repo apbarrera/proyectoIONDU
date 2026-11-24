@@ -10,19 +10,19 @@ from supabase import create_client
 from supabase.lib.client_options import SyncClientOptions
 
 from app.core.config import get_settings
-from app.worker.database import (
-    dispose_worker_engine,
-    get_worker_engine,
-    get_worker_session_factory,
-    bloqueo_factura,
-)
 from app.models.empresa import Empresa
 from app.models.factura import Factura
 from app.services.almacenamiento import AlmacenamientoRideService
 from app.sri.clave_acceso import Ambiente
 from app.sri.emision import EstadoEmision, ServicioEmision
-from app.sri.servicios_web import ClienteSri
 from app.sri.ride import generar_ride
+from app.sri.servicios_web import ClienteSri
+from app.worker.database import (
+    bloqueo_factura,
+    dispose_worker_engine,
+    get_worker_engine,
+    get_worker_session_factory,
+)
 
 logger = logging.getLogger("iondu.worker")
 stop = threading.Event()
@@ -45,9 +45,7 @@ def _obtener_pendientes(session_factory) -> list[tuple[int, int]]:
             Factura.fecha_emision,
             Factura.id_empresa,
             Factura.id_factura,
-        ).where(
-            Factura.estado_autorizacion.in_(ESTADOS_PENDIENTES)
-        )
+        ).where(Factura.estado_autorizacion.in_(ESTADOS_PENDIENTES))
 
         if cursor is not None:
             fecha, empresa_id, factura_id = cursor
@@ -98,9 +96,7 @@ def _obtener_pendientes(session_factory) -> list[tuple[int, int]]:
 def _crear_almacenamiento(settings):
     """Crea un cliente independiente de Supabase para este ciclo."""
     if not settings.supabase_url or not settings.supabase_service_role_key:
-        logger.warning(
-            "Supabase no está configurado; los RIDE no se subirán desde el worker."
-        )
+        logger.warning("Supabase no está configurado; los RIDE no se subirán desde el worker.")
         return None, None
 
     cliente_http = None
@@ -144,18 +140,17 @@ def _serializar_mensajes(mensajes) -> list[dict]:
 
 def _guardar_ruta_ride(session_factory, empresa_id: int, factura_id: int, ruta: str):
     """Registra la ruta del RIDE sin modificar el resultado de autorización."""
-    with session_factory() as session:
-        with session.begin():
-            factura = session.scalar(
-                select(Factura).where(
-                    Factura.id_empresa == empresa_id,
-                    Factura.id_factura == factura_id,
-                    Factura.estado_autorizacion == EstadoEmision.AUTORIZADA.value,
-                )
+    with session_factory() as session, session.begin():
+        factura = session.scalar(
+            select(Factura).where(
+                Factura.id_empresa == empresa_id,
+                Factura.id_factura == factura_id,
+                Factura.estado_autorizacion == EstadoEmision.AUTORIZADA.value,
             )
+        )
 
-            if factura is not None:
-                factura.pdf_ride_path = ruta
+        if factura is not None:
+            factura.pdf_ride_path = ruta
 
 
 def _procesar_factura(
@@ -171,52 +166,47 @@ def _procesar_factura(
                 return
 
             # Primera transacción: validar y persistir el intento antes del SRI.
-            with session_factory() as session:
-                with session.begin():
-                    factura = session.scalar(
-                        select(Factura)
-                        .where(
-                            Factura.id_empresa == empresa_id,
-                            Factura.id_factura == factura_id,
-                        )
-                        .with_for_update()
+            with session_factory() as session, session.begin():
+                factura = session.scalar(
+                    select(Factura)
+                    .where(
+                        Factura.id_empresa == empresa_id,
+                        Factura.id_factura == factura_id,
                     )
+                    .with_for_update()
+                )
 
-                    if (
-                        factura is None
-                        or factura.estado_autorizacion not in ESTADOS_PENDIENTES
-                    ):
-                        return
+                if factura is None or factura.estado_autorizacion not in ESTADOS_PENDIENTES:
+                    return
 
-                    if not factura.clave_acceso or not factura.xml_firmado:
-                        raise ValueError(
-                            "La factura pendiente no tiene XML o clave de acceso."
-                        )
+                if not factura.clave_acceso or not factura.xml_firmado:
+                    raise ValueError("La factura pendiente no tiene XML o clave de acceso.")
 
-                    empresa = session.get(Empresa, empresa_id)
-                    if empresa is None:
-                        raise ValueError(
-                            "No existe la empresa asociada a la factura."
-                        )
+                resultado_empresa = session.execute(
+                    select(
+                        Empresa.id_empresa,
+                        Empresa.datos_facturacion_electronica,
+                    ).where(Empresa.id_empresa == empresa_id)
+                )
+                fila_empresa = resultado_empresa.one_or_none()
+                if fila_empresa is None:
+                    raise ValueError("No existe la empresa asociada a la factura.")
 
-                    configuracion = empresa.datos_facturacion_electronica or {}
-                    ambiente_configurado = configuracion.get("ambiente")
+                _, configuracion_empresa = fila_empresa
+                configuracion = configuracion_empresa or {}
+                ambiente_configurado = configuracion.get("ambiente")
 
-                    if ambiente_configurado not in ("1", "2"):
-                        raise ValueError(
-                            "El ambiente SRI de la empresa no es válido."
-                        )
+                if ambiente_configurado not in ("1", "2"):
+                    raise ValueError("El ambiente SRI de la empresa no es válido.")
 
-                    ambiente = Ambiente(ambiente_configurado)
-                    estado_anterior = factura.estado_autorizacion
-                    clave_acceso = factura.clave_acceso
-                    xml_firmado_texto = factura.xml_firmado
-                    xml_firmado = xml_firmado_texto.encode("utf-8")
+                ambiente = Ambiente(ambiente_configurado)
+                estado_anterior = factura.estado_autorizacion
+                clave_acceso = factura.clave_acceso
+                xml_firmado_texto = factura.xml_firmado
+                xml_firmado = xml_firmado_texto.encode("utf-8")
 
-                    if estado_anterior == EstadoEmision.POR_ENVIAR.value:
-                        factura.intentos_envio = (
-                            factura.intentos_envio or 0
-                        ) + 1
+                if estado_anterior == EstadoEmision.POR_ENVIAR.value:
+                    factura.intentos_envio = (factura.intentos_envio or 0) + 1
 
             # La transacción de negocio ya terminó. El advisory lock de sesión
             # permanece adquirido durante toda la comunicación con el SRI.
@@ -240,9 +230,7 @@ def _procesar_factura(
                         )
             except Exception as exc:
                 accion = (
-                    "enviar"
-                    if estado_anterior == EstadoEmision.POR_ENVIAR.value
-                    else "consultar"
+                    "enviar" if estado_anterior == EstadoEmision.POR_ENVIAR.value else "consultar"
                 )
                 logger.error(
                     "Error al %s factura %s de empresa %s. tipo=%s",
@@ -256,63 +244,48 @@ def _procesar_factura(
             datos_ride = None
 
             # Segunda transacción: releer, verificar y persistir la respuesta.
-            with session_factory() as session:
-                with session.begin():
-                    factura = session.scalar(
-                        select(Factura)
-                        .where(
-                            Factura.id_empresa == empresa_id,
-                            Factura.id_factura == factura_id,
-                        )
-                        .with_for_update()
+            with session_factory() as session, session.begin():
+                factura = session.scalar(
+                    select(Factura)
+                    .where(
+                        Factura.id_empresa == empresa_id,
+                        Factura.id_factura == factura_id,
                     )
+                    .with_for_update()
+                )
 
-                    if (
-                        factura is None
-                        or factura.estado_autorizacion != estado_anterior
-                        or factura.clave_acceso != clave_acceso
-                        or factura.xml_firmado != xml_firmado_texto
-                    ):
-                        logger.warning(
-                            "La factura %s de empresa %s cambió durante "
-                            "la consulta al SRI; no se aplicará la respuesta.",
-                            factura_id,
-                            empresa_id,
+                if (
+                    factura is None
+                    or factura.estado_autorizacion != estado_anterior
+                    or factura.clave_acceso != clave_acceso
+                    or factura.xml_firmado != xml_firmado_texto
+                ):
+                    logger.warning(
+                        "La factura %s de empresa %s cambió durante "
+                        "la consulta al SRI; no se aplicará la respuesta.",
+                        factura_id,
+                        empresa_id,
+                    )
+                    return
+
+                factura.estado_autorizacion = resultado.estado.value
+
+                factura.mensajes_sri = _serializar_mensajes(resultado.mensajes or [])
+
+                if resultado.estado == EstadoEmision.AUTORIZADA:
+                    factura.numero_autorizacion = resultado.numero_autorizacion
+                    factura.fecha_autorizacion = resultado.fecha_autorizacion
+
+                    if resultado.xml_autorizado:
+                        factura.xml_autorizado = resultado.xml_autorizado.decode("utf-8")
+
+                    xml_para_ride = resultado.xml_autorizado or xml_firmado
+                    if resultado.numero_autorizacion and resultado.fecha_autorizacion:
+                        datos_ride = (
+                            xml_para_ride,
+                            resultado.numero_autorizacion,
+                            resultado.fecha_autorizacion,
                         )
-                        return
-
-                    factura.estado_autorizacion = resultado.estado.value
-
-                    if resultado.mensajes:
-                        factura.mensajes_sri = _serializar_mensajes(
-                            resultado.mensajes
-                        )
-
-                    if resultado.estado == EstadoEmision.AUTORIZADA:
-                        factura.numero_autorizacion = (
-                            resultado.numero_autorizacion
-                        )
-                        factura.fecha_autorizacion = (
-                            resultado.fecha_autorizacion
-                        )
-
-                        if resultado.xml_autorizado:
-                            factura.xml_autorizado = (
-                                resultado.xml_autorizado.decode("utf-8")
-                            )
-
-                        xml_para_ride = (
-                            resultado.xml_autorizado or xml_firmado
-                        )
-                        if (
-                            resultado.numero_autorizacion
-                            and resultado.fecha_autorizacion
-                        ):
-                            datos_ride = (
-                                xml_para_ride,
-                                resultado.numero_autorizacion,
-                                resultado.fecha_autorizacion,
-                            )
 
             # La autorización ya está confirmada. Un fallo de RIDE o Storage
             # no puede revertirla.

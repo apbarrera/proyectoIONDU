@@ -17,8 +17,23 @@ PWA para PyMEs ecuatorianas: facturación electrónica, ventas, gastos, inventar
 
 ```bash
 cp .env.example .env
+# Completar en .env: POSTGRES_PASSWORD, APP_ENV=development, las tres conexiones
+# (DATABASE_URL, WORKER_DATABASE_URL, MIGRATION_DATABASE_URL; ver la nota en .env.example)
+# y DEV_USER_ID=11111111-1111-1111-1111-111111111111
 docker compose up --build
-# abrir http://localhost:8080
+# abrir http://localhost:8080 (API interactiva en http://localhost:8080/api/docs)
+```
+
+Base local por primera vez (desde `backend/`, con Docker encendido). En la computadora la base
+está en `127.0.0.1:15432`, así que las conexiones se pasan con ese host en vez de `db`:
+
+```powershell
+$env:DATABASE_URL = "postgresql+psycopg://iondu:<POSTGRES_PASSWORD>@127.0.0.1:15432/iondu"
+$env:MIGRATION_DATABASE_URL = $env:DATABASE_URL; $env:WORKER_DATABASE_URL = $env:DATABASE_URL
+$env:APP_ENV = "development"
+.venv\Scripts\python.exe scripts\bootstrap_local_auth.py   # auth.users local (en vez de Supabase)
+.venv\Scripts\alembic.exe upgrade head                     # crea el esquema completo
+.venv\Scripts\python.exe -m scripts.cargar_datos_demo      # cafetería demo con un mes de datos
 ```
 
 ## Ejecutar sin Docker (desarrollo del frontend)

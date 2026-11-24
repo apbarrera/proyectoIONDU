@@ -1,11 +1,13 @@
-﻿"""Configuración tributaria de una empresa para emitir facturas SRI."""
+"""Configuración tributaria de una empresa para emitir facturas SRI."""
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
+from pydantic import ConfigDict, Field, StrictBool, field_validator
+
+from app.schemas.common import ApiInput, OptionalText255
 
 
-class ConfiguracionFacturacion(BaseModel):
+class ConfiguracionFacturacion(ApiInput):
     model_config = ConfigDict(extra="forbid")
 
     ambiente: Literal["1", "2"]
@@ -14,6 +16,7 @@ class ConfiguracionFacturacion(BaseModel):
     obligado_contabilidad: StrictBool
     contribuyente_especial: str | None = None
     contribuyente_rimpe: StrictBool
+    direccion_establecimiento: OptionalText255 | None = None
 
     @field_validator("contribuyente_especial")
     @classmethod

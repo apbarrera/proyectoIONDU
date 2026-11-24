@@ -1,6 +1,6 @@
 """Pruebas unitarias del servicio de ventas sin acceso a PostgreSQL."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
@@ -47,17 +47,13 @@ class FakeVentaRepository:
         elif isinstance(objeto, MovimientoInventario):
             self.movimientos.append(objeto)
         else:
-            raise AssertionError(
-                f"Objeto inesperado: {type(objeto).__name__}"
-            )
+            raise AssertionError(f"Objeto inesperado: {type(objeto).__name__}")
 
     def guardar_pendientes(self):
         self.flushes += 1
         if self.venta is not None and self.venta.id_venta is None:
             self.venta.id_venta = 101
-            self.venta.fecha = datetime(
-                2026, 11, 9, 20, 0, tzinfo=timezone.utc
-            )
+            self.venta.fecha = datetime(2026, 11, 9, 20, 0, tzinfo=UTC)
 
     def obtener(self, id_venta):
         if self.venta is None or self.venta.id_venta != id_venta:
@@ -110,12 +106,14 @@ def _producto():
 def test_venta_solo_servicios_no_modifica_inventario(monkeypatch):
     servicio, repo, session = _servicio(monkeypatch)
     datos = SaleCreate(
-        items=[{
-            "description": "Consultoría",
-            "quantity": Decimal("1"),
-            "unit_price": Decimal("25.00"),
-            "vat_percentage_code": "5",
-        }],
+        items=[
+            {
+                "description": "Consultoría",
+                "quantity": Decimal("1"),
+                "unit_price": Decimal("25.00"),
+                "vat_percentage_code": "5",
+            }
+        ],
         payment_method="efectivo",
     )
 
@@ -125,6 +123,8 @@ def test_venta_solo_servicios_no_modifica_inventario(monkeypatch):
     assert repo.lineas[0].id_producto is None
     assert repo.lineas[0].descripcion_libre == "Consultoría"
     assert repo.lineas[0].codigo_porcentaje_iva == "5"
+    assert repo.lineas[0].porcentaje_iva == Decimal("5")
+    assert repo.lineas[0].valor_iva == Decimal("1.25")
     assert resultado.items[0].product_name == "Consultoría"
     assert resultado.items[0].vat_percentage_code == "5"
     assert repo.movimientos == []
@@ -149,6 +149,8 @@ def test_venta_de_producto_descuenta_stock_y_registra_movimiento(monkeypatch):
     assert repo.lineas[0].descripcion_libre == producto.nombre
     assert repo.lineas[0].precio_unitario == Decimal("10.00")
     assert repo.lineas[0].codigo_porcentaje_iva == "4"
+    assert repo.lineas[0].porcentaje_iva == Decimal("15")
+    assert repo.lineas[0].valor_iva == Decimal("3.00")
     assert len(repo.movimientos) == 1
     assert repo.movimientos[0].tipo_movimiento == "VENTA"
     assert repo.movimientos[0].cantidad == Decimal("2")
@@ -180,15 +182,9 @@ def test_venta_mixta_conserva_lineas_y_codigos_iva(monkeypatch):
 
     assert len(repo.lineas) == 2
     assert [linea.id_producto for linea in repo.lineas] == [1, None]
-    assert [linea.descripcion_libre for linea in repo.lineas] == [
-        producto.nombre, "Consultoría"
-    ]
-    assert [linea.codigo_porcentaje_iva for linea in repo.lineas] == [
-        "4", "5"
-    ]
-    assert [item.vat_percentage_code for item in resultado.items] == [
-        "4", "5"
-    ]
+    assert [linea.descripcion_libre for linea in repo.lineas] == [producto.nombre, "Consultoría"]
+    assert [linea.codigo_porcentaje_iva for linea in repo.lineas] == ["4", "5"]
+    assert [item.vat_percentage_code for item in resultado.items] == ["4", "5"]
     assert producto.stock_actual == Decimal("6")
     assert len(repo.movimientos) == 1
     assert resultado.subtotal == Decimal("45.00")

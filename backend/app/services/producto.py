@@ -84,9 +84,7 @@ def _a_product(producto: Producto, nombre_categoria: str) -> Product:
         unit=producto.unidad_medida,
         sale_price=producto.precio_venta,
         cost=producto.precio_compra,
-        vat_percentage_code=cast(
-            VatPercentageCode, producto.codigo_porcentaje_iva
-        ),
+        vat_percentage_code=cast(VatPercentageCode, producto.codigo_porcentaje_iva),
         applies_vat=producto.codigo_porcentaje_iva in {"4", "5"},
         current_stock=producto.stock_actual,
         min_stock=producto.stock_minimo,

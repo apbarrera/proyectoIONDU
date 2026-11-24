@@ -1,4 +1,4 @@
-﻿"""Reglas de negocio de las ventas.
+"""Reglas de negocio de las ventas.
 
 Registrar una venta es UNA transacción (todo o nada): venta, líneas,
 descuento de stock y movimientos de inventario.
@@ -33,10 +33,7 @@ MOVIMIENTO_VENTA = "VENTA"
 _ZONA = ZoneInfo(TIMEZONE)
 
 # Relación entre el código de porcentaje del SRI y su tarifa.
-TARIFAS_IVA_POR_CODIGO = {
-    tarifa.codigo: tarifa
-    for tarifa in TarifaIva
-}
+TARIFAS_IVA_POR_CODIGO = {tarifa.codigo: tarifa for tarifa in TarifaIva}
 
 
 def _metodo_pago_desde_db(valor: str) -> PaymentMethod:
@@ -51,9 +48,7 @@ def _metodo_pago_desde_db(valor: str) -> PaymentMethod:
     try:
         return metodos_validos[valor.upper()]
     except KeyError as exc:
-        raise ValueError(
-            f"Método de pago no válido en la base de datos: {valor}"
-        ) from exc
+        raise ValueError(f"Método de pago no válido en la base de datos: {valor}") from exc
 
 
 def _estado_desde_db(valor: str) -> SaleStatus:
@@ -66,9 +61,7 @@ def _estado_desde_db(valor: str) -> SaleStatus:
     try:
         return estados_validos[valor.upper()]
     except KeyError as exc:
-        raise ValueError(
-            f"Estado de venta no válido en la base de datos: {valor}"
-        ) from exc
+        raise ValueError(f"Estado de venta no válido en la base de datos: {valor}") from exc
 
 
 def _error(campo: str, mensaje: str, code: str) -> UnprocessableError:
@@ -90,11 +83,7 @@ def _a_sale(venta: Venta, cliente: Cliente | None, lineas) -> Sale:
             SaleItem(
                 product_id=detalle.id_producto,
                 sku=producto.codigo_principal if producto else None,
-                product_name=(
-                    producto.nombre
-                    if producto
-                    else (detalle.descripcion_libre or "")
-                ),
+                product_name=(producto.nombre if producto else (detalle.descripcion_libre or "")),
                 quantity=detalle.cantidad,
                 unit_price=detalle.precio_unitario,
                 discount=detalle.descuento,
@@ -151,10 +140,7 @@ class VentaService:
         lineas = self._repo.detalles([venta.id_venta for venta, _ in filas])
 
         return Page[Sale](
-            items=[
-                _a_sale(v, c, lineas.get(v.id_venta, []))
-                for v, c in filas
-            ],
+            items=[_a_sale(v, c, lineas.get(v.id_venta, [])) for v, c in filas],
             total=total,
             page=page,
             page_size=page_size,
@@ -188,11 +174,7 @@ class VentaService:
         datos: SaleCreate,
         id_usuario: uuid.UUID,
     ) -> Sale:
-        ids_productos = [
-            item.product_id
-            for item in datos.items
-            if item.product_id is not None
-        ]
+        ids_productos = [item.product_id for item in datos.items if item.product_id is not None]
 
         if len(set(ids_productos)) != len(ids_productos):
             raise _error(
@@ -201,10 +183,7 @@ class VentaService:
                 "DUPLICATE_PRODUCT",
             )
 
-        if (
-            datos.customer_id is not None
-            and self._clientes.obtener(datos.customer_id) is None
-        ):
+        if datos.customer_id is not None and self._clientes.obtener(datos.customer_id) is None:
             raise _error(
                 "customerId",
                 "El cliente no existe.",
@@ -291,24 +270,20 @@ class VentaService:
             codigos_iva,
             strict=True,
         ):
-            producto = (
-                productos[item.product_id]
-                if item.product_id is not None
-                else None
-            )
+            producto = productos[item.product_id] if item.product_id is not None else None
 
             self._repo.agregar(
                 DetalleVenta(
                     id_venta=venta.id_venta,
                     id_producto=producto.id_producto if producto else None,
-                    descripcion_libre=(
-                        producto.nombre if producto else item.description
-                    ),
+                    descripcion_libre=(producto.nombre if producto else item.description),
                     cantidad=item.quantity,
                     precio_unitario=calculada.linea.precio_unitario,
                     descuento=item.discount,
                     codigo_porcentaje_iva=codigo_iva,
                     subtotal=calculada.precio_total_sin_impuesto,
+                    porcentaje_iva=calculada.linea.tarifa.porcentaje,
+                    valor_iva=calculada.iva,
                 )
             )
 
@@ -369,9 +344,7 @@ class VentaService:
                 sin_stock.append(
                     {
                         "field": f"items[{i}].quantity",
-                        "message": (
-                            f"Stock disponible de {producto.nombre}: {disponible}."
-                        ),
+                        "message": (f"Stock disponible de {producto.nombre}: {disponible}."),
                     }
                 )
 

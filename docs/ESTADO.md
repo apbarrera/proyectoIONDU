@@ -104,16 +104,16 @@
 
 ## 2. Qué falta, por orden
 
-### Progreso del backend (estimado, 25/10/2026)
+### Progreso del backend (estimado, 20/11/2026)
 
 | Módulo (requisitos) | Avance | Hecho | Falta |
 |---|---|---|---|
 | Infraestructura | 90 % | Docker, base local, migraciones, CI, errores, Ruff | Desplegar en el VPS |
-| 1. Usuarios, roles y empresa | 55 % | Token de Supabase, varias empresas por usuario y selector, rol y permiso de Administrador, `/api/me`, subir el certificado | Configuración de la empresa, gestión de usuarios |
-| 2. Facturación y ventas | 75 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión, cifrado del `.p12` y firma XAdES-BES, clientes, registrar ventas | Facturar la venta (fase 2), anular ventas, prueba real con el SRI (`.p12`) |
-| 3. Gastos | 0 % | — | Gastos, proveedores, correo (IMAP) |
-| 4. Productos e inventario | 60 % | Categorías, productos y movimientos por venta | Desactivar, movimientos, ajustes, alertas |
-| 5. Dashboard | 0 % | — | Indicadores (necesita ventas y gastos) |
+| 1. Usuarios, roles y empresa | 70 % | Token de Supabase, varias empresas por usuario y selector, rol y permiso de Administrador, `/api/me`, subir el certificado, datos y configuración de facturación de la empresa | Gestión de usuarios |
+| 2. Facturación y ventas | 85 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión, cifrado del `.p12` y firma XAdES-BES, clientes, registrar ventas, facturar la venta y descargar el RIDE | Reintentos del worker, anular ventas, prueba real con el SRI (`.p12`) |
+| 3. Gastos | 60 % | Categorías (7 predefinidas y propias), proveedores con RUC/cédula validados, registrar, filtrar y editar gastos | Lectura de facturas por correo (IMAP), anular gastos |
+| 4. Productos e inventario | 80 % | Categorías, productos (activar/desactivar, filtro de stock bajo), movimientos por venta, entradas y salidas manuales, ajustes del Administrador, historial con stock resultante | Compra que suma inventario (RF-4.4), recetas y producción |
+| 5. Dashboard | 90 % | Indicadores del período (ingresos, gastos, utilidad, ventas, ticket promedio, más vendidos, serie diaria, gastos por categoría) e inventario, solo Administrador | Conectarlo en el frontend |
 | 6. Agente IA | 0 % | — | Todo (Sprint 4) |
 | 7. Recomendaciones | 0 % | — | Todo (Sprint 5) |
 

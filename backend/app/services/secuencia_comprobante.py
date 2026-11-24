@@ -1,4 +1,4 @@
-﻿import re
+import re
 
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
@@ -38,9 +38,7 @@ class SecuenciaComprobanteService:
 
         for campo, (valor, patron) in configuracion.items():
             if not isinstance(valor, str) or re.fullmatch(patron, valor) is None:
-                raise UnprocessableError(
-                    f"El campo {campo} tiene un formato inválido."
-                )
+                raise UnprocessableError(f"El campo {campo} tiene un formato inválido.")
 
         tabla = SecuenciaComprobante
 
@@ -66,8 +64,6 @@ class SecuenciaComprobanteService:
         secuencial = self._db.scalar(stmt)
 
         if secuencial is None:
-            raise ConflictError(
-                "Se agotaron los secuenciales disponibles para esta configuración."
-            )
+            raise ConflictError("Se agotaron los secuenciales disponibles para esta configuración.")
 
         return int(secuencial)

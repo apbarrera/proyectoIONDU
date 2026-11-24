@@ -52,7 +52,7 @@ RUN groupadd --system --gid 10001 app \
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY --chown=app:app app ./app
-# Migraciones: docker compose exec api alembic upgrade head
+# Alembic se ejecuta desde un entorno administrativo separado, nunca desde API o worker.
 COPY --chown=app:app alembic.ini ./
 COPY --chown=app:app alembic ./alembic
 

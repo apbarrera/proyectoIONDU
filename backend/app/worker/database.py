@@ -1,6 +1,6 @@
 """Conexión PostgreSQL independiente para el worker."""
 
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from functools import lru_cache
 
 from sqlalchemy import Engine, create_engine, func, select
@@ -99,16 +99,13 @@ def bloqueo_factura(
 
                 if not liberado:
                     raise RuntimeError(
-                        "PostgreSQL no confirmó la liberación "
-                        "del bloqueo de la factura."
+                        "PostgreSQL no confirmó la liberación del bloqueo de la factura."
                     )
             except Exception:
                 # No devolver al pool una conexión cuyo estado de bloqueo
                 # no podamos garantizar.
-                try:
+                with suppress(Exception):
                     conexion.invalidate()
-                except Exception:
-                    pass
                 raise
 
 

@@ -78,6 +78,7 @@ def test_worker_session_factory_usa_worker_session(monkeypatch):
 
     engine.dispose()
 
+
 def test_worker_no_ejecuta_listener_rls_de_la_api():
     engine = create_engine("sqlite+pysqlite:///:memory:")
 
@@ -98,9 +99,8 @@ def test_api_session_conserva_listener_rls():
     try:
         factory = sessionmaker_for_test(engine, APISession)
 
-        with pytest.raises(OperationalError, match="set_config"):
-            with factory() as session:
-                session.execute(text("SELECT 1"))
+        with pytest.raises(OperationalError, match="set_config"), factory() as session:
+            session.execute(text("SELECT 1"))
     finally:
         engine.dispose()
 
@@ -144,10 +144,12 @@ def test_bloqueo_factura_impide_adquisicion_simultanea(engine):
 def test_bloqueo_factura_se_libera_ante_excepcion(engine):
     from app.worker.database import bloqueo_factura
 
-    with pytest.raises(RuntimeError, match="fallo simulado"):
-        with bloqueo_factura(7, 16, engine=engine) as adquirido:
-            assert adquirido is True
-            raise RuntimeError("fallo simulado")
+    with (
+        pytest.raises(RuntimeError, match="fallo simulado"),
+        bloqueo_factura(7, 16, engine=engine) as adquirido,
+    ):
+        assert adquirido is True
+        raise RuntimeError("fallo simulado")
 
     # La excepción no debe dejar el bloqueo retenido.
     with bloqueo_factura(7, 16, engine=engine) as siguiente:
@@ -157,10 +159,8 @@ def test_bloqueo_factura_se_libera_ante_excepcion(engine):
 def test_bloqueo_factura_rechaza_identificadores_invalidos():
     from app.worker.database import bloqueo_factura
 
-    with pytest.raises(ValueError):
-        with bloqueo_factura(0, 15):
-            pass
+    with pytest.raises(ValueError), bloqueo_factura(0, 15):
+        pass
 
-    with pytest.raises(ValueError):
-        with bloqueo_factura(7, 0):
-            pass
+    with pytest.raises(ValueError), bloqueo_factura(7, 0):
+        pass

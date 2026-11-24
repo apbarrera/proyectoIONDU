@@ -8,10 +8,10 @@ variable se saltan; las demás corren igual.
 """
 
 import os
-import warnings
 
 # Las pruebas simulan el entorno de desarrollo (encabezado X-Empresa-Id habilitado).
 os.environ["APP_ENV"] = "development"
+os.environ["DEV_USER_ID"] = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 
 import uuid  # noqa: E402
 
@@ -31,6 +31,7 @@ from app.models.rol import ADMINISTRADOR, OPERATIVO  # noqa: E402
 from tests.tokens import crear_token, verificador_de_prueba  # noqa: E402
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
+SERVIDORES_DE_PRUEBA = {"127.0.0.1", "localhost", "db"}
 
 
 def validar_url_pruebas(database_url: str) -> None:
@@ -44,10 +45,15 @@ def validar_url_pruebas(database_url: str) -> None:
         pytest.fail("TEST_DATABASE_URL debe usar postgresql+psycopg")
     if url.database != "iondu_test":
         pytest.fail("TEST_DATABASE_URL debe apuntar exactamente a iondu_test")
-    if url.host not in {"127.0.0.1", "localhost"} or url.port != 15432:
-        pytest.fail("TEST_DATABASE_URL debe usar localhost o 127.0.0.1 en el puerto 15432")
-    if url.username != "iondu":
-        pytest.fail("TEST_DATABASE_URL debe conectarse con el usuario iondu")
+    # Solo servidores locales: tu Docker (127.0.0.1:15432), el contenedor "db" (Docker
+    # Compose) o el PostgreSQL temporal del CI (127.0.0.1:5432). Nunca Supabase.
+    if url.host not in SERVIDORES_DE_PRUEBA:
+        pytest.fail(
+            "TEST_DATABASE_URL debe apuntar a un PostgreSQL local "
+            f"({', '.join(sorted(SERVIDORES_DE_PRUEBA))})"
+        )
+    if url.username != "iondu_test_runner":
+        pytest.fail("TEST_DATABASE_URL debe conectarse con el usuario iondu_test_runner")
 
 
 @pytest.fixture(scope="session")
@@ -71,19 +77,14 @@ def engine():
                     """
                 ).one()
 
-                if identidad[0] != "iondu_test" or identidad[1] != "iondu":
-                    pytest.fail(
-                        "La conexión real no corresponde a iondu_test con el usuario iondu"
-                    )
+                if identidad[0] != "iondu_test" or identidad[1] != "iondu_test_runner":
+                    pytest.fail("La conexión real no corresponde a iondu_test con el usuario iondu_test_runner")
 
                 if identidad[2] or identidad[3]:
-                    warnings.warn(
-                        "El usuario de pruebas tiene permisos SUPERUSER o BYPASSRLS; "
-                        "estas pruebas no pueden demostrar el cumplimiento de RLS "
-                        "a nivel de PostgreSQL.",
-                        RuntimeWarning,
-                        stacklevel=2,
+                    pytest.fail(
+                        "El usuario de pruebas no debe tener SUPERUSER ni BYPASSRLS"
                     )
+
         except OperationalError:
             pytest.exit(
                 "No se pudo conectar a iondu_test. ¿Está encendido Docker con el servicio db?",
@@ -141,11 +142,27 @@ def client(db):
 
 
 @pytest.fixture
-def empresas(db) -> tuple[int, int]:
-    """Dos empresas para probar el aislamiento: (id_a, id_b)."""
+def empresas(db, roles) -> tuple[int, int]:
+    """Dos empresas aisladas y un usuario demo con membresia explicita en ambas."""
     a = Empresa(razon_social="Empresa A", ruc="0990000000001", correo_electronico="a@test.ec")
     b = Empresa(razon_social="Empresa B", ruc="0990000000002", correo_electronico="b@test.ec")
     db.add_all([a, b])
+    db.flush()
+
+    usuario_demo = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+    db.execute(auth_users.insert().values(id=usuario_demo))
+    db.add_all(
+        [
+            UsuarioEmpresa(
+                id_usuario=usuario_demo,
+                id_empresa=empresa.id_empresa,
+                id_rol=roles[ADMINISTRADOR],
+                nombre_visible="Usuario Demo",
+                estado="ACTIVO",
+            )
+            for empresa in (a, b)
+        ]
+    )
     db.flush()
     return a.id_empresa, b.id_empresa
 
@@ -204,3 +221,10 @@ def nuevo_usuario(db, agregar_pertenencia):
 def con_token(usuario: uuid.UUID, **extra: str) -> dict[str, str]:
     """Encabezados de una petición con la sesión de ese usuario."""
     return {"Authorization": f"Bearer {crear_token(usuario)}"} | extra
+
+
+@pytest.fixture
+def usuarios_empresa(empresas, nuevo_usuario):
+    """Un usuario autenticado con pertenencia activa para cada empresa de prueba."""
+    a, b = empresas
+    return {a: nuevo_usuario(a), b: nuevo_usuario(b)}

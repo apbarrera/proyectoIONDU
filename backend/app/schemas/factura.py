@@ -1,4 +1,4 @@
-﻿"""Datos de salida de facturas electrónicas."""
+"""Datos de salida de facturas electrónicas."""
 
 from datetime import datetime
 from typing import Literal

@@ -8,6 +8,78 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import TIMEZONE, get_settings
 
+# Claves privadas utilizadas para conservar el contexto entre transacciones.
+_RLS_USER_KEY = "rls_usuario_id"
+_RLS_COMPANY_KEY = "rls_empresa_id"
+
+
+def _aplicar_contexto_rls(session, transaction, connection) -> None:
+    """Aplica el contexto RLS al iniciar cada transacción de la sesión."""
+    connection.execute(
+        text("""
+            SELECT
+                set_config(
+                    'app.current_user_id',
+                    :usuario_id,
+                    true
+                ),
+                set_config(
+                    'app.current_empresa_id',
+                    :empresa_id,
+                    true
+                )
+        """),
+        {
+            "usuario_id": session.info.get(_RLS_USER_KEY) or "",
+            "empresa_id": (
+                str(session.info[_RLS_COMPANY_KEY])
+                if session.info.get(_RLS_COMPANY_KEY) is not None
+                else ""
+            ),
+        },
+    )
+
+
+class APISession(Session):
+    """Sesión de la API con contexto transaccional RLS."""
+
+
+# El listener se registra exclusivamente en las sesiones de la API.
+# WorkerSession hereda directamente de Session y no recibe este evento.
+event.listen(APISession, "after_begin", _aplicar_contexto_rls)
+
+
+def establecer_contexto_rls(
+    session: Session,
+    *,
+    usuario_id: str | None,
+    empresa_id: int | None,
+) -> None:
+    """Actualiza el contexto RLS de la transacción actual y las siguientes."""
+    session.info[_RLS_USER_KEY] = str(usuario_id) if usuario_id else None
+    session.info[_RLS_COMPANY_KEY] = empresa_id
+
+    # Actualiza también la transacción que ya pudiera estar abierta.
+    session.execute(
+        text("""
+            SELECT
+                set_config(
+                    'app.current_user_id',
+                    :usuario_id,
+                    true
+                ),
+                set_config(
+                    'app.current_empresa_id',
+                    :empresa_id,
+                    true
+                )
+        """),
+        {
+            "usuario_id": session.info[_RLS_USER_KEY] or "",
+            "empresa_id": (str(empresa_id) if empresa_id is not None else ""),
+        },
+    )
+
 
 # Claves privadas utilizadas para conservar el contexto entre transacciones.
 _RLS_USER_KEY = "rls_usuario_id"

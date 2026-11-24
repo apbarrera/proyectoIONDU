@@ -1,7 +1,7 @@
-"""Entorno de Alembic: cómo se conecta a la base y qué modelos conoce.
+"""Entorno de Alembic: conexion a la base de datos y modelos conocidos.
 
-La dirección de la base sale de DATABASE_URL (la misma configuración que usa
-la API), nunca de alembic.ini.
+La direccion de la base se obtiene de MIGRATION_DATABASE_URL, una credencial
+administrativa separada de las conexiones de la API y del worker.
 """
 
 from logging.config import fileConfig
@@ -21,9 +21,9 @@ target_metadata = Base.metadata
 
 
 def _database_url() -> str:
-    url = get_settings().database_url
+    url = get_settings().migration_database_url
     if not url:
-        raise RuntimeError("Define DATABASE_URL para ejecutar las migraciones")
+        raise RuntimeError("Define MIGRATION_DATABASE_URL para ejecutar las migraciones")
     return url
 
 

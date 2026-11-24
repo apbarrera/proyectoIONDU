@@ -16,6 +16,10 @@
     elegida, y el backend comprueba que el usuario pertenezca a ella. Ver sección 5.
   - **Sin sesión, solo desarrollo:** encabezado `X-Empresa-Id: <número>`, con rol Administrador, para probar sin
     login. En cualquier otro entorno se responde `401`.
+  - **Usuario demo, solo desarrollo:** además de `X-Empresa-Id`, el encabezado `X-Usuario-Id: <uuid>` actúa como
+    ese usuario con su pertenencia real (rol y nombre), así se pueden registrar ventas, gastos y movimientos desde
+    Swagger sin Supabase. `backend/scripts/cargar_datos_demo.py` crea el Administrador
+    `11111111-1111-1111-1111-111111111111` y el Operativo `22222222-2222-2222-2222-222222222222`. En producción se ignora.
 - **IDs:** números enteros (`"id": 12`). *En el frontend hoy son texto (`id: string`); hay que cambiarlos a `number`.*
 - **Montos y cantidades:** números con hasta 2 decimales (`"salePrice": 2.5`).
 - **Fechas:** texto ISO 8601 con zona horaria de Ecuador (`"2026-10-25T14:30:00-05:00"`).
@@ -328,7 +332,8 @@ Sin cliente: `customerId` y `customerIdentification` son `null` y `customerName`
 | ✅ | `POST /api/sales` | Registra la venta (arriba) | `201` con `Sale` |
 | ✅ | `GET /api/sales` | Historial, de la más reciente a la más antigua. Filtros: `from` y `to` (fechas `AAAA-MM-DD`, en hora de Ecuador), `customerId`, `paymentMethod` | `200` con `PageResult<Sale>` |
 | ✅ | `GET /api/sales/{id}` | Una venta | `200` con `Sale`, o `404` |
-| ⏳ | Factura de la venta | Emitir, reintentar y ver su estado | Fase 2: requiere cambios en la tabla `factura` |
+| ✅ | `POST /api/sales/{id}/invoice` | **Emite la factura electrónica** de la venta: XML, firma con el `.p12` de la empresa, envío al SRI y RIDE. Exige sesión | `201` con `Invoice` |
+| ✅ | `GET /api/sales/{id}/invoice/ride` | Descarga el PDF (RIDE) de la factura. Exige sesión | `200` con `application/pdf` |
 
 Pendiente: anular ventas (RF-2.7) y completar la integración para emitir facturas electrónicas desde una venta.
 
@@ -351,3 +356,187 @@ Pendiente: anular ventas (RF-2.7) y completar la integración para emitir factur
     `POST /api/customers` lo crea. El consumidor final debe ser `9999999999999` (13 nueves), no `9999999999`.
 11. `SalesService.createSale` envía `customerId` (no el nombre), `items` con `productId` y `quantity` (sin precio)
     y `paymentMethod` con tarjeta separada en `tarjeta_debito` / `tarjeta_credito` (sección 8).
+
+## 10. Empresa y configuración de facturación
+
+Cualquier usuario de la empresa puede consultarlas; **solo el Administrador las modifica** (`403 FORBIDDEN`).
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/company` | Datos de la empresa, estado de la firma y configuración de facturación | `200` con `Company` |
+| ✅ | `PUT /api/company` | Edita solo los campos enviados: `businessName`, `tradeName`, `economicActivity`, `address`, `email`. **El RUC no se edita** (va dentro de cada clave de acceso) | `200` con `Company` |
+| ✅ | `PUT /api/company/billing-settings` | Guarda la configuración del emisor (objeto `BillingSettings` completo) | `200` con `Company` |
+
+Objeto `Company` (mismos nombres que `Tenant` del frontend):
+
+```json
+{
+  "id": 7, "ruc": "1790010937001", "businessName": "CAFETERÍA DEMO S.A.", "tradeName": "Café Demo",
+  "economicActivity": "Venta de café", "address": "Av. Amazonas N12-34, Quito", "email": "demo@iondu.ec",
+  "electronicSignature": { "configured": true, "expiresAt": "2027-03-01", "expiresSoon": false, "expired": false },
+  "billing": {
+    "environment": "pruebas", "establishment": "001", "emissionPoint": "001",
+    "requiredToKeepAccounts": false, "rimpe": true, "specialTaxpayer": null
+  }
+}
+```
+
+- `electronicSignature.expiresSoon` es `true` cuando faltan 30 días o menos (alerta de RNF-25).
+- `billing` es `null` mientras la empresa no configure su facturación; sin ella no se puede emitir.
+- `environment`: `pruebas` (SRI de pruebas, sin validez legal) o `produccion`. `establishment` y `emissionPoint`:
+  3 dígitos. `specialTaxpayer`: número de resolución de contribuyente especial, o `null`.
+
+## 11. Gastos, categorías de gasto y proveedores
+
+Cualquier usuario de la empresa puede consultarlos y registrarlos. **Registrar o editar un gasto exige
+iniciar sesión** (`403 USER_SESSION_REQUIRED`): el gasto guarda qué usuario lo registró.
+
+### Categorías de gasto
+
+La primera vez que se piden se crean solas las 7 de RF-3.5: Materia prima, Servicios, Transporte,
+Empaque, Mantenimiento, Arriendo y Otros gastos operativos (`predefined: true`).
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/expense-categories` | Lista las categorías por nombre (sin paginar) | `200` con `ExpenseCategory[]` |
+| ✅ | `POST /api/expense-categories` | Crea una propia: `{ "name", "description"? }`. Nombre repetido (sin importar mayúsculas) → `409 CATEGORY_EXISTS` | `201` con `ExpenseCategory` |
+
+```json
+{ "id": 3, "name": "Servicios", "description": null, "predefined": true }
+```
+
+### Proveedores
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/suppliers?page=&pageSize=&search=` | Lista paginada; `search` busca en identificación y nombre | `200` con `Page<Supplier>` |
+| ✅ | `GET /api/suppliers/lookup?identification=` | Busca por RUC o cédula exactos (para autocompletar) | `200` o `404` |
+| ✅ | `GET /api/suppliers/{id}` | Un proveedor | `200` o `404` |
+| ✅ | `POST /api/suppliers` | Crea: `identification`, `name`, `phone`?, `email`?, `address`? | `201` con `Supplier` |
+| ✅ | `PATCH /api/suppliers/{id}` | Edita solo los campos enviados | `200` con `Supplier` |
+
+```json
+{
+  "id": 4, "identification": "1790016919001", "name": "Corporación Favorita", "phone": "022345678",
+  "email": "compras@favorita.ec", "address": "Quito", "identificationWarning": null
+}
+```
+
+- `identification`: RUC (13 dígitos) o cédula (10), validados con las reglas del SRI; si no →
+  `422 INVALID_IDENTIFICATION`. Repetida en la empresa → `409 SUPPLIER_EXISTS`.
+- `identificationWarning`: aviso (no error) para RUC de sociedades cuyo dígito verificador no cuadra.
+
+### Gastos
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/expenses` | Lista paginada, el más reciente primero. Filtros: `from`, `to` (fechas `YYYY-MM-DD` de Ecuador), `categoryId`, `supplierId`, `paymentMethod`, `minTotal`, `maxTotal` | `200` con `Page<Expense>` |
+| ✅ | `GET /api/expenses/{id}` | Un gasto | `200` o `404` |
+| ✅ | `POST /api/expenses` | Registra un gasto manual | `201` con `Expense` |
+| ✅ | `PATCH /api/expenses/{id}` | Edita solo los campos enviados (`supplierId: null` quita el proveedor) | `200` con `Expense` |
+
+Cuerpo de `POST /api/expenses`:
+
+```json
+{
+  "categoryId": 3, "supplierId": 4, "total": 25.50, "description": "Pago de internet",
+  "paymentMethod": "transferencia", "date": "2026-11-20T10:30:00-05:00", "receiptNumber": "001-001-000000123"
+}
+```
+
+- Obligatorios: `categoryId`, `total` (mayor a 0), `description`, `paymentMethod`
+  (`efectivo`, `tarjeta_debito`, `tarjeta_credito`, `transferencia`, `cheque`).
+- `date` es opcional: sin ella se usa la hora actual; sin zona horaria se toma como hora de Ecuador.
+- Categoría o proveedor que no son de la empresa → `422 CATEGORY_NOT_FOUND` / `422 SUPPLIER_NOT_FOUND`.
+
+Objeto `Expense`:
+
+```json
+{
+  "id": 12, "date": "2026-11-20T10:30:00-05:00", "categoryId": 3, "categoryName": "Servicios",
+  "supplierId": 4, "supplierName": "Corporación Favorita", "supplierIdentification": "1790016919001",
+  "total": 25.5, "description": "Pago de internet", "paymentMethod": "transferencia",
+  "receiptNumber": "001-001-000000123", "status": "confirmado", "source": "manual"
+}
+```
+
+- `source`: `manual` o `correo` (cuando lo lea el worker desde una factura recibida, RF-3.2).
+- La base todavía no guarda el IVA del gasto por separado: el `ivaAmount` del frontend no tiene dónde
+  guardarse (pendiente con Ariana).
+
+## 12. Inventario: historial, entradas, salidas y ajustes
+
+El stock de un producto **solo cambia junto con un movimiento** (ventas, entradas, salidas y ajustes), así el
+historial siempre cuadra con el stock (DECISIONES 2.15). Registrar un movimiento **exige iniciar sesión**
+(`403 USER_SESSION_REQUIRED`) porque guarda quién lo hizo.
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/inventory/movements` | Historial paginado, el más reciente primero. Filtros: `productId`, `type` (`entrada`, `salida`, `ajuste`, `venta`), `from`, `to` (fechas de Ecuador) | `200` con `Page<InventoryMovement>` |
+| ✅ | `GET /api/inventory/movements/{id}` | Un movimiento | `200` o `404` |
+| ✅ | `POST /api/inventory/movements` | Entrada o salida manual (RF-4.3): `{ "productId", "type": "entrada" \| "salida", "quantity" (> 0), "reason" }` | `201` con `InventoryMovement` |
+| ✅ | `POST /api/inventory/adjustments` | **Solo Administrador** (RF-4.8). Ajuste al conteo físico: `{ "productId", "newStock" (≥ 0), "reason" }`. Se envía el stock real, no la diferencia | `201` con `StockAdjustment` |
+
+Errores: producto que no es de la empresa → `422 PRODUCT_NOT_FOUND`; salida mayor al stock →
+`409 INSUFFICIENT_STOCK`; ajuste al mismo stock que ya tiene → `422 NO_STOCK_CHANGE`; motivo vacío → `422`.
+
+Objeto `InventoryMovement` (igual que el modelo del frontend):
+
+```json
+{
+  "id": 31, "productId": 5, "productName": "Café molido 250 g", "unit": "UNIDAD", "type": "salida",
+  "quantity": -2.5, "resultingStock": 12.5, "reason": "Merma", "date": "2026-11-20T10:30:00-05:00",
+  "createdBy": "Ana Torres"
+}
+```
+
+- `quantity` lleva signo: **positiva si entra** al inventario, **negativa si sale** (ventas, salidas y ajustes a la baja).
+- `resultingStock`: stock del producto justo después de ese movimiento.
+- Para la pantalla de ajustes: `GET /api/inventory/movements?type=ajuste`.
+
+Objeto `StockAdjustment` (respuesta del ajuste):
+
+```json
+{
+  "id": 32, "productId": 5, "productName": "Café molido 250 g", "previousStock": 10, "newStock": 7,
+  "quantityDelta": -3, "reason": "Conteo de fin de mes", "date": "2026-11-20T18:00:00-05:00",
+  "createdBy": "Ana Torres"
+}
+```
+
+- Las alertas de stock bajo (RF-4.6) ya existen: `GET /api/products?lowStock=true` (sección 4).
+
+## 13. Dashboard financiero
+
+**Solo el Administrador** (RF-5.5): cualquier otro rol recibe `403 FORBIDDEN`. Los indicadores se calculan **en vivo**
+en cada consulta, así reflejan al instante cada venta, gasto o movimiento (RF-5.4).
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/dashboard?from=&to=` | Indicadores del período (fechas `YYYY-MM-DD` de Ecuador). Sin fechas: el mes en curso hasta hoy. Máximo 366 días; `from` posterior a `to` → `422` | `200` con `DashboardSummary` |
+
+Para RF-5.3 el frontend calcula el rango: hoy (`from = to = hoy`), semana, mes o personalizado.
+
+```json
+{
+  "from": "2026-11-01", "to": "2026-11-20",
+  "income": 2240.8, "expenses": 910, "profit": 1330.8,
+  "salesCount": 125, "expensesCount": 9, "averageTicket": 17.93,
+  "topProducts": [ { "productId": 1, "name": "Café en grano 500 g", "unitsSold": 98, "revenue": 833 } ],
+  "dailySeries": [ { "date": "2026-11-01", "income": 74.5, "expenses": 0 } ],
+  "expensesByCategory": [ { "categoryId": 6, "name": "Arriendo", "total": 450 } ],
+  "inventory": {
+    "activeProducts": 7, "lowStockCount": 2, "inventoryValue": 691.5,
+    "lowStockProducts": [ { "productId": 5, "name": "Agua sin gas 500 ml", "unit": "UNIDAD", "currentStock": 6, "minStock": 12 } ]
+  }
+}
+```
+
+- `income`: total de las ventas **completadas** del período, **con IVA** (lo que entró a caja). Las anuladas no cuentan.
+- `expenses`: gastos **confirmados**. `profit` = `income − expenses` (utilidad estimada, RF-5.2).
+- `topProducts`: los 5 productos con más ingreso; `revenue` es el subtotal **sin IVA** de sus líneas.
+- `dailySeries`: **un punto por cada día** del período, también los días en 0, listo para el gráfico.
+- `inventory` es el estado **actual** (no depende del período): productos activos, cuántos tienen stock bajo,
+  valor del inventario (stock × costo) y los 10 más críticos.
+- Mismos nombres que `DashboardSummary` del frontend, más `expenses`, `expensesCount`, `expensesByCategory`,
+  `inventory` y `dailySeries[].expenses`. Los ids pasan de `string` a `number`.

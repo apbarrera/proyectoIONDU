@@ -43,6 +43,32 @@ def test_factura_completa_es_valida_y_tiene_los_valores_esperados():
     assert "Caf\u00e9 molido".encode() in xml  # UTF-8, sin entidades
 
 
+def test_xml_separa_iva_individual_del_iva_agrupado():
+    detalles = [
+        DetalleFactura(
+            f"ITEM-{indice}",
+            f"Producto {indice}",
+            Linea(D("1"), D("0.10"), TarifaIva.IVA_15),
+        )
+        for indice in range(1, 4)
+    ]
+    factura = replace(
+        FACTURA,
+        detalles=detalles,
+        pagos=[Pago(FormaPago.SIN_SISTEMA_FINANCIERO, D("0.35"))],
+    )
+
+    generada = generar_factura_xml(factura)
+
+    assert validar_factura_xml(generada.xml) == []
+    assert _texto(generada.xml, "//totalImpuesto/baseImponible") == ["0.30"]
+    assert _texto(generada.xml, "//totalImpuesto/valor") == ["0.05"]
+    assert _texto(
+        generada.xml,
+        "//detalle/impuestos/impuesto/valor",
+    ) == ["0.02", "0.02", "0.02"]
+
+
 def test_consumidor_final_es_valido():
     factura = replace(FACTURA, comprador=Comprador.consumidor_final())
     xml = generar_factura_xml(factura).xml
@@ -77,7 +103,7 @@ def test_errores_detectados_antes_de_armar_el_xml(cambios, error):
 
 
 def test_nunca_devuelve_un_xml_que_el_esquema_rechace():
-    # codigoPrincipal admite mÃ¡ximo 25 caracteres en el esquema.
+    # codigoPrincipal admite como maximo 25 caracteres en el esquema.
     largo = DetalleFactura("X" * 26, "Producto", Linea(D("1"), D("24.00"), TarifaIva.IVA_0))
     with pytest.raises(ValueError, match="no cumple el esquema"):
         generar_factura_xml(replace(FACTURA, detalles=[largo]))
@@ -94,6 +120,7 @@ def test_el_validador_detecta_un_xml_alterado():
 
 def test_el_validador_no_acepta_xml_mal_formado():
     assert validar_factura_xml(b"<factura><sin-cerrar></factura>")[0].startswith("XML mal formado")
+
 
 def test_codigo_sin_producto_asociado_es_valido_en_el_xsd():
     detalles = [

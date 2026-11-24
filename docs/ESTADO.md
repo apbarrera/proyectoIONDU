@@ -280,7 +280,15 @@ Detectados al conectar Ventas y Facturación (24/11/2026). Cada uno bloquea una 
 | Pruebas del backend con base de datos | Una vez: `docker compose exec db createdb -U iondu iondu_test`. Luego, desde `backend/`, definir `TEST_DATABASE_URL=postgresql+psycopg://iondu:<POSTGRES_PASSWORD>@127.0.0.1:15432/iondu_test` y correr `pytest` (sin la variable, esas pruebas se saltan) |
 | Agregar un ícono | añadirlo en `frontend/scripts/generate-icons.mjs` y correr `npm run icons` |
 
-Usuarios de prueba del frontend: `admin@iondu.demo` y `operador@iondu.demo`, contraseña `iondu2026`.
+**Probar todo el sistema en local (frontend contra el backend real):**
+1. Node 22.22.3 o superior, 24.15 o superior, o 26 (el Angular CLI no corre con menos). Luego `cd frontend && npm ci && npx ng test --no-watch`.
+2. Con Docker encendido: copiar `.env.example` a `.env` y completar `POSTGRES_PASSWORD`, `APP_ENV=development`, las tres conexiones y `DEV_USER_ID=11111111-1111-1111-1111-111111111111`. Luego `docker compose up --build -d`.
+3. Preparar la base (desde `backend/`, con las variables de conexión del README): `scripts\bootstrap_local_auth.py`, `alembic upgrade head` y `python -m scripts.cargar_datos_demo` (cafetería con un mes de ventas).
+4. El login usa **Supabase real** (el `.env` del frontend apunta a su proyecto), no usuarios de ejemplo. La base local no conoce a ese usuario: tras entrar la API responde `NO_COMPANY`. Se soluciona con `python -m scripts.asignar_usuario_local --usuario <uuid de Supabase> --nombre "Nombre" [--rol Operativo]`. Para probar el rol Operativo hay que repetirlo con otro usuario.
+5. Abrir http://localhost:8080 y recorrer: venta con cliente nuevo y con consumidor final (baja el stock), emitir factura (sin `.p12` debe dar un error claro), entrada, salida y ajuste de inventario, gasto con y sin proveedor, dashboard con distintos períodos, y configuración de la empresa. Con el Operativo, Dashboard, Recomendaciones, Ajustes y Empresa deben responder 403.
+6. Para separar fallos del frontend de los del backend, probar la API sola en http://localhost:8080/api/docs con los encabezados `X-Empresa-Id` y `X-Usuario-Id`.
+
+Ya no existen los usuarios de ejemplo `admin@iondu.demo` y `operador@iondu.demo`: el login simulado se reemplazó por Supabase Auth.
 
 ## 4. Cosas a tener en cuenta
 - El contenedor en `localhost:8080` usa la imagen que se construyó la última vez; se actualiza con `docker compose up -d --build`.

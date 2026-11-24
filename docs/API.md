@@ -357,10 +357,12 @@ Pendiente: anular ventas (RF-2.7) y completar la integración para emitir factur
 11. `SalesService.createSale` envía `customerId` (no el nombre), `items` con `productId` y `quantity` (sin precio)
     y `paymentMethod` con tarjeta separada en `tarjeta_debito` / `tarjeta_credito` (sección 8).
 
-**Estado de estos cambios en el frontend (24/11/2026):** ✅ los puntos 7, 8 (login e interceptor), 10 y 11 y la
-emisión de facturas (`POST /api/sales/{id}/invoice` y su RIDE) están hechos; el 6 está hecho solo en la pantalla de
-Productos. Siguen pendientes los puntos 1 a 5 (IDs numéricos, `categoryId` en todos los consumidores, tipos de
-producto, campos nuevos y bloqueo de `currentStock` en el resto de las pantallas). Detalle por módulo en
+**Estado de estos cambios en el frontend (24/11/2026):** ✅ los puntos 6 a 8 (login, interceptor y productos),
+10 y 11, y todas las secciones de este contrato que tienen backend (ventas, facturas y RIDE, clientes, gastos,
+categorías de gasto, proveedores, inventario, dashboard y empresa con su configuración y firma). Siguen pendientes
+los puntos 1 a 5 (IDs como `number` en todo el frontend, `categoryId`, tipos de producto, campos nuevos y bloqueo de
+`currentStock`): hoy los servicios convierten con `String(...)` y `Number(...)`. Sin conectar, por falta de backend:
+usuarios, auditoría, lectura de correo, agente de IA y recetas y producción. Detalle por módulo en
 [`ESTADO.md`](ESTADO.md), sección "Frontend: conexión con la API".
 
 **Pendiente del backend** detectado al conectar la facturación: `Sale` no trae el estado de su factura ni

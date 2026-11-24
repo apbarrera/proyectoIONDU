@@ -1,34 +1,76 @@
-import { Injectable, signal } from '@angular/core';
-import { Observable } from 'rxjs';
-import { InventoryMovement, MovementType } from '../models/movement.model';
-import { INVENTORY_MOVEMENTS_MOCK } from '../../../mocks/inventory-movements.mock';
-import { simulateRequest } from '../../../core/services/mock-http.util';
-import { generateId } from '../../../core/utils/id.util';
+import { Injectable, inject, signal } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable, map, tap } from 'rxjs';
 
+import { environment } from '../../../../environments/environment';
+import { fetchAllPages } from '../../../core/utils/pagination.util';
+import { BackendMovementType, InventoryMovement } from '../models/movement.model';
+
+export interface MovementDto {
+  id: number;
+  productId: number;
+  productName: string;
+  unit: string;
+  type: BackendMovementType;
+  quantity: number;
+  resultingStock: number;
+  reason: string;
+  date: string;
+  createdBy: string;
+}
+
+export function toMovement(dto: MovementDto): InventoryMovement {
+  return {
+    id: String(dto.id),
+    productId: String(dto.productId),
+    productName: dto.productName,
+    unit: dto.unit,
+    type: dto.type,
+    quantity: dto.quantity,
+    resultingStock: dto.resultingStock,
+    reference: dto.reason,
+    date: dto.date,
+    createdBy: dto.createdBy,
+  };
+}
+
+export interface ManualMovementInput {
+  productId: number;
+  type: 'entrada' | 'salida';
+  quantity: number;
+  reason: string;
+}
+
+/** Historial de movimientos y entradas/salidas manuales (`/api/inventory/movements`). */
 @Injectable({ providedIn: 'root' })
 export class MovementsService {
-  #movements = signal<InventoryMovement[]>(INVENTORY_MOVEMENTS_MOCK);
+  private readonly http = inject(HttpClient);
+  private readonly baseUrl = `${environment.apiUrl}/inventory/movements`;
+
+  #movements = signal<InventoryMovement[]>([]);
   readonly movements = this.#movements.asReadonly();
 
-  getMovements(): Observable<InventoryMovement[]> {
-    return simulateRequest(this.#movements());
+  /** Descarga todo el historial (el más reciente primero) y actualiza `movements`. */
+  getMovements(type?: BackendMovementType): Observable<InventoryMovement[]> {
+    return fetchAllPages<MovementDto>((page) => {
+      let params = new HttpParams().set('page', page).set('pageSize', 100);
+      if (type) params = params.set('type', type);
+      return this.http.get<{ items: MovementDto[]; total: number; page: number; pageSize: number }>(this.baseUrl, {
+        params,
+      });
+    }).pipe(
+      map((items) => items.map(toMovement)),
+      tap((movements) => {
+        if (!type) this.#movements.set(movements);
+      }),
+    );
   }
 
-  record(params: {
-    productId: string;
-    productName: string;
-    type: MovementType;
-    quantity: number;
-    resultingStock: number;
-    reference: string;
-    createdBy: string;
-  }): InventoryMovement {
-    const movement: InventoryMovement = {
-      id: generateId(),
-      date: new Date().toISOString(),
-      ...params,
-    };
-    this.#movements.update((list) => [movement, ...list]);
-    return movement;
+  /** Entrada o salida manual (RF-4.3). El backend actualiza el stock en la misma transacción. */
+  record(input: ManualMovementInput): Observable<InventoryMovement> {
+    return this.http.post<MovementDto>(this.baseUrl, input).pipe(
+      map(toMovement),
+      tap((movement) => this.#movements.update((list) => [movement, ...list])),
+    );
   }
 }

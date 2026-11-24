@@ -1,9 +1,54 @@
 <app-page-header
   title="Movimientos de inventario"
-  subtitle="Historial de entradas, salidas, ajustes y fabricación."
+  subtitle="Historial de entradas, salidas, ajustes y ventas."
   [breadcrumb]="[{ label: 'Inventario', link: '/inventory/products' }, { label: 'Movimientos' }]"
 />
 
+<app-card title="Registrar entrada o salida">
+  <div class="movements__row">
+    <div>
+      <label class="movements__label" for="mov-product">Producto</label>
+      <select id="mov-product" class="movements__field" [ngModel]="productId()" (ngModelChange)="productId.set($event)">
+        <option value="" disabled>Selecciona un producto</option>
+        @for (p of productsService.products(); track p.id) {
+          <option [value]="p.id">{{ p.name }} ({{ p.currentStock }} {{ p.unit }})</option>
+        }
+      </select>
+    </div>
+    <div>
+      <label class="movements__label" for="mov-type">Tipo</label>
+      <select id="mov-type" class="movements__field" [ngModel]="type()" (ngModelChange)="type.set($event)">
+        <option value="entrada">Entrada</option>
+        <option value="salida">Salida</option>
+      </select>
+    </div>
+    <div>
+      <label class="movements__label" for="mov-quantity">Cantidad</label>
+      <input
+        id="mov-quantity"
+        class="movements__field"
+        type="number"
+        min="0"
+        step="0.01"
+        [ngModel]="quantity()"
+        (ngModelChange)="quantity.set($event)"
+      />
+    </div>
+  </div>
+
+  <label class="movements__label" for="mov-reason">Motivo</label>
+  <input
+    id="mov-reason"
+    class="movements__field"
+    [ngModel]="reason()"
+    (ngModelChange)="reason.set($event)"
+    placeholder="Ej. Compra a proveedor, merma, consumo interno…"
+  />
+
+  <app-button [loading]="submitting()" [disabled]="!canSubmit()" (clicked)="submit()">Registrar movimiento</app-button>
+</app-card>
+
+<h3 class="movements__history-title">Historial</h3>
 <app-data-table
   [columns]="columns"
   [rows]="movementsService.movements()"

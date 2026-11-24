@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ProductionService } from '../../services/production.service';
 import { RecipesService } from '../../services/recipes.service';
+import { ProductsService } from '../../services/products.service';
 import { PageHeader } from '../../../../shared/components/page-header/page-header';
 import { Button } from '../../../../shared/components/button/button';
 import { Card } from '../../../../shared/components/card/card';
@@ -18,6 +19,11 @@ export class Production {
   recipesService = inject(RecipesService);
   productionService = inject(ProductionService);
   private toast = inject(ToastService);
+  private productsService = inject(ProductsService);
+
+  constructor() {
+    this.productsService.refresh();
+  }
 
   selectedRecipeId = signal('');
   units = signal(1);

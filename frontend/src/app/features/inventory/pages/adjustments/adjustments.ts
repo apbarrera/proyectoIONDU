@@ -42,6 +42,11 @@ export class Adjustments {
     { key: 'createdBy', header: 'Usuario', cell: (a) => a.createdBy },
   ];
 
+  constructor() {
+    this.productsService.refresh();
+    this.adjustmentsService.getAdjustments().subscribe();
+  }
+
   onProductChange(id: string): void {
     this.selectedProductId.set(id);
     this.newStock.set(this.productsService.getProduct(id)?.currentStock ?? 0);
@@ -61,9 +66,14 @@ export class Adjustments {
       })
       .subscribe((confirmed) => {
         if (!confirmed) return;
-        this.adjustmentsService.createAdjustment(product.id, this.newStock(), this.reason()).subscribe(() => {
-          this.toast.success('Ajuste registrado.');
-          this.reason.set('');
+        this.adjustmentsService.createAdjustment(product.id, this.newStock(), this.reason()).subscribe({
+          next: (adjustment) => {
+            this.toast.success('Ajuste registrado.');
+            this.reason.set('');
+            this.newStock.set(adjustment.newStock);
+          },
+          // El interceptor ya mostró el motivo (por ejemplo, solo el Administrador puede ajustar).
+          error: () => undefined,
         });
       });
   }

@@ -1,46 +1,54 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable } from 'rxjs';
 import { Product } from '../models/product.model';
-import { PRODUCTS_MOCK } from '../../../mocks/products.mock';
-import { simulateRequest } from '../../../core/services/mock-http.util';
-import { generateId } from '../../../core/utils/id.util';
-import { MovementsService } from './movements.service';
+import { MovementType } from '../models/movement.model';
+import { ProductsApiService } from './products-api.service';
 
+/**
+ * Productos de la empresa en memoria, cargados desde `/api/products`.
+ *
+ * Es la caché que comparten las pantallas de Inventario, Alertas y Ajustes; las altas y ediciones
+ * de la pantalla de Productos pasan por `ProductsApiService`. Cada pantalla llama a `refresh()`
+ * al abrirse.
+ */
 @Injectable({ providedIn: 'root' })
 export class ProductsService {
-  private movements = inject(MovementsService);
+  private readonly api = inject(ProductsApiService);
 
-  #products = signal<Product[]>(PRODUCTS_MOCK);
+  #products = signal<Product[]>([]);
   readonly products = this.#products.asReadonly();
+
+  #loading = signal(false);
+  readonly loading = this.#loading.asReadonly();
 
   readonly lowStockProducts = computed(() =>
     this.#products().filter((p) => p.active && p.currentStock <= p.minStock),
   );
 
-  getProducts(): Observable<Product[]> {
-    return simulateRequest(this.#products());
+  /** Vuelve a pedir los productos al backend (stock incluido). */
+  refresh(): void {
+    this.#loading.set(true);
+    this.api.getProducts().subscribe({
+      next: (products) => {
+        this.#products.set(products);
+        this.#loading.set(false);
+      },
+      // El interceptor ya mostró el error.
+      error: () => this.#loading.set(false),
+    });
   }
 
   getProduct(id: string): Product | undefined {
     return this.#products().find((p) => p.id === id);
   }
 
-  createProduct(input: Omit<Product, 'id'>): Observable<Product> {
-    const product: Product = { ...input, id: generateId() };
-    this.#products.update((list) => [product, ...list]);
-    return simulateRequest(product);
-  }
-
-  updateProduct(id: string, changes: Partial<Product>): Observable<Product> {
-    this.#products.update((list) => list.map((p) => (p.id === id ? { ...p, ...changes } : p)));
-    return simulateRequest(this.getProduct(id)!);
-  }
-
-  /** Moves stock by a signed delta and writes the matching movement in one step. */
+  /**
+   * Cambia el stock solo en memoria. Lo usa únicamente Producción, que todavía es simulada
+   * (el backend no tiene recetas ni fabricación). `type`, `reference` y `createdBy` no se guardan.
+   */
   applyStockChange(params: {
     productId: string;
     delta: number;
-    type: Parameters<MovementsService['record']>[0]['type'];
+    type: MovementType;
     reference: string;
     createdBy: string;
   }): number {
@@ -51,17 +59,6 @@ export class ProductsService {
     this.#products.update((list) =>
       list.map((p) => (p.id === params.productId ? { ...p, currentStock: resultingStock } : p)),
     );
-
-    this.movements.record({
-      productId: product.id,
-      productName: product.name,
-      type: params.type,
-      quantity: params.delta,
-      resultingStock,
-      reference: params.reference,
-      createdBy: params.createdBy,
-    });
-
     return resultingStock;
   }
 }

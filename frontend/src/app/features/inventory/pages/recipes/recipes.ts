@@ -26,6 +26,10 @@ export class Recipes {
   private toast = inject(ToastService);
   private fb = inject(FormBuilder);
 
+  constructor() {
+    this.productsService.refresh();
+  }
+
   formOpen = signal(false);
   editingId = signal<string | null>(null);
 

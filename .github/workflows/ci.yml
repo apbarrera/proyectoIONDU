@@ -52,7 +52,7 @@ jobs:
         run: >-
           docker run --rm --network host
           postgres:17-alpine
-          psql -h 127.0.0.1 -U iondu -d postgres
+          psql -h 127.0.0.1 -U iondu -d iondu_test
           -v ON_ERROR_STOP=1
           -c "CREATE ROLE iondu_test_runner LOGIN NOSUPERUSER NOBYPASSRLS;"
           -c "GRANT CONNECT, CREATE, TEMP ON DATABASE iondu_test TO iondu_test_runner;"

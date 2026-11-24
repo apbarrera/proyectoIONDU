@@ -78,12 +78,13 @@ def engine():
                 ).one()
 
                 if identidad[0] != "iondu_test" or identidad[1] != "iondu_test_runner":
-                    pytest.fail("La conexión real no corresponde a iondu_test con el usuario iondu_test_runner")
+                    pytest.fail(
+                        "La conexion real no corresponde a iondu_test con el usuario "
+                        "iondu_test_runner"
+                    )
 
                 if identidad[2] or identidad[3]:
-                    pytest.fail(
-                        "El usuario de pruebas no debe tener SUPERUSER ni BYPASSRLS"
-                    )
+                    pytest.fail("El usuario de pruebas no debe tener SUPERUSER ni BYPASSRLS")
 
         except OperationalError:
             pytest.exit(

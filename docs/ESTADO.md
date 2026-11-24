@@ -1,6 +1,6 @@
 # IONDU · Estado del proyecto y siguientes pasos
 
-> Resumen de traspaso. Última actualización: 24 de noviembre de 2026 (frontend de Ventas, Clientes y Facturación conectado a la API; ver "Frontend: conexión con la API").
+> Resumen de traspaso. Última actualización: 24 de noviembre de 2026 (todo el frontend que tiene backend ya usa la API; ver "Frontend: conexión con la API").
 > Documentos relacionados: [`DECISIONES.md`](DECISIONES.md) (el porqué de cada decisión) · [`REQUISITOS.md`](REQUISITOS.md) · [`PRESUPUESTO.md`](PRESUPUESTO.md) · [`DESPLIEGUE.md`](DESPLIEGUE.md) · [`CORRECCIONES_PDF.md`](CORRECCIONES_PDF.md)
 
 ## 1. Qué está hecho
@@ -108,12 +108,16 @@ Estado por módulo (24/11/2026). Un servicio "real" usa `HttpClient` contra `/ap
 | Ventas (nueva venta e historial) | Real | `SalesService` |
 | Clientes (autocompletar y crear al vender) | Real | `CustomersApiService` |
 | Facturas (emitir, descargar RIDE) | Real | `BillingService` |
-| Gastos, proveedores, bandeja de correo | Simulado | `ExpensesService`, `ExpenseInboxService` |
-| Movimientos y ajustes de inventario, alertas | Simulado | `MovementsService`, `AdjustmentsService`, `ProductsService` |
-| Recetas y producción | Simulado (sin backend ni requisito) | `RecipesService`, `ProductionService` |
-| Dashboard | Simulado (lee `SalesService.sales()` y `ExpensesService`) | `DashboardService` |
-| Empresa y configuración | Simulado | `TenantService` |
-| Usuarios, auditoría, agente IA, recomendaciones | Simulado (sin backend) | `UserDirectoryService`, `AuditService`, `AiAgentService`, `RecommendationsService` |
+| Gastos, categorías de gasto y proveedores | Real | `ExpensesService`, `SuppliersApiService` |
+| Movimientos (con entradas y salidas manuales), ajustes y alertas de inventario | Real | `MovementsService`, `AdjustmentsService`, `ProductsService` (caché de `/api/products`) |
+| Dashboard | Real | `DashboardService` (`GET /api/dashboard`) |
+| Recomendaciones | Real, por reglas sobre el dashboard (no es IA) | `RecommendationsService` |
+| Empresa, configuración de facturación y firma electrónica | Real | `TenantService` |
+| Bandeja de gastos por correo | Simulado (falta IMAP en el worker). Al confirmar un borrador **sí** crea un gasto real | `ExpenseInboxService` |
+| Recetas y producción | Simulado (sin backend ni requisito); solo mueve el stock en memoria | `RecipesService`, `ProductionService` |
+| Usuarios (gestión) | Simulado (falta el backend) | `UserDirectoryService` |
+| Auditoría | Simulado (falta el backend) | `AuditService` |
+| Agente de IA | Simulado (falta el sprint 4). Al confirmar una propuesta **sí** crea un gasto o un ajuste reales | `AiAgentService`, `AiNluMockService`, `AiConfigService` |
 
 **Ventas, clientes y facturas (commits `6d5219a` y `1f143a0`):**
 - `SalesService`: `GET /api/sales` (todas las páginas de 100 en 100) y `POST /api/sales`. Envía `customerId`, `items` con `productId` y `quantity` (sin precio ni IVA: los calcula el backend) y `paymentMethod`. El método de pago `tarjeta` se separó en `tarjeta_debito` y `tarjeta_credito`.
@@ -123,12 +127,22 @@ Estado por módulo (24/11/2026). Un servicio "real" usa `HttpClient` contra `/ap
 - Errores: `core/utils/api-error.util.ts` extrae el mensaje del formato `{"error": {"code", "message"}}` y el interceptor de errores lo muestra en un solo aviso (los componentes no repiten el aviso). El 404 de `customers/lookup` no muestra aviso (`SKIP_ERROR_TOAST`).
 - Pruebas nuevas o reescritas: `sales.service.spec.ts`, `customers-api.service.spec.ts`, `new-sale.spec.ts`, `sales-history.spec.ts`.
 
+**Inventario, gastos, dashboard y empresa (24/11/2026):**
+- `core/utils/pagination.util.ts` (`fetchAllPages`): junta todas las páginas de 100 en 100; lo usan movimientos y gastos.
+- **Inventario.** `ProductsService` ya no tiene datos de ejemplo: es una caché de `/api/products` y cada pantalla llama a `refresh()` al abrirse. `MovementsService` lee `GET /api/inventory/movements` y registra entradas y salidas (`POST`); la pantalla Movimientos tiene un formulario nuevo para eso (RF-4.3). `AdjustmentsService` envía el stock real a `POST /api/inventory/adjustments` (solo Administrador) y arma su historial con los movimientos de tipo `ajuste` (stock anterior = resultante − cantidad). El backend usa `reason`; el frontend lo muestra como `reference`.
+- **Gastos.** El backend guarda solo el `total` (no separa el IVA ni la observación), así que el formulario pide el total con IVA. Las categorías vienen de `/api/expense-categories` (7 predefinidas). El proveedor es opcional: con RUC o cédula se busca o crea (`SuppliersApiService`) y se autocompleta el nombre. Se agregó el número de comprobante. El método de pago `tarjeta` se separó en débito y crédito. Una categoría que no existe (por ejemplo las del agente de IA) va a "Otros gastos operativos".
+- **Dashboard.** `DashboardService.summary(range)` es ahora un `Observable` de `GET /api/dashboard?from&to`; el cálculo en el navegador se eliminó. Se agregaron tarjetas de gastos por categoría y valor del inventario; el stock bajo sale del backend. Se corrigió `date-range.util.ts`: usaba `toISOString()` (UTC) y en Ecuador cambiaba de día a las 19:00, lo que enviaba un rango equivocado al backend.
+- **Recomendaciones.** Mismas reglas que antes, pero sobre los indicadores reales de este mes y el anterior (dos consultas al dashboard). Como el dashboard es solo del Administrador, un Operativo ve el error 403.
+- **Empresa.** `TenantService` usa `GET/PUT /api/company`, `PUT /api/company/billing-settings` y `PUT /api/company/certificate` (multipart). La pantalla Empresa ahora tiene datos generales (el RUC es de solo lectura), configuración de facturación (ambiente, establecimiento, punto de emisión, RIMPE, contabilidad, contribuyente especial) y la subida de la firma `.p12` con el estado de vencimiento. Se quitó el teléfono: el backend no lo guarda. El IVA que se muestra en Nueva venta es una constante (`TenantService.ivaRate = 0.15`, solo estimado).
+- Se eliminaron `expenses.mock.ts`, `expenses-history.mock.ts`, `inventory-movements.mock.ts`, `products.mock.ts` y `tenant.mock.ts`.
+- Pruebas nuevas: `expenses.service.spec.ts`, `inventory-api.service.spec.ts`, `dashboard.service.spec.ts` (incluye las reglas de recomendaciones), `tenant.service.spec.ts`. A las pruebas de los componentes que ahora usan HTTP se les agregó `provideHttpClient()` y `provideHttpClientTesting()`.
+
 **Límites actuales por falta de soporte en el backend** (ver "Pendientes del backend para el frontend", sección 2.G):
 - El historial solo muestra el estado de las facturas emitidas en la sesión del navegador.
 - No se puede reintentar una factura rechazada: se quitó el botón.
 - La venta no trae quién la registró: se quitó la columna "Usuario".
 
-**Verificación:** `tsc --noEmit` pasa sin errores. **Las pruebas con `ng test` no se corrieron**: Angular CLI exige Node 22.22.3, 24.15 o 26 y la computadora usada tenía 24.8.0. Correr `npx ng test --no-watch` en `frontend/` antes de confiar en este cambio y revisar el CI.
+**Verificación:** `tsc --noEmit` (app y pruebas) y `ngc --noEmit` (plantillas) pasan sin errores. **Las pruebas con `ng test` no se corrieron**: Angular CLI exige Node 22.22.3, 24.15 o 26 y la computadora usada tenía 24.8.0. Correr `npx ng test --no-watch` en `frontend/` antes de confiar en estos cambios y revisar el CI. Tampoco se probó la interfaz en el navegador contra un backend real.
 
 ### Documentación
 - Requerimientos y presupuesto corregidos en Markdown (el presupuesto baja de $96,93 a $60,93 al mes).
@@ -146,7 +160,7 @@ Estado por módulo (24/11/2026). Un servicio "real" usa `HttpClient` contra `/ap
 | 2. Facturación y ventas | 85 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión, cifrado del `.p12` y firma XAdES-BES, clientes, registrar ventas, facturar la venta y descargar el RIDE | Reintentos del worker, anular ventas, prueba real con el SRI (`.p12`) |
 | 3. Gastos | 60 % | Categorías (7 predefinidas y propias), proveedores con RUC/cédula validados, registrar, filtrar y editar gastos | Lectura de facturas por correo (IMAP), anular gastos |
 | 4. Productos e inventario | 80 % | Categorías, productos (activar/desactivar, filtro de stock bajo), movimientos por venta, entradas y salidas manuales, ajustes del Administrador, historial con stock resultante | Compra que suma inventario (RF-4.4), recetas y producción |
-| 5. Dashboard | 90 % | Indicadores del período (ingresos, gastos, utilidad, ventas, ticket promedio, más vendidos, serie diaria, gastos por categoría) e inventario, solo Administrador | Conectarlo en el frontend |
+| 5. Dashboard | 90 % | Indicadores del período (ingresos, gastos, utilidad, ventas, ticket promedio, más vendidos, serie diaria, gastos por categoría) e inventario, solo Administrador | Nada: ya está conectado en el frontend |
 | 6. Agente IA | 0 % | — | Todo (Sprint 4) |
 | 7. Recomendaciones | 0 % | — | Todo (Sprint 5) |
 
@@ -173,11 +187,12 @@ El código de facturación está listo para probarse contra el SRI apenas llegue
 1. Revisión visual, pantalla por pantalla y en móvil, de Gastos, Inventario, Agente IA y Configuración. Se comprobó que no se desbordan y que cumplen accesibilidad, pero falta revisar su aspecto con ojo de diseño.
 2. Pulido con `impeccable` (`/impeccable init` y luego `audit` y `polish`).
 3. Probar la instalación de la PWA y el service worker en Chrome.
-4. Reemplazar los datos *mock* que quedan por llamadas reales a `/api/...`, en este orden: inventario (movimientos, ajustes, alertas; hoy usan `ProductsService` simulado), gastos y proveedores, dashboard (`GET /api/dashboard`, hoy solo ve las ventas ya cargadas), empresa y configuración de facturación (`/api/company`). Ventas y facturas ya están conectadas.
-5. Pasar `Product.id`, `User.tenantId` y los demás IDs de `string` a `number`, como pide `API.md` sección 9 (hoy `ProductsApiService` y `SalesService` convierten con `String(...)` y `Number(...)`).
-6. Ocultar en la interfaz lo que el backend restringe al Administrador (dashboard, ajustes de inventario).
-7. Nueva venta: la vista previa del IVA usa la tasa de `TenantService` (simulado); mostrar el IVA real por producto (`vatPercentageCode`) y soportar líneas de concepto libre.
-8. Retirar los servicios simulados y sus datos en `src/app/mocks/` conforme se conecte cada módulo.
+4. Ya están conectados todos los módulos que tienen backend. Lo que sigue simulado no tiene dónde guardarse todavía: gestión de usuarios, auditoría, bandeja de gastos por correo (IMAP), agente de IA, y recetas y producción (ver la tabla "Frontend: conexión con la API").
+5. Pasar `Product.id`, `User.tenantId` y los demás IDs de `string` a `number`, como pide `API.md` sección 9 (hoy los servicios convierten con `String(...)` y `Number(...)`).
+6. Ocultar en el menú lo que el backend restringe al Administrador (dashboard, recomendaciones y ajustes de inventario): hoy el Operativo entra y ve el error 403. Solo la pantalla Empresa ya deshabilita los botones.
+7. Nueva venta: la vista previa del IVA usa una tasa fija del 15 %; mostrar el IVA real por producto (`vatPercentageCode`) y soportar líneas de concepto libre.
+8. Editar y desactivar gastos y proveedores (el backend ya tiene `PATCH`), y listar y editar clientes (`GET/PATCH /api/customers`): hoy solo se pueden crear.
+9. Probar todo en el navegador contra el backend real con datos demo (`backend/scripts/cargar_datos_demo.py`), con un Administrador y un Operativo.
 5. Validaciones de negocio de la factura (por ejemplo, límites del SRI para consumidor final) se harán en el backend en el Sprint 2.
 ### C. Sprint 1: lo que bloquea el resto
 1. Crear el proyecto en **Supabase** (plan gratis para desarrollo). Pasar `SUPABASE_URL` y la dirección del *Session Pooler* (puerto 5432). **Las contraseñas y las claves no se pegan en el chat ni van al repositorio.**

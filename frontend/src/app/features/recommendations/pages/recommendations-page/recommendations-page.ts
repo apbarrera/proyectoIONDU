@@ -20,4 +20,8 @@ const PRIORITY_TONES: Record<RecommendationPriority, BadgeTone> = {
 export class RecommendationsPage {
   recommendationsService = inject(RecommendationsService);
   priorityTones = PRIORITY_TONES;
+
+  constructor() {
+    this.recommendationsService.refresh();
+  }
 }

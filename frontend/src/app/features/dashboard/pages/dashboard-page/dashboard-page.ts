@@ -1,7 +1,7 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DashboardService } from '../../services/dashboard.service';
-import { ProductsService } from '../../../inventory/services/products.service';
+import { DashboardSummary, EMPTY_DASHBOARD_SUMMARY } from '../../models/dashboard-summary.model';
 import { DateRange, resolveDateRange } from '../../../../shared/utils/date-range.util';
 import { PageHeader } from '../../../../shared/components/page-header/page-header';
 import { PeriodSelector } from '../../../../shared/components/period-selector/period-selector';
@@ -19,12 +19,32 @@ import { Icon } from '../../../../shared/components/icon/icon';
 })
 export class DashboardPage {
   private dashboardService = inject(DashboardService);
-  productsService = inject(ProductsService);
 
   range = signal<DateRange>(resolveDateRange('esteMes'));
-  summary = computed(() => this.dashboardService.summary(this.range()));
+  summary = signal<DashboardSummary>(EMPTY_DASHBOARD_SUMMARY);
+  loading = signal(true);
+
+  constructor() {
+    this.load();
+  }
 
   onRangeChange(range: DateRange): void {
     this.range.set(range);
+    this.load();
+  }
+
+  private load(): void {
+    const range = this.range();
+    this.loading.set(true);
+    this.dashboardService.summary(range).subscribe({
+      next: (summary) => {
+        // Ignora la respuesta si el usuario ya eligió otro período mientras llegaba.
+        if (this.range() !== range) return;
+        this.summary.set(summary);
+        this.loading.set(false);
+      },
+      // El interceptor ya mostró el error (por ejemplo, el dashboard es solo para el Administrador).
+      error: () => this.loading.set(false),
+    });
   }
 }

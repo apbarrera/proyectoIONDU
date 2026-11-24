@@ -357,6 +357,16 @@ Pendiente: anular ventas (RF-2.7) y completar la integración para emitir factur
 11. `SalesService.createSale` envía `customerId` (no el nombre), `items` con `productId` y `quantity` (sin precio)
     y `paymentMethod` con tarjeta separada en `tarjeta_debito` / `tarjeta_credito` (sección 8).
 
+**Estado de estos cambios en el frontend (24/11/2026):** ✅ los puntos 7, 8 (login e interceptor), 10 y 11 y la
+emisión de facturas (`POST /api/sales/{id}/invoice` y su RIDE) están hechos; el 6 está hecho solo en la pantalla de
+Productos. Siguen pendientes los puntos 1 a 5 (IDs numéricos, `categoryId` en todos los consumidores, tipos de
+producto, campos nuevos y bloqueo de `currentStock` en el resto de las pantallas). Detalle por módulo en
+[`ESTADO.md`](ESTADO.md), sección "Frontend: conexión con la API".
+
+**Pendiente del backend** detectado al conectar la facturación: `Sale` no trae el estado de su factura ni
+`createdBy`, no hay `GET` de facturas y una factura rechazada no se puede reintentar (`409`). Lista completa en
+`ESTADO.md`, sección 2.G.
+
 ## 10. Empresa y configuración de facturación
 
 Cualquier usuario de la empresa puede consultarlas; **solo el Administrador las modifica** (`403 FORBIDDEN`).

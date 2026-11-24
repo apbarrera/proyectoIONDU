@@ -1,6 +1,6 @@
 # IONDU · Estado del proyecto y siguientes pasos
 
-> Resumen de traspaso. Última actualización: 25 de octubre de 2026 (primer módulo del backend: categorías y productos, con contrato en `API.md`).
+> Resumen de traspaso. Última actualización: 24 de noviembre de 2026 (frontend de Ventas, Clientes y Facturación conectado a la API; ver "Frontend: conexión con la API").
 > Documentos relacionados: [`DECISIONES.md`](DECISIONES.md) (el porqué de cada decisión) · [`REQUISITOS.md`](REQUISITOS.md) · [`PRESUPUESTO.md`](PRESUPUESTO.md) · [`DESPLIEGUE.md`](DESPLIEGUE.md) · [`CORRECCIONES_PDF.md`](CORRECCIONES_PDF.md)
 
 ## 1. Qué está hecho
@@ -71,7 +71,7 @@
 - **Ruff** revisa y formatea el código (`backend/pyproject.toml`); las migraciones nuevas se formatean solas.
 - Estructura por capas acordada (patrón Repositorio del PDF): `api/` (endpoints) → `schemas/` (datos de entrada y salida) → `services/` (reglas de negocio) → `repositories/` (consultas, siempre por `id_empresa`) → `models/` (tablas). Las carpetas se crean cuando se necesitan.
 - Worker con latido (`/tmp/worker-heartbeat`) y apagado limpio ante SIGTERM.
-- **Todavía sin login**: el frontend sigue con datos de ejemplo hasta conectar sus servicios a `/api/...`.
+- El login ya existe (Supabase Auth); los módulos del frontend se conectan a `/api/...` uno por uno (ver "Frontend: conexión con la API").
 
 ### Base de datos (Ariana)
 - **Modelos de las 17 tablas** en `backend/app/models/` con el esquema corregido: `usuario_empresa` con UUID de
@@ -96,6 +96,39 @@
 - **Móvil:** probado a 320, 390 y 768 px sin desborde horizontal. Las tablas se ven como tarjetas, y el menú lateral es un cajón que, cerrado, no recibe foco y se cierra con Escape.
 - **Cierre de sesión:** limpia `localStorage`, `sessionStorage` y la caché del service worker (regla de `CLAUDE.md`).
 - 72 pruebas del frontend.
+
+### Frontend: conexión con la API
+
+Estado por módulo (24/11/2026). Un servicio "real" usa `HttpClient` contra `/api/...`; uno "simulado" usa `simulateRequest` con datos de `src/app/mocks/`.
+
+| Módulo del frontend | Estado | Servicio |
+|---|---|---|
+| Login, selector de empresa, `/api/me` | Real | `AuthService`, `MeApiService`, interceptor de autenticación |
+| Productos y categorías (pantalla de Productos) | Real | `ProductsApiService` |
+| Ventas (nueva venta e historial) | Real | `SalesService` |
+| Clientes (autocompletar y crear al vender) | Real | `CustomersApiService` |
+| Facturas (emitir, descargar RIDE) | Real | `BillingService` |
+| Gastos, proveedores, bandeja de correo | Simulado | `ExpensesService`, `ExpenseInboxService` |
+| Movimientos y ajustes de inventario, alertas | Simulado | `MovementsService`, `AdjustmentsService`, `ProductsService` |
+| Recetas y producción | Simulado (sin backend ni requisito) | `RecipesService`, `ProductionService` |
+| Dashboard | Simulado (lee `SalesService.sales()` y `ExpensesService`) | `DashboardService` |
+| Empresa y configuración | Simulado | `TenantService` |
+| Usuarios, auditoría, agente IA, recomendaciones | Simulado (sin backend) | `UserDirectoryService`, `AuditService`, `AiAgentService`, `RecommendationsService` |
+
+**Ventas, clientes y facturas (commits `6d5219a` y `1f143a0`):**
+- `SalesService`: `GET /api/sales` (todas las páginas de 100 en 100) y `POST /api/sales`. Envía `customerId`, `items` con `productId` y `quantity` (sin precio ni IVA: los calcula el backend) y `paymentMethod`. El método de pago `tarjeta` se separó en `tarjeta_debito` y `tarjeta_credito`.
+- `CustomersApiService`: `lookup`, `create` y `findOrCreate`. En Nueva venta, al escribir una cédula o RUC completo se autocompleta el cliente; si no existe, se pide el nombre y se crea al confirmar. El consumidor final es `9999999999999` (13 nueves) y no se guarda como cliente (`customerId: null`).
+- `BillingService`: `POST /api/sales/{id}/invoice` y `GET /api/sales/{id}/invoice/ride`. Se eliminaron `BillingAdapterService` y `billing.mock.ts`. Estados del backend → frontend: `por_enviar` → Procesando, `por_autorizar` → Pendiente.
+- Nueva venta toma los productos de `ProductsApiService`, no del `ProductsService` simulado.
+- Errores: `core/utils/api-error.util.ts` extrae el mensaje del formato `{"error": {"code", "message"}}` y el interceptor de errores lo muestra en un solo aviso (los componentes no repiten el aviso). El 404 de `customers/lookup` no muestra aviso (`SKIP_ERROR_TOAST`).
+- Pruebas nuevas o reescritas: `sales.service.spec.ts`, `customers-api.service.spec.ts`, `new-sale.spec.ts`, `sales-history.spec.ts`.
+
+**Límites actuales por falta de soporte en el backend** (ver "Pendientes del backend para el frontend", sección 2.G):
+- El historial solo muestra el estado de las facturas emitidas en la sesión del navegador.
+- No se puede reintentar una factura rechazada: se quitó el botón.
+- La venta no trae quién la registró: se quitó la columna "Usuario".
+
+**Verificación:** `tsc --noEmit` pasa sin errores. **Las pruebas con `ng test` no se corrieron**: Angular CLI exige Node 22.22.3, 24.15 o 26 y la computadora usada tenía 24.8.0. Correr `npx ng test --no-watch` en `frontend/` antes de confiar en este cambio y revisar el CI.
 
 ### Documentación
 - Requerimientos y presupuesto corregidos en Markdown (el presupuesto baja de $96,93 a $60,93 al mes).
@@ -124,9 +157,9 @@
 | 1 | Ariana | ✅ Modelos con el esquema corregido. Falta: migración que cree todo desde cero y los pendientes de `SEGURIDAD_BD.md` | Desplegar en Supabase | Media |
 | 2 | Equipo | Crear el proyecto de Supabase y pasar URL y claves por un canal seguro | Login real: validar el token y tomar la empresa del usuario | Alta |
 | 3 | Equipo | Decidir el tipo de producto y si Recetas/Producción entran en el MVP | Cerrar productos; tablas de recetas si entran | Media |
-| 4 | Denisse | Conectar `ProductsService` a `/api/products` (`API.md`, sección 9) | Primera pantalla con datos reales | Media |
-| 5 | Denisse | Consumidor final con 13 nueves (2.F) | Evitar facturas rechazadas | Baja |
-| 6 | Denisse | Login de Angular con Supabase Auth | Enviar el token al backend | Después del #2 |
+| 4 | Denisse | ✅ Productos, ventas, clientes y facturas conectados. Falta conectar el resto (ver "Frontend: conexión con la API") | Pantallas con datos reales | Media |
+| 5 | Denisse | ✅ Consumidor final con 13 nueves | Evitar facturas rechazadas | — |
+| 6 | Denisse | ✅ Login de Angular con Supabase Auth | Enviar el token al backend | — |
 | 7 | Cliente | Certificado `.p12`, RUC del emisor, VPS y dominio | Probar la firma y el envío en el SRI de pruebas (el código ya está listo); desplegar | Pedirlo ya |
 
 El código de facturación está listo para probarse contra el SRI apenas llegue el `.p12`; guardar ventas y facturas espera el esquema corregido de Ariana.
@@ -140,7 +173,11 @@ El código de facturación está listo para probarse contra el SRI apenas llegue
 1. Revisión visual, pantalla por pantalla y en móvil, de Gastos, Inventario, Agente IA y Configuración. Se comprobó que no se desbordan y que cumplen accesibilidad, pero falta revisar su aspecto con ojo de diseño.
 2. Pulido con `impeccable` (`/impeccable init` y luego `audit` y `polish`).
 3. Probar la instalación de la PWA y el service worker en Chrome.
-4. Cuando exista el backend: reemplazar los datos *mock* y la emisión simulada de facturas (`BillingAdapterService`) por llamadas reales a `/api/...`.
+4. Reemplazar los datos *mock* que quedan por llamadas reales a `/api/...`, en este orden: inventario (movimientos, ajustes, alertas; hoy usan `ProductsService` simulado), gastos y proveedores, dashboard (`GET /api/dashboard`, hoy solo ve las ventas ya cargadas), empresa y configuración de facturación (`/api/company`). Ventas y facturas ya están conectadas.
+5. Pasar `Product.id`, `User.tenantId` y los demás IDs de `string` a `number`, como pide `API.md` sección 9 (hoy `ProductsApiService` y `SalesService` convierten con `String(...)` y `Number(...)`).
+6. Ocultar en la interfaz lo que el backend restringe al Administrador (dashboard, ajustes de inventario).
+7. Nueva venta: la vista previa del IVA usa la tasa de `TenantService` (simulado); mostrar el IVA real por producto (`vatPercentageCode`) y soportar líneas de concepto libre.
+8. Retirar los servicios simulados y sus datos en `src/app/mocks/` conforme se conecte cada módulo.
 5. Validaciones de negocio de la factura (por ejemplo, límites del SRI para consumidor final) se harán en el backend en el Sprint 2.
 ### C. Sprint 1: lo que bloquea el resto
 1. Crear el proyecto en **Supabase** (plan gratis para desarrollo). Pasar `SUPABASE_URL` y la dirección del *Session Pooler* (puerto 5432). **Las contraseñas y las claves no se pegan en el chat ni van al repositorio.**
@@ -198,6 +235,18 @@ rechazada.
 **Por decidir en equipo:** los valores del tipo de producto, y si Recetas y Producción entran en el MVP (si entran, hay que agregarlas a los requisitos y crear sus tablas).
 
 **Contrato de la API:** en [`API.md`](API.md), empezando por productos (ya implementados en el backend). El JSON usará los nombres que ya usa el frontend (`sku`, `name`, `salePrice`…) y el backend los traduce a las columnas de la base. Así, en el frontend basta con cambiar `simulateRequest(...)` por llamadas reales en cada servicio.
+
+### G. Pendientes del backend para el frontend
+Detectados al conectar Ventas y Facturación (24/11/2026). Cada uno bloquea una función de la interfaz:
+
+| # | Falta en el backend | Efecto hoy en el frontend |
+|---|---|---|
+| 1 | Resumen de la factura (estado, número) dentro de `Sale`, o un `GET /api/invoices` | El historial solo conoce las facturas emitidas en la sesión del navegador; las demás aparecen como "Sin factura". Los filtros por estado no sirven con el historial completo |
+| 2 | Reintentar una factura rechazada (hoy `POST /api/sales/{id}/invoice` responde `409` "La venta ya tiene una factura registrada") | Se quitó el botón "Reintentar emisión" y la corrección de la cédula o RUC |
+| 3 | `createdBy` (nombre del usuario) en `Sale` | Se quitó la columna "Usuario" del historial |
+| 4 | Anular ventas (RF-2.7) | No hay botón de anular |
+| 5 | Prueba real con el SRI de pruebas (requiere el `.p12` y el RUC del cliente) | Las facturas no se han autorizado contra el SRI real |
+| 6 | Reintentos del worker para facturas en `por_enviar` o `por_autorizar` | Esas facturas quedan "En proceso" hasta que el worker las resuelva; la pantalla no se actualiza sola |
 
 ## 3. Cómo trabajar en el proyecto
 

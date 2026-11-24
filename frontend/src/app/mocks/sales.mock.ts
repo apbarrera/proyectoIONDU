@@ -21,7 +21,7 @@ const BASE_SALES: Sale[] = [
     subtotal: 50,
     ivaAmount: 7.5,
     total: 57.5,
-    paymentMethod: 'tarjeta',
+    paymentMethod: 'tarjeta_debito',
     status: 'completada',
     createdBy: 'Juan Carlos Pérez',
   },

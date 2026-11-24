@@ -1,7 +1,8 @@
-export type PaymentMethod = 'efectivo' | 'tarjeta' | 'transferencia';
+export type PaymentMethod = 'efectivo' | 'tarjeta_debito' | 'tarjeta_credito' | 'transferencia';
 export type SaleStatus = 'completada' | 'anulada';
 
 export interface SaleLineItem {
+  /** Vacío en las líneas de concepto libre (sin producto). */
   productId: string;
   productName: string;
   quantity: number;
@@ -13,7 +14,10 @@ export interface Sale {
   id: string;
   folio: string;
   date: string;
+  /** `null` = consumidor final. */
+  customerId?: number | null;
   customerName: string;
+  customerIdentification?: string | null;
   items: SaleLineItem[];
   subtotal: number;
   ivaAmount: number;
@@ -21,5 +25,6 @@ export interface Sale {
   paymentMethod: PaymentMethod;
   status: SaleStatus;
   observation?: string;
-  createdBy: string;
+  /** El backend todavía no devuelve quién registró la venta. */
+  createdBy?: string;
 }

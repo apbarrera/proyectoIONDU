@@ -1,5 +1,4 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { SalesService } from '../../services/sales.service';
 import { BillingService } from '../../../billing/services/billing.service';
@@ -16,7 +15,8 @@ import { Icon } from '../../../../shared/components/icon/icon';
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   efectivo: 'Efectivo',
-  tarjeta: 'Tarjeta',
+  tarjeta_debito: 'Tarjeta de débito',
+  tarjeta_credito: 'Tarjeta de crédito',
   transferencia: 'Transferencia',
 };
 
@@ -29,9 +29,6 @@ const FILTERS: { value: InvoiceFilter; label: string }[] = [
   { value: 'rejected', label: 'Rechazadas' },
   { value: 'none', label: 'Sin factura' },
 ];
-
-const ID_PATTERN = /^\d{10}(\d{3})?$/;
-const FINAL_CONSUMER_ID = '9999999999';
 
 /** Fecha corta y consistente en toda la pantalla: 02/09/2026 09:00. */
 function formatDateTime(iso: string): string {
@@ -68,7 +65,7 @@ function matchesFilter(row: SaleRow, filter: InvoiceFilter): boolean {
 
 @Component({
   selector: 'app-sales-history',
-  imports: [RouterLink, FormsModule, PageHeader, Button, DataTable, Modal, StatusBadge, Icon],
+  imports: [RouterLink, PageHeader, Button, DataTable, Modal, StatusBadge, Icon],
   templateUrl: './sales-history.html',
   styleUrl: './sales-history.scss',
 })
@@ -86,10 +83,7 @@ export class SalesHistory {
   filter = signal<InvoiceFilter>('all');
   selectedId = signal<string | null>(null);
   busy = signal(false);
-
-  // Datos de facturación editables en el detalle (para emitir o corregir y reintentar).
-  idDraft = signal(FINAL_CONSUMER_ID);
-  emailDraft = signal('');
+  loading = signal(true);
 
   rows = computed<SaleRow[]>(() => {
     const invoiceBySale = new Map<string, Invoice>();
@@ -109,8 +103,6 @@ export class SalesHistory {
   /** La venta abierta en el detalle; se recalcula sola cuando cambia el estado de su factura. */
   selected = computed(() => this.rows().find((row) => row.id === this.selectedId()) ?? null);
 
-  idError = computed(() => (ID_PATTERN.test(this.idDraft().trim()) ? '' : 'Ingresa una cédula (10 dígitos) o un RUC (13 dígitos).'));
-
   columns: DataTableColumn<SaleRow>[] = [
     { key: 'folio', header: 'N°', cell: (s) => s.folio, sortable: true },
     { key: 'date', header: 'Fecha', cell: (s) => formatDateTime(s.date), sortable: true },
@@ -126,50 +118,51 @@ export class SalesHistory {
           ? { label: INVOICE_STATUS_LABELS[s.invoice.status], tone: INVOICE_STATUS_TONES[s.invoice.status] }
           : { label: 'Sin factura', tone: 'neutral' },
     },
-    { key: 'createdBy', header: 'Usuario', cell: (s) => s.createdBy },
   ];
+
+  constructor() {
+    this.salesService.getSales().subscribe({
+      next: () => this.loading.set(false),
+      error: () => this.loading.set(false),
+    });
+  }
 
   open(row: SaleRow): void {
     this.selectedId.set(row.id);
-    this.idDraft.set(row.invoice?.customer.rucOrCedula ?? FINAL_CONSUMER_ID);
-    this.emailDraft.set(row.invoice?.customer.email ?? '');
   }
 
   close(): void {
     this.selectedId.set(null);
   }
 
+  /** Emite la factura de una venta registrada sin ella. El cliente sale de la propia venta. */
   issueInvoice(row: SaleRow): void {
-    if (this.idError() || this.busy()) return;
+    if (this.busy()) return;
     this.busy.set(true);
-    this.billingService.invoiceSale(row, this.#customerFor(row)).subscribe({
-      next: (invoice) => this.#finish(invoice),
-      error: () => this.#fail(),
+    this.billingService.invoiceSale(row).subscribe({
+      next: (invoice) => {
+        this.busy.set(false);
+        if (invoice.status === 'autorizada') this.toast.success(`Factura ${invoice.numero} autorizada.`);
+        else if (invoice.status === 'rechazada') this.toast.error(`Factura ${invoice.numero} rechazada.`);
+        else this.toast.info(`Factura ${invoice.numero} enviada al SRI; queda pendiente de autorización.`);
+      },
+      // El interceptor ya mostró el motivo del error.
+      error: () => this.busy.set(false),
     });
   }
 
-  retryInvoice(row: SaleRow): void {
-    if (!row.invoice || this.idError() || this.busy()) return;
+  downloadRide(row: SaleRow): void {
+    if (this.busy()) return;
     this.busy.set(true);
-    this.billingService.retry(row.invoice.id, this.#customerFor(row)).subscribe({
-      next: (invoice) => this.#finish(invoice),
-      error: () => this.#fail(),
+    this.billingService.downloadRide(row.id).subscribe({
+      next: (pdf) => {
+        this.busy.set(false);
+        const url = URL.createObjectURL(pdf);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      },
+      error: () => this.busy.set(false),
     });
-  }
-
-  #customerFor(row: SaleRow): Invoice['customer'] {
-    return { rucOrCedula: this.idDraft().trim(), razonSocial: row.customerName, email: this.emailDraft().trim() };
-  }
-
-  #finish(invoice: Invoice): void {
-    this.busy.set(false);
-    if (invoice.status === 'autorizada') this.toast.success(`Factura ${invoice.numero} autorizada.`);
-    else this.toast.error(`Factura ${invoice.numero} rechazada.`);
-  }
-
-  #fail(): void {
-    this.busy.set(false);
-    this.toast.error('No se pudo emitir la factura. Inténtalo de nuevo.');
   }
 
   formatDate(iso: string): string {

@@ -346,11 +346,17 @@ Sin cliente: `customerId` y `customerIdentification` son `null` y `customerName`
 | ✅ | `POST /api/sales` | Registra la venta (arriba) | `201` con `Sale` |
 | ✅ | `GET /api/sales` | Historial, de la más reciente a la más antigua. Filtros: `from` y `to` (fechas `AAAA-MM-DD`, en hora de Ecuador), `customerId`, `paymentMethod` | `200` con `PageResult<Sale>` |
 | ✅ | `GET /api/sales/{id}` | Una venta | `200` con `Sale`, o `404` |
-| ✅ | `POST /api/sales/{id}/invoice` | **Emite la factura electrónica** de la venta: XML, firma con el `.p12` de la empresa, envío al SRI y RIDE. Exige sesión | `201` con `Invoice` |
+| ✅ | `POST /api/sales/{id}/invoice` | **Emite la factura electrónica** de la venta: XML, firma con el `.p12` de la empresa, envío al SRI y RIDE. Exige sesión | `201` con `Invoice`; `409 INVOICE_ALREADY_ISSUED` si ya tiene una factura autorizada o en proceso |
 | ✅ | `GET /api/sales/{id}/invoice` | Estado actual de la factura de la venta, para seguirla mientras el worker la autoriza | `200` con `Invoice`; `404 INVOICE_NOT_FOUND` si no tiene |
 | ✅ | `GET /api/sales/{id}/invoice/ride` | Descarga el PDF (RIDE) de la factura. Exige sesión | `200` con `application/pdf` |
 
-Pendiente: anular ventas (RF-2.7) y reintentar una factura rechazada.
+**Reintentar una factura rechazada:** el mismo `POST /api/sales/{id}/invoice`. Si la factura de la venta está
+`rechazada`, se vuelve a emitir con **secuencial y clave de acceso nuevos** (reusar el rechazado provoca el error 45
+del SRI, "secuencial registrado") y con los datos actuales: por ejemplo, tras corregir la cédula del cliente con
+`PATCH /api/customers/{id}`. Queda en `por_enviar` y el worker la envía; en `messages` queda constancia del número
+que reemplaza.
+
+Pendiente: anular ventas (RF-2.7).
 
 ## 9. Cambios que implica en el frontend
 

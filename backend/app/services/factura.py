@@ -122,8 +122,12 @@ class FacturaService:
                     FacturaORM.id_venta == id_venta,
                 )
             )
-            if existente is not None:
-                raise ConflictError("La venta ya tiene una factura registrada.")
+            # Solo una factura RECHAZADA por el SRI se puede volver a emitir (por ejemplo,
+            # tras corregir la cédula del cliente). Autorizada o en proceso: no se toca.
+            if existente is not None and existente.estado_autorizacion != "rechazada":
+                raise ConflictError(
+                    "La venta ya tiene una factura registrada.", code="INVOICE_ALREADY_ISSUED"
+                )
 
             if venta_bloqueada.estado != "COMPLETADA":
                 raise ConflictError("Solo se pueden facturar ventas completadas.")
@@ -277,21 +281,44 @@ class FacturaService:
                 f"{configuracion.establecimiento}-{configuracion.punto_emision}-{secuencial:09d}"
             )
 
-            factura = FacturaORM(
-                id_empresa=self.empresa_id,
-                id_venta=id_venta,
-                numero_comprobante=numero,
-                clave_acceso=generada.clave_acceso,
-                estado_autorizacion="por_enviar",
-                mensajes_sri=[],
-                intentos_envio=0,
-                subtotal=generada.totales.total_sin_impuestos,
-                impuestos=generada.totales.total_iva,
-                total=generada.totales.importe_total,
-                fecha_emision=fecha_emision,
-                xml_firmado=xml_firmado.decode("utf-8"),
-            )
-            self.db.add(factura)
+            datos_factura = {
+                "numero_comprobante": numero,
+                "clave_acceso": generada.clave_acceso,
+                "estado_autorizacion": "por_enviar",
+                "mensajes_sri": [],
+                "intentos_envio": 0,
+                "subtotal": generada.totales.total_sin_impuestos,
+                "impuestos": generada.totales.total_iva,
+                "total": generada.totales.importe_total,
+                "fecha_emision": fecha_emision,
+                "xml_firmado": xml_firmado.decode("utf-8"),
+            }
+            if existente is None:
+                factura = FacturaORM(id_empresa=self.empresa_id, id_venta=id_venta, **datos_factura)
+                self.db.add(factura)
+            else:
+                # Reintento: secuencial y clave de acceso NUEVOS (reusar el secuencial
+                # rechazado provoca el error 45 del SRI). Queda constancia del anterior.
+                factura = existente
+                datos_factura["mensajes_sri"] = [
+                    {
+                        "identificador": "REINTENTO",
+                        "mensaje": (
+                            f"Reemplaza al comprobante {existente.numero_comprobante}, "
+                            "rechazado por el SRI."
+                        ),
+                        "informacion_adicional": None,
+                        "tipo": "INFORMATIVO",
+                    }
+                ]
+                datos_factura |= {
+                    "numero_autorizacion": None,
+                    "fecha_autorizacion": None,
+                    "xml_autorizado": None,
+                    "pdf_ride_path": None,
+                }
+                for campo, valor in datos_factura.items():
+                    setattr(factura, campo, valor)
             self.db.flush()
             self.db.commit()
             self.db.refresh(factura)

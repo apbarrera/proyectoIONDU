@@ -66,7 +66,7 @@ def test_venta_ya_facturada_no_reserva_otro_secuencial(monkeypatch):
         id_empresa=1,
         estado="COMPLETADA",
     )
-    factura_existente = SimpleNamespace(id_factura=50)
+    factura_existente = SimpleNamespace(id_factura=50, estado_autorizacion="autorizada")
 
     servicio, session, reservas = _servicio(
         monkeypatch,
@@ -402,6 +402,106 @@ def test_emision_persiste_factura_pendiente_para_worker(monkeypatch):
     assert factura.numero_autorizacion is None
     assert factura.numero_comprobante == "001-001-000000001"
     assert factura.total == Decimal("11.50")
+
+
+def test_factura_rechazada_se_reemite_con_secuencial_nuevo(monkeypatch):
+    """Tras un rechazo del SRI se vuelve a emitir en la MISMA fila, con número y clave nuevos."""
+    venta = SimpleNamespace(
+        id_venta=101,
+        id_empresa=1,
+        estado="COMPLETADA",
+        subtotal=Decimal("10.00"),
+        iva=Decimal("1.50"),
+        monto_total=Decimal("11.50"),
+        metodo_pago="EFECTIVO",
+    )
+    empresa = SimpleNamespace(
+        datos_facturacion_electronica={
+            "ambiente": "1",
+            "establecimiento": "001",
+            "punto_emision": "001",
+            "obligado_contabilidad": False,
+            "contribuyente_especial": None,
+            "contribuyente_rimpe": False,
+            "direccion_establecimiento": "Av. Amazonas 123, Quito",
+        },
+        ruc="1790010937001",
+        razon_social="Empresa de prueba",
+        nombre_comercial="Empresa de prueba",
+        direccion="Quito, Ecuador",
+    )
+    detalle = SimpleNamespace(
+        cantidad=Decimal("1"),
+        precio_unitario=Decimal("10"),
+        descuento=Decimal("0"),
+        codigo_porcentaje_iva="4",
+        descripcion_libre=None,
+    )
+    producto = SimpleNamespace(
+        codigo_principal="PROD-001",
+        nombre="Producto de prueba",
+        unidad_medida="UNIDAD",
+    )
+
+    rechazada = SimpleNamespace(
+        id_factura=50,
+        id_venta=101,
+        estado_autorizacion="rechazada",
+        numero_comprobante="001-001-000000001",
+        clave_acceso="1" * 49,
+        mensajes_sri=[{"identificador": "45", "mensaje": "ERROR", "tipo": "ERROR"}],
+        intentos_envio=3,
+        numero_autorizacion=None,
+        fecha_autorizacion=None,
+        xml_autorizado=None,
+        pdf_ride_path=None,
+    )
+    session = FakeSessionCompleta([venta, rechazada], empresa)
+    servicio = FacturaService(cast(Session, session), empresa_id=1)
+    reservas = []
+
+    monkeypatch.setattr(
+        servicio.secuencias,
+        "reservar",
+        lambda **kwargs: reservas.append(kwargs) or 2,
+    )
+    monkeypatch.setattr(
+        servicio,
+        "_obtener_firmador",
+        lambda empresa: FirmadorSinFirma(),
+    )
+    monkeypatch.setattr(
+        servicio.ventas,
+        "obtener",
+        lambda id_venta: (venta, None),
+    )
+    monkeypatch.setattr(
+        servicio.ventas,
+        "detalles",
+        lambda ids: {101: [(detalle, producto)]},
+    )
+
+    factura = servicio.emitir(101)
+
+    assert factura is rechazada  # la misma fila: la venta tiene una sola factura
+    assert session.added == []
+    assert session.commits == 1
+    assert len(reservas) == 1
+    assert factura.numero_comprobante == "001-001-000000002"
+    assert factura.clave_acceso != "1" * 49
+    assert (factura.estado_autorizacion, factura.intentos_envio) == ("por_enviar", 0)
+    assert factura.mensajes_sri[0]["identificador"] == "REINTENTO"
+    assert "001-001-000000001" in factura.mensajes_sri[0]["mensaje"]
+
+
+def test_factura_en_proceso_no_se_reemite(monkeypatch):
+    venta = SimpleNamespace(id_venta=101, id_empresa=1, estado="COMPLETADA")
+    for estado in ("autorizada", "por_enviar", "por_autorizar"):
+        existente = SimpleNamespace(id_factura=50, estado_autorizacion=estado)
+        servicio, session, reservas = _servicio(monkeypatch, [venta, existente])
+        with pytest.raises(ConflictError):
+            servicio.emitir(101)
+        assert reservas == []
 
 
 def test_emision_pendiente_no_intenta_contactar_al_sri(monkeypatch):

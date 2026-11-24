@@ -65,7 +65,7 @@ export class NewSale {
 
   cart = signal<CartLine[]>([]);
 
-  ivaRate = this.tenant.tenant().ivaRate;
+  ivaRate = this.tenant.ivaRate;
 
   subtotal = computed(() => Math.round(this.cart().reduce((sum, l) => sum + l.unitPrice * l.quantity, 0) * 100) / 100);
   ivaAmount = computed(() => Math.round(this.subtotal() * this.ivaRate * 100) / 100);

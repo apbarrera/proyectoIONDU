@@ -21,7 +21,8 @@ def preparar(
 ):
     monkeypatch.setenv("APP_ENV", app_env)
     if dev_user_id is None:
-        monkeypatch.delenv("DEV_USER_ID", raising=False)
+        # Vacía y no borrada: así tampoco la toma del archivo .env local.
+        monkeypatch.setenv("DEV_USER_ID", "")
     else:
         monkeypatch.setenv("DEV_USER_ID", dev_user_id)
 

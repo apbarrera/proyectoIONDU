@@ -164,7 +164,8 @@ def test_sin_sesion_de_usuario_no_se_puede_registrar(client, db, empresas, catal
         "items": [{"productId": catalogo["cafe"], "quantity": 1}],
         "paymentMethod": "efectivo",
     }
-    monkeypatch.delenv("DEV_USER_ID", raising=False)
+    # Vacía y no borrada: así tampoco la toma del archivo .env local.
+    monkeypatch.setenv("DEV_USER_ID", "")
     get_settings.cache_clear()
     try:
         response = client.post("/api/sales", json=cuerpo, headers=_h_sin_sesion(a))

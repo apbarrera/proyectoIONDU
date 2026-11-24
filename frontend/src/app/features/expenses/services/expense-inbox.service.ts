@@ -29,12 +29,9 @@ export class ExpenseInboxService {
         category: edited.category,
         providerName: edited.providerName,
         providerRuc: edited.providerRuc,
-        amount: Math.round((edited.amount / 1.15) * 100) / 100,
-        ivaAmount: Math.round((edited.amount - edited.amount / 1.15) * 100) / 100,
         total: edited.amount,
         paymentMethod: 'transferencia',
         description: `Gasto detectado automáticamente desde correo (${draft.subjectRaw}).`,
-        sourceType: 'email',
       })
       .subscribe();
 

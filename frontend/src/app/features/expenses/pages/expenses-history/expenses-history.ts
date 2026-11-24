@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ExpensesService } from '../../services/expenses.service';
 import { Expense } from '../../models/expense.model';
@@ -15,12 +15,21 @@ import { DataTable, DataTableColumn } from '../../../../shared/components/data-t
 export class ExpensesHistory {
   expensesService = inject(ExpensesService);
 
+  loading = signal(true);
+
   columns: DataTableColumn<Expense>[] = [
     { key: 'date', header: 'Fecha', cell: (e) => new Date(e.date).toLocaleDateString('es-EC'), sortable: true },
-    { key: 'providerName', header: 'Proveedor', cell: (e) => e.providerName, sortable: true },
+    { key: 'providerName', header: 'Proveedor', cell: (e) => e.providerName || '—', sortable: true },
     { key: 'category', header: 'Categoría', cell: (e) => e.category },
+    { key: 'description', header: 'Descripción', cell: (e) => e.description },
     { key: 'total', header: 'Monto', cell: (e) => `$${e.total.toFixed(2)}`, align: 'right' },
     { key: 'sourceType', header: 'Origen', cell: (e) => (e.sourceType === 'email' ? 'Correo' : 'Manual') },
-    { key: 'createdBy', header: 'Usuario', cell: (e) => e.createdBy },
   ];
+
+  constructor() {
+    this.expensesService.getExpenses().subscribe({
+      next: () => this.loading.set(false),
+      error: () => this.loading.set(false),
+    });
+  }
 }

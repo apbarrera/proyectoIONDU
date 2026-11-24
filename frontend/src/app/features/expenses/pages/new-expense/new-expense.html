@@ -11,24 +11,25 @@
     </app-form-field>
     <app-form-field label="Categoría" required>
       <select formControlName="category">
-        @for (cat of categories; track cat) {
-          <option [value]="cat">{{ cat }}</option>
+        @for (cat of categories(); track cat.id) {
+          <option [value]="cat.name">{{ cat.name }}</option>
         }
       </select>
     </app-form-field>
-    <app-form-field label="Proveedor" required>
+    <app-form-field label="RUC o cédula del proveedor" hint="Opcional. Si ya existe, se autocompleta el nombre.">
+      <input formControlName="providerRuc" inputmode="numeric" (input)="onSupplierIdChange()" />
+    </app-form-field>
+    <app-form-field label="Proveedor">
       <input formControlName="providerName" placeholder="Nombre del proveedor" />
     </app-form-field>
-    <app-form-field label="RUC del proveedor">
-      <input formControlName="providerRuc" />
-    </app-form-field>
-    <app-form-field label="Monto (sin IVA)" required>
-      <input type="number" step="0.01" formControlName="amount" />
+    <app-form-field label="Total (con IVA)" required>
+      <input type="number" step="0.01" min="0" formControlName="total" />
     </app-form-field>
     <app-form-field label="Método de pago" required>
       <select formControlName="paymentMethod">
         <option value="efectivo">Efectivo</option>
-        <option value="tarjeta">Tarjeta</option>
+        <option value="tarjeta_debito">Tarjeta de débito</option>
+        <option value="tarjeta_credito">Tarjeta de crédito</option>
         <option value="transferencia">Transferencia</option>
         <option value="cheque">Cheque</option>
       </select>
@@ -36,15 +37,16 @@
     <app-form-field label="Descripción" required>
       <input formControlName="description" />
     </app-form-field>
-    <app-form-field label="Observación">
-      <textarea formControlName="observation"></textarea>
+    <app-form-field label="N.º de comprobante">
+      <input formControlName="receiptNumber" placeholder="001-001-000000123" />
     </app-form-field>
   </form>
 
-  <div class="new-expense__totals">
-    <div><span>IVA</span><span>${{ ivaAmount().toFixed(2) }}</span></div>
-    <div class="new-expense__total"><span>Total</span><span>${{ total().toFixed(2) }}</span></div>
-  </div>
+  @if (form.touched && form.errors?.['providerRuc']) {
+    <p class="new-expense__error" role="alert">Ingresa una cédula (10 dígitos) o un RUC (13 dígitos) válido.</p>
+  } @else if (form.touched && form.errors?.['providerName']) {
+    <p class="new-expense__error" role="alert">Escribe el nombre del proveedor para registrarlo.</p>
+  }
 
-  <app-button (clicked)="save()">Guardar gasto</app-button>
+  <app-button [loading]="submitting()" (clicked)="save()">Guardar gasto</app-button>
 </app-card>

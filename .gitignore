@@ -24,3 +24,7 @@ htmlcov/
 
 # Paquetes de despliegue generados
 *.zip
+
+# Caché de Angular y respaldos locales
+.angular/
+/backups/iondu_supabase_public_20261124.backup

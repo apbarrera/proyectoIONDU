@@ -1,3 +1,52 @@
+## Auditoría actualizada - 2026-11-24
+
+### 1. Estado de migraciones
+
+Se validó la ejecución completa de Alembic desde una base de datos aislada y vacía:
+
+- Base de validación: `iondu_migration_test`.
+- Revisión final: `b72e91c4a630` (head).
+- Migraciones ejecutadas correctamente: 6 de 6.
+- La base operativa `iondu` y la base de pruebas `iondu_test` no fueron modificadas durante esta validación.
+
+### 2. Comparación entre `iondu` e `iondu_migration_test`
+
+Se compararon las definiciones estructurales de ambas bases:
+
+| Elemento | `iondu` | `iondu_migration_test` | Diferencias |
+|---|---:|---:|---:|
+| Tablas públicas | 19 | 19 | 0 |
+| Columnas y definiciones | Coincidentes | Coincidentes | 0 |
+| Restricciones | 103 | 103 | 0 |
+| Índices | 59 | 59 | 0 |
+| Tablas con RLS habilitado y forzado | 19 | 19 | 0 |
+| Políticas RLS | 22 | 22 | 0 |
+
+**Resultado:** las definiciones comparadas coinciden entre la base operativa y la base reconstruida desde cero mediante las migraciones.
+
+Esta comparación no representa una equivalencia completa de todos los objetos o datos de PostgreSQL. No se compararon datos, permisos efectivos de todos los roles, funciones, triggers, secuencias ni extensiones.
+
+### 3. Pruebas y permisos verificados
+
+- Suite del backend: 389 pruebas aprobadas.
+- Las pruebas se ejecutaron sobre `iondu_test` mediante el rol restringido `iondu_test_runner`.
+- Se verificaron los permisos del rol `iondu_worker` para consultar y actualizar únicamente los campos autorizados de facturas, junto con su política RLS.
+- `dashboard_financiero` todavía no está integrado en los servicios del backend ni en el frontend. No se concedieron permisos adicionales por anticipado.
+
+### 4. Pendientes
+
+Esta auditoría no certifica que el sistema esté listo para producción. Continúan pendientes:
+
+1. Validación de autenticación real con Supabase, JWT, membresías y aislamiento entre empresas.
+2. Integración y pruebas funcionales del frontend con el backend.
+3. Pruebas de emisión electrónica real en el entorno de certificación del SRI.
+4. Validación de despliegue, configuración de producción y CI/CD.
+5. Configuración y comprobación de copias de seguridad, restauración y monitoreo.
+6. Integración del dashboard financiero y sus permisos cuando se implemente.
+
+> **Nota de actualización:** esta sección contiene los resultados vigentes de la auditoría al 24 de noviembre de 2026. Las cifras anteriores del documento corresponden a revisiones históricas y no deben interpretarse como el estado actual.
+
+---
 # IONDU · Auditoría y decisiones de seguridad de la base de datos
 
 > Registro de la auditoría de `iondu_prueba`, realizada el 25 de octubre de 2026. Se distinguen los hallazgos comprobados, las decisiones acordadas y los puntos pendientes. La auditoría fue de solo lectura; no se modificaron tablas, políticas, funciones ni privilegios durante esta revisión.

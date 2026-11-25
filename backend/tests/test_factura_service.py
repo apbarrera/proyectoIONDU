@@ -1,4 +1,4 @@
-"""Pruebas unitarias de la orquestación de facturas sin PostgreSQL."""
+﻿"""Pruebas unitarias de la orquestación de facturas sin PostgreSQL."""
 
 from datetime import datetime
 from decimal import Decimal
@@ -257,6 +257,7 @@ def test_emision_conserva_porcentaje_historico_de_iva(monkeypatch):
 
     factura = servicio.emitir(103)
 
+    assert factura.xml_firmado is not None
     assert factura.total == Decimal("11.20")
     assert "<tarifa>12</tarifa>" in factura.xml_firmado
     assert "<valor>1.20</valor>" in factura.xml_firmado
@@ -286,6 +287,7 @@ def test_emision_conserva_servicio_sin_producto_y_su_iva_historico(monkeypatch):
 
     factura = servicio.emitir(103)
 
+    assert factura.xml_firmado is not None
     assert "<codigoPrincipal>SIN-CODIGO</codigoPrincipal>" in factura.xml_firmado
     assert "<descripcion>Servicio de consultoria</descripcion>" in factura.xml_firmado
     assert "<tarifa>12</tarifa>" in factura.xml_firmado
@@ -490,6 +492,7 @@ def test_factura_rechazada_se_reemite_con_secuencial_nuevo(monkeypatch):
     assert factura.numero_comprobante == "001-001-000000002"
     assert factura.clave_acceso != "1" * 49
     assert (factura.estado_autorizacion, factura.intentos_envio) == ("por_enviar", 0)
+    assert factura.mensajes_sri is not None
     assert factura.mensajes_sri[0]["identificador"] == "REINTENTO"
     assert "001-001-000000001" in factura.mensajes_sri[0]["mensaje"]
 
@@ -635,17 +638,18 @@ def test_recupera_ride_desde_xml_autorizado_si_storage_falla(monkeypatch):
         return pdf_generado
 
     class AlmacenamientoFalso:
-        def descargar(self, ruta):
+        def guardar(self, empresa_id: int, factura_id: int, contenido: bytes) -> str:
             raise ServiceUnavailableError(
                 "Storage no disponible",
                 code="RIDE_STORAGE_UNAVAILABLE",
             )
 
-        def guardar(self, empresa_id, factura_id, contenido):
+        def descargar(self, ruta: str) -> bytes:
             raise ServiceUnavailableError(
                 "Storage no disponible",
                 code="RIDE_STORAGE_UNAVAILABLE",
             )
+
 
     monkeypatch.setattr(
         "app.services.factura.generar_ride",
@@ -682,7 +686,10 @@ def test_descarga_ride_existente_sin_reconstruirlo(monkeypatch):
     rutas_descargadas = []
 
     class AlmacenamientoFalso:
-        def descargar(self, ruta):
+        def guardar(self, empresa_id: int, factura_id: int, contenido: bytes) -> str:
+            return f"empresas/{empresa_id}/facturas/{factura_id}/ride.pdf"
+
+        def descargar(self, ruta: str) -> bytes:
             rutas_descargadas.append(ruta)
             return pdf_guardado
 

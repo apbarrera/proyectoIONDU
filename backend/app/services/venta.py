@@ -1,3 +1,4 @@
+﻿
 """Reglas de negocio de las ventas.
 
 Registrar una venta es UNA transacción (todo o nada): venta, líneas,
@@ -185,10 +186,15 @@ class VentaService:
             lineas = self._repo.detalles([id_venta]).get(id_venta, [])
             ids = sorted({d.id_producto for d, _ in lineas if d.id_producto is not None})
             productos = self._repo.bloquear_productos(ids)
+
             for detalle, _producto in lineas:
+                if detalle.id_producto is None:
+                    continue  # línea de servicio: no mueve inventario
+
                 producto = productos.get(detalle.id_producto)
                 if producto is None:
-                    continue  # línea de servicio: no mueve inventario
+                    continue
+
                 producto.stock_actual += detalle.cantidad
                 self._repo.agregar(
                     MovimientoInventario(

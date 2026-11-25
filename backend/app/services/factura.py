@@ -1,9 +1,10 @@
-"""Orquestación de emisión y persistencia de facturas electrónicas."""
+﻿"""Orquestación de emisión y persistencia de facturas electrónicas."""
 
 import base64
 import logging
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Protocol
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
@@ -23,7 +24,6 @@ from app.models.factura import Factura as FacturaORM
 from app.models.venta import Venta
 from app.repositories.venta import VentaRepository
 from app.schemas.configuracion_facturacion import ConfiguracionFacturacion
-from app.services.almacenamiento import AlmacenamientoRideService
 from app.services.secuencia_comprobante import SecuenciaComprobanteService
 from app.sri.certificado import CertificadoInvalidoError
 from app.sri.clave_acceso import Ambiente
@@ -76,6 +76,22 @@ def _dinero(valor: Decimal) -> Decimal:
     return valor.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+
+class AlmacenamientoRide(Protocol):
+    """Contrato del almacenamiento de archivos RIDE."""
+
+    def guardar(
+        self,
+        empresa_id: int,
+        factura_id: int,
+        contenido: bytes,
+    ) -> str:
+        ...
+
+    def descargar(self, ruta: str) -> bytes:
+        ...
+
+
 class FacturaService:
     """Emite una factura para una venta de la empresa del contexto actual."""
 
@@ -83,7 +99,7 @@ class FacturaService:
         self,
         db: Session,
         empresa_id: int,
-        almacenamiento: AlmacenamientoRideService | None = None,
+        almacenamiento: AlmacenamientoRide | None = None,
     ):
         self.db = db
         self.empresa_id = empresa_id

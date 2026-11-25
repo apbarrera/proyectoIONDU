@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from functools import lru_cache
+from uuid import UUID
 
 from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -52,7 +53,7 @@ event.listen(APISession, "after_begin", _aplicar_contexto_rls)
 def establecer_contexto_rls(
     session: Session,
     *,
-    usuario_id: str | None,
+    usuario_id: UUID | str | None,
     empresa_id: int | None,
 ) -> None:
     """Actualiza el contexto RLS de la transacción actual y las siguientes."""

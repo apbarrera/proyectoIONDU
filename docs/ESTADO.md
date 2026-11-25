@@ -29,8 +29,10 @@
 - **Ventas y facturación unidas:** un solo módulo. Cada venta nueva lleva el interruptor "Emitir factura electrónica" **activado por defecto**; el historial muestra el estado de la factura (Autorizada, En proceso, Rechazada o Sin factura) con filtros, y el detalle permite emitir o reintentar (corrigiendo la cédula o el RUC). Las rutas antiguas `/billing/*` redirigen a Ventas.
 - **Accesibilidad:** auditadas con Lighthouse 19 pantallas en escritorio, en tema claro y oscuro, y las principales en móvil: **100 en todas**. Incluye etiquetas vinculadas a sus campos, contraste, orden de encabezados, modales con foco atrapado y filas de tabla operables con teclado.
 - **Móvil:** probado a 320, 390 y 768 px sin desborde horizontal. Las tablas se ven como tarjetas, y el menú lateral es un cajón que, cerrado, no recibe foco y se cierra con Escape.
+- **Productos:** "+ Nuevo producto" ofrece agregar uno solo o cargar un documento (CSV o Excel) con plantilla descargable, vista previa y validación por fila. El código se genera solo y la categoría y unidad ofrecen sugerencias o texto libre. Se quitaron recetas y fabricación (ver `DECISIONES.md` 3.1.1).
+- **Ventanas flotantes:** ya no se cierran si el clic empieza dentro y termina afuera.
 - **Cierre de sesión:** limpia `localStorage`, `sessionStorage` y la caché del service worker (regla de `CLAUDE.md`).
-- 72 pruebas del frontend.
+- 90 pruebas del frontend.
 
 ### Documentación
 - Requerimientos y presupuesto corregidos en Markdown (el presupuesto baja de $96,93 a $60,93 al mes).

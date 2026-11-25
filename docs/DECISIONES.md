@@ -133,6 +133,24 @@
   cambia en vivo. Las rutas antiguas `/billing/*` redirigen a `/sales/history`.
 - La validación de negocio de la factura (por ejemplo, los límites del SRI para consumidor final) se hará en el backend.
 
+### 3.1.1 Inventario sin recetas ni fabricación (17 de octubre de 2026)
+- **Decisión:** se retiran del producto las recetas, la fabricación y el tipo "producto compuesto". Los tipos son
+  solo **Producto** e **Insumo**. Las rutas `/inventory/recipes` y `/inventory/production` redirigen a Productos.
+- **Por qué:** los clientes indicaron que no pueden calcular la merma y que no usarán esa función.
+- **Consecuencia:** los movimientos de stock son entrada, salida, ajuste y venta. Si en el futuro se retoma, hay que
+  volver a diseñarlo desde cero; el código anterior solo queda en el historial de git.
+
+### 3.1.2 Alta de productos: código y categoría automáticos, carga masiva
+- **Código:** opcional. Si se deja vacío se genera `PS-###` (producto) o `IN-###` (insumo), siguiendo el último número usado.
+- **Categoría y unidad:** campo de texto con sugerencias (las ya usadas más algunas comunes); se puede escribir una nueva.
+- **Carga masiva:** "+ Nuevo producto" pregunta si es individual o desde un documento. El documento puede ser **CSV** o
+  **Excel (.xlsx)**; hay plantilla descargable con las columnas en orden (Código, Nombre*, Categoría*, Tipo, Unidad,
+  Precio de venta, Costo, Stock actual, Stock mínimo). Se valida fila por fila, se muestra una vista previa y solo se
+  importan las filas válidas (máximo 1000 filas y 2 MB). El CSV acepta coma o punto y coma, y decimales con coma.
+- **Librerías:** `read-excel-file` y `write-excel-file` (versión `universal`, sin Web Workers), cargadas solo al usar la carga masiva.
+- **Pendiente con el backend:** hoy las filas se crean en memoria (*mock*); cuando exista la API, la importación debe
+  hacerse en una sola petición transaccional, filtrada por `id_empresa`.
+
 ### 3.2 Tema claro y oscuro
 - **Decisión:** el tema por defecto **sigue al sistema**; hay un botón en la cabecera para alternar
   (sistema → claro → oscuro).
@@ -156,6 +174,10 @@
   declarada con Angular 22) y se evitó el uso exclusivo de las librerías más genéricas.
 - **Logo:** vectorizado a SVG con `currentColor` para que cambie solo entre tema claro y oscuro. Se hizo a partir de
   un PNG borroso; **conviene sustituirlo por el SVG original** del diseño (`shared/components/logo/logo-mark.const.ts`).
+
+### 4.1.1 Ventanas flotantes (modal)
+- Solo se cierran con un clic que **empieza y termina** sobre el fondo. Si se presiona dentro del cuadro y se suelta
+  afuera (por ejemplo, al seleccionar texto), no se cierra.
 
 ### 4.2 Menú lateral
 - Retráctil a una columna de íconos, **redimensionable** (arrastrando el borde o con el teclado, 220–360 px),

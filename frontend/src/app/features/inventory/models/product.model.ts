@@ -1,4 +1,4 @@
-export type ProductType = 'simple' | 'insumo' | 'compuesto';
+export type ProductType = 'simple' | 'insumo';
 
 export interface Product {
   id: string;

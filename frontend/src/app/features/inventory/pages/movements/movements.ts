@@ -9,8 +9,6 @@ const TYPE_LABELS: Record<MovementType, string> = {
   salida: 'Salida',
   ajuste: 'Ajuste',
   venta: 'Venta',
-  produccion_consumo: 'Consumo de receta',
-  produccion_ingreso: 'Fabricación',
 };
 
 @Component({

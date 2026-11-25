@@ -1,5 +1,5 @@
 @if (open()) {
-  <div class="modal-backdrop" (click)="onBackdropClick()">
+  <div class="modal-backdrop" (pointerdown)="onBackdropPointerDown($event)" (click)="onBackdropClick($event)">
     <div
       class="modal"
       role="dialog"
@@ -7,7 +7,6 @@
       tabindex="-1"
       [attr.aria-labelledby]="title() ? titleId : null"
       [class]="'modal--' + size()"
-      (click)="$event.stopPropagation()"
       (keydown)="onKeydown($event)"
     >
       @if (title()) {

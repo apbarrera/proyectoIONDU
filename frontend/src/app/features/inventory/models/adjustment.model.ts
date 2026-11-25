@@ -9,14 +9,3 @@ export interface StockAdjustment {
   date: string;
   createdBy: string;
 }
-
-export interface ProductionRun {
-  id: string;
-  recipeId: string;
-  productId: string;
-  productName: string;
-  unitsProduced: number;
-  estimatedCost: number;
-  date: string;
-  producedBy: string;
-}

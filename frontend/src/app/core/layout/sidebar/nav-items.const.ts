@@ -47,8 +47,6 @@ export const NAV_ITEMS: NavItem[] = [
     roles: BOTH,
     children: [
       { label: 'Productos', link: '/inventory/products' },
-      { label: 'Recetas', link: '/inventory/recipes' },
-      { label: 'Fabricación', link: '/inventory/production' },
       { label: 'Movimientos', link: '/inventory/movements' },
       { label: 'Ajustes', link: '/inventory/adjustments' },
       { label: 'Alertas de stock', link: '/inventory/alerts' },

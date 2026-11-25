@@ -4,10 +4,10 @@ import { PRODUCT_IDS } from './seed-ids.const';
 export const PRODUCTS_MOCK: Product[] = [
   {
     id: PRODUCT_IDS.TORTA_CHOCOLATE,
-    sku: 'PT-001',
+    sku: 'PS-001',
     name: 'Torta de Chocolate',
     category: 'Pastelería',
-    type: 'compuesto',
+    type: 'simple',
     unit: 'unidad',
     salePrice: 25,
     cost: 8.4,
@@ -17,10 +17,10 @@ export const PRODUCTS_MOCK: Product[] = [
   },
   {
     id: PRODUCT_IDS.BROWNIE,
-    sku: 'PT-002',
+    sku: 'PS-002',
     name: 'Brownie de Chocolate',
     category: 'Pastelería',
-    type: 'compuesto',
+    type: 'simple',
     unit: 'unidad',
     salePrice: 3.5,
     cost: 1.1,

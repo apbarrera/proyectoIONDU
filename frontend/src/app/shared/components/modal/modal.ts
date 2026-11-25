@@ -64,7 +64,20 @@ export class Modal {
     }
   }
 
-  onBackdropClick(): void {
-    if (this.closeOnBackdrop()) this.closed.emit();
+  /**
+   * Cierra solo si el clic completo (presionar y soltar) ocurrió sobre el fondo. Así, arrastrar
+   * desde dentro del diálogo (p. ej. al seleccionar texto) y soltar afuera no lo cierra.
+   */
+  private pressStartedOnBackdrop = false;
+
+  onBackdropPointerDown(event: PointerEvent): void {
+    this.pressStartedOnBackdrop = event.target === event.currentTarget;
+  }
+
+  onBackdropClick(event: MouseEvent): void {
+    const startedOutside = this.pressStartedOnBackdrop;
+    this.pressStartedOnBackdrop = false;
+    if (!this.closeOnBackdrop() || !startedOutside) return;
+    if (event.target === event.currentTarget) this.closed.emit();
   }
 }

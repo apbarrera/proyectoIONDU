@@ -1,4 +1,4 @@
-﻿"""Orquestación de emisión y persistencia de facturas electrónicas."""
+"""Orquestación de emisión y persistencia de facturas electrónicas."""
 
 import base64
 import logging
@@ -76,7 +76,6 @@ def _dinero(valor: Decimal) -> Decimal:
     return valor.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-
 class AlmacenamientoRide(Protocol):
     """Contrato del almacenamiento de archivos RIDE."""
 
@@ -85,11 +84,9 @@ class AlmacenamientoRide(Protocol):
         empresa_id: int,
         factura_id: int,
         contenido: bytes,
-    ) -> str:
-        ...
+    ) -> str: ...
 
-    def descargar(self, ruta: str) -> bytes:
-        ...
+    def descargar(self, ruta: str) -> bytes: ...
 
 
 class FacturaService:

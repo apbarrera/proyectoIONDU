@@ -1,4 +1,3 @@
-﻿
 """Reglas de negocio de las ventas.
 
 Registrar una venta es UNA transacción (todo o nada): venta, líneas,

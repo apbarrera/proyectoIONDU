@@ -40,15 +40,9 @@ POLITICAS = (
 
 def upgrade() -> None:
     for tabla, politica, rol in POLITICAS:
-        op.execute(
-            f'ALTER POLICY "{politica}" '
-            f'ON public."{tabla}" TO "{rol}"'
-        )
+        op.execute(f'ALTER POLICY "{politica}" ON public."{tabla}" TO "{rol}"')
 
 
 def downgrade() -> None:
     for tabla, politica, _rol in reversed(POLITICAS):
-        op.execute(
-            f'ALTER POLICY "{politica}" '
-            f'ON public."{tabla}" TO PUBLIC'
-        )
+        op.execute(f'ALTER POLICY "{politica}" ON public."{tabla}" TO PUBLIC')

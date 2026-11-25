@@ -1,4 +1,4 @@
-﻿"""Pruebas unitarias de la orquestación de facturas sin PostgreSQL."""
+"""Pruebas unitarias de la orquestación de facturas sin PostgreSQL."""
 
 from datetime import datetime
 from decimal import Decimal
@@ -649,7 +649,6 @@ def test_recupera_ride_desde_xml_autorizado_si_storage_falla(monkeypatch):
                 "Storage no disponible",
                 code="RIDE_STORAGE_UNAVAILABLE",
             )
-
 
     monkeypatch.setattr(
         "app.services.factura.generar_ride",

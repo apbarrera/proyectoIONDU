@@ -39,6 +39,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: 'Historial', link: '/expenses/history' },
       { label: 'Registrar gasto', link: '/expenses/new' },
       { label: 'Facturas recibidas', link: '/expenses/email-drafts' },
+      { label: 'Proveedores', link: '/expenses/suppliers' },
     ],
   },
   {

@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { ExpensesService } from '../../services/expenses.service';
+import { ExpensesService, expenseDay } from '../../services/expenses.service';
 import { Expense, ExpensePaymentMethod } from '../../models/expense.model';
 import { AuthService } from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
@@ -11,6 +11,8 @@ import { DataTable, DataTableColumn } from '../../../../shared/components/data-t
 import { Modal } from '../../../../shared/components/modal/modal';
 import { StatusBadge } from '../../../../shared/components/status-badge/status-badge';
 import { FormField } from '../../../../shared/components/form-field/form-field';
+
+const RUC_PATTERN = /^(\d{10}|\d{13})?$/;
 
 const PAYMENT_LABELS: Record<ExpensePaymentMethod, string> = {
   efectivo: 'Efectivo',
@@ -22,7 +24,7 @@ const PAYMENT_LABELS: Record<ExpensePaymentMethod, string> = {
 
 @Component({
   selector: 'app-expenses-history',
-  imports: [FormsModule, RouterLink, PageHeader, Button, DataTable, Modal, StatusBadge, FormField],
+  imports: [FormsModule, ReactiveFormsModule, RouterLink, PageHeader, Button, DataTable, Modal, StatusBadge, FormField],
   templateUrl: './expenses-history.html',
   styleUrl: './expenses-history.scss',
 })
@@ -30,9 +32,12 @@ export class ExpensesHistory {
   expensesService = inject(ExpensesService);
   private auth = inject(AuthService);
   private toast = inject(ToastService);
+  private fb = inject(FormBuilder);
 
   readonly isAdmin = this.auth.isAdmin;
   readonly paymentLabels = PAYMENT_LABELS;
+  readonly paymentMethods = Object.entries(PAYMENT_LABELS) as [ExpensePaymentMethod, string][];
+  readonly categories = this.expensesService.categories;
   readonly trackById = (row: Expense): string => row.id;
 
   loading = signal(true);
@@ -40,6 +45,18 @@ export class ExpensesHistory {
   selectedId = signal<string | null>(null);
   voiding = signal(false);
   voidReason = signal('');
+  editing = signal(false);
+
+  editForm = this.fb.nonNullable.group({
+    date: ['', Validators.required],
+    categoryId: [0, [Validators.required, Validators.min(1)]],
+    providerRuc: ['', Validators.pattern(RUC_PATTERN)],
+    providerName: [''],
+    total: [0, [Validators.required, Validators.min(0.01)]],
+    paymentMethod: ['efectivo' as ExpensePaymentMethod, Validators.required],
+    description: ['', [Validators.required, Validators.maxLength(1000)]],
+    receiptNumber: ['', Validators.maxLength(50)],
+  });
 
   selected = computed(() => this.expensesService.expenses().find((e) => e.id === this.selectedId()) ?? null);
 
@@ -77,9 +94,60 @@ export class ExpensesHistory {
   close(): void {
     this.selectedId.set(null);
     this.cancelVoid();
+    this.editing.set(false);
+  }
+
+  startEdit(expense: Expense): void {
+    if (!this.categories().length) this.expensesService.loadCategories().subscribe();
+    this.cancelVoid();
+    this.editForm.reset({
+      date: expenseDay(expense.date),
+      categoryId: expense.categoryId,
+      providerRuc: expense.providerRuc,
+      providerName: expense.providerName,
+      total: expense.total,
+      paymentMethod: expense.paymentMethod,
+      description: expense.description,
+      receiptNumber: expense.receiptNumber ?? '',
+    });
+    this.editing.set(true);
+  }
+
+  /** Mensaje de error de un campo del formulario de edición (solo después de tocarlo). */
+  editError(name: keyof typeof this.editForm.controls): string | null {
+    const control = this.editForm.controls[name];
+    if (!control.touched || control.valid) return null;
+    if (control.hasError('required')) return 'Este campo es obligatorio.';
+    if (control.hasError('min')) return 'Debe ser mayor que cero.';
+    if (control.hasError('pattern')) return 'Debe tener 10 dígitos (cédula) o 13 (RUC).';
+    return 'Valor demasiado largo.';
+  }
+
+  /** Guarda solo lo que cambió. Con RUC o cédula, el proveedor se busca o se crea. */
+  saveEdit(expense: Expense): void {
+    if (this.busy()) return;
+    const value = this.editForm.getRawValue();
+    if (value.providerRuc.trim() && !value.providerName.trim()) {
+      this.editForm.controls.providerName.setErrors({ required: true });
+    }
+    if (this.editForm.invalid) {
+      this.editForm.markAllAsTouched();
+      return;
+    }
+    this.busy.set(true);
+    this.expensesService.updateExpense(expense, { ...value, categoryId: Number(value.categoryId) }).subscribe({
+      next: (saved) => {
+        this.busy.set(false);
+        this.editing.set(false);
+        if (saved) this.toast.success('Gasto actualizado.');
+      },
+      // El interceptor ya mostró el motivo del error.
+      error: () => this.busy.set(false),
+    });
   }
 
   startVoid(): void {
+    this.editing.set(false);
     this.voidReason.set('');
     this.voiding.set(true);
   }

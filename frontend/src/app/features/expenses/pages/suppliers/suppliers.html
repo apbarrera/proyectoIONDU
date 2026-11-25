@@ -1,0 +1,62 @@
+<app-page-header
+  title="Proveedores"
+  subtitle="Consulta y actualiza los datos de quienes te venden o prestan servicios."
+  [breadcrumb]="[{ label: 'Gastos', link: '/expenses/history' }, { label: 'Proveedores' }]"
+>
+  <app-button (clicked)="openNew()">
+    <app-icon name="plus" [size]="18" />
+    Nuevo proveedor
+  </app-button>
+</app-page-header>
+
+<app-data-table
+  [columns]="columns"
+  [rows]="suppliers()"
+  [trackBy]="trackById"
+  [clickableRows]="true"
+  emptyTitle="Todavía no hay proveedores. Se crean al registrar un gasto o con «Nuevo proveedor»."
+  searchPlaceholder="Buscar por nombre o RUC…"
+  (rowClick)="openEdit($event)"
+/>
+
+<app-modal
+  [open]="editing() !== null"
+  [title]="editingSupplier() ? 'Editar proveedor' : 'Nuevo proveedor'"
+  (closed)="close()"
+>
+  <form class="suppliers__form" [formGroup]="form" (ngSubmit)="save()" novalidate>
+    <app-form-field
+      label="RUC o cédula"
+      hint="13 dígitos para RUC, 10 para cédula."
+      [error]="fieldError('identification')"
+      required
+    >
+      <input formControlName="identification" inputmode="numeric" autocomplete="off" />
+    </app-form-field>
+
+    <app-form-field label="Nombre o razón social" [error]="fieldError('name')" required>
+      <input formControlName="name" autocomplete="off" />
+    </app-form-field>
+
+    <app-form-field label="Dirección">
+      <input formControlName="address" autocomplete="off" />
+    </app-form-field>
+
+    <app-form-field label="Teléfono" [error]="fieldError('phone')">
+      <input formControlName="phone" type="tel" autocomplete="off" />
+    </app-form-field>
+
+    <app-form-field
+      label="Correo"
+      hint="Ayuda a reconocer sus facturas por correo."
+      [error]="fieldError('email')"
+    >
+      <input formControlName="email" type="email" autocomplete="off" />
+    </app-form-field>
+
+    <div class="suppliers__actions">
+      <app-button variant="ghost" [disabled]="saving()" (clicked)="close()">Cancelar</app-button>
+      <app-button type="submit" [loading]="saving()">Guardar</app-button>
+    </div>
+  </form>
+</app-modal>

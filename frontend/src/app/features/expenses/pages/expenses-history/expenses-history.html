@@ -16,12 +16,18 @@
   (rowClick)="open($event)"
 />
 
-<app-modal [open]="!!selected()" title="Detalle del gasto" (closed)="close()">
+<app-modal
+  [open]="!!selected()"
+  [title]="editing() ? 'Editar gasto' : 'Detalle del gasto'"
+  (closed)="close()"
+>
   @if (selected(); as expense) {
     <div class="expense-detail__header">
       <div>
         <p class="expense-detail__amount">${{ expense.total.toFixed(2) }}</p>
-        <p class="expense-detail__meta">{{ formatDate(expense.date) }} · {{ paymentLabels[expense.paymentMethod] }}</p>
+        <p class="expense-detail__meta">
+          {{ formatDate(expense.date) }} · {{ paymentLabels[expense.paymentMethod] }}
+        </p>
       </div>
       @if (expense.status === 'anulado') {
         <app-status-badge label="Anulado" tone="danger" />
@@ -30,25 +36,93 @@
       }
     </div>
 
-    <dl class="expense-detail__data">
-      <div><dt>Categoría</dt><dd>{{ expense.category }}</dd></div>
-      <div>
-        <dt>Proveedor</dt>
-        <dd>
-          {{ expense.providerName || 'Sin proveedor' }}
-          @if (expense.providerRuc) {
-            · {{ expense.providerRuc }}
-          }
-        </dd>
-      </div>
-      @if (expense.receiptNumber) {
-        <div><dt>Comprobante</dt><dd>{{ expense.receiptNumber }}</dd></div>
-      }
-      <div><dt>Descripción</dt><dd>{{ expense.description }}</dd></div>
-    </dl>
+    @if (editing()) {
+      <form class="expense-edit" [formGroup]="editForm" (ngSubmit)="saveEdit(expense)" novalidate>
+        <app-form-field label="Fecha" [error]="editError('date')" required>
+          <input type="date" formControlName="date" />
+        </app-form-field>
+        <app-form-field label="Categoría" [error]="editError('categoryId')" required>
+          <select formControlName="categoryId">
+            @for (cat of categories(); track cat.id) {
+              <option [ngValue]="cat.id">{{ cat.name }}</option>
+            }
+          </select>
+        </app-form-field>
+        <app-form-field
+          label="RUC o cédula del proveedor"
+          hint="Vacío: el gasto queda sin proveedor."
+          [error]="editError('providerRuc')"
+        >
+          <input formControlName="providerRuc" inputmode="numeric" autocomplete="off" />
+        </app-form-field>
+        <app-form-field label="Proveedor" hint="El nombre se usa al registrar un proveedor nuevo. Para modificar uno existente, hazlo desde Proveedores." [error]="editError('providerName')">
+          <input formControlName="providerName" autocomplete="off" />
+        </app-form-field>
+        <app-form-field label="Total con IVA" [error]="editError('total')" required>
+          <input type="number" min="0.01" step="0.01" formControlName="total" />
+        </app-form-field>
+        <app-form-field label="Método de pago" required>
+          <select formControlName="paymentMethod">
+            @for (method of paymentMethods; track method[0]) {
+              <option [value]="method[0]">{{ method[1] }}</option>
+            }
+          </select>
+        </app-form-field>
+        <app-form-field label="N.º de comprobante" [error]="editError('receiptNumber')">
+          <input formControlName="receiptNumber" autocomplete="off" />
+        </app-form-field>
+        <app-form-field
+          class="expense-edit__wide"
+          label="Descripción"
+          [error]="editError('description')"
+          required
+        >
+          <textarea rows="2" formControlName="description"></textarea>
+        </app-form-field>
+        <div class="expense-detail__actions expense-edit__wide">
+          <app-button variant="ghost" [disabled]="busy()" (clicked)="editing.set(false)"
+            >Cancelar</app-button
+          >
+          <app-button type="submit" [loading]="busy()">Guardar cambios</app-button>
+        </div>
+      </form>
+    } @else {
+      <dl class="expense-detail__data">
+        <div>
+          <dt>Categoría</dt>
+          <dd>{{ expense.category }}</dd>
+        </div>
+        <div>
+          <dt>Proveedor</dt>
+          <dd>
+            {{ expense.providerName || 'Sin proveedor' }}
+            @if (expense.providerRuc) {
+              · {{ expense.providerRuc }}
+            }
+          </dd>
+        </div>
+        @if (expense.receiptNumber) {
+          <div>
+            <dt>Comprobante</dt>
+            <dd>{{ expense.receiptNumber }}</dd>
+          </div>
+        }
+        <div>
+          <dt>Descripción</dt>
+          <dd>{{ expense.description }}</dd>
+        </div>
+      </dl>
 
-    @if (isAdmin() && expense.status !== 'anulado') {
-      @if (voiding()) {
+      @if (expense.status !== 'anulado' && !voiding()) {
+        <div class="expense-detail__actions">
+          <app-button variant="secondary" (clicked)="startEdit(expense)">Editar gasto</app-button>
+          @if (isAdmin()) {
+            <app-button variant="secondary" (clicked)="startVoid()">Anular gasto</app-button>
+          }
+        </div>
+      }
+
+      @if (isAdmin() && expense.status !== 'anulado' && voiding()) {
         <div class="expense-detail__void">
           <app-form-field
             label="Motivo de la anulación"
@@ -63,7 +137,9 @@
             ></textarea>
           </app-form-field>
           <div class="expense-detail__actions">
-            <app-button variant="ghost" [disabled]="busy()" (clicked)="cancelVoid()">Cancelar</app-button>
+            <app-button variant="ghost" [disabled]="busy()" (clicked)="cancelVoid()"
+              >Cancelar</app-button
+            >
             <app-button
               variant="danger"
               [loading]="busy()"
@@ -73,10 +149,6 @@
               Confirmar anulación
             </app-button>
           </div>
-        </div>
-      } @else {
-        <div class="expense-detail__actions">
-          <app-button variant="secondary" (clicked)="startVoid()">Anular gasto</app-button>
         </div>
       }
     }

@@ -195,7 +195,7 @@ El código de facturación está listo para probarse contra el SRI apenas llegue
 5. Pasar `Product.id`, `User.tenantId` y los demás IDs de `string` a `number`, como pide `API.md` sección 9 (hoy los servicios convierten con `String(...)` y `Number(...)`).
 6. ✅ Ocultar en el menú lo que el backend restringe al Administrador (dashboard, recomendaciones y ajustes de inventario).
 7. Nueva venta: la vista previa del IVA usa una tasa fija del 15 %; mostrar el IVA real por producto (`vatPercentageCode`) y soportar líneas de concepto libre.
-8. Editar gastos y proveedores (el backend ya tiene `PATCH`). ✅ Anular gastos y ✅ listar y editar clientes.
+8. ✅ Editar gastos (detalle del historial) y ✅ proveedores (`/expenses/suppliers`). ✅ Anular gastos y ✅ listar y editar clientes.
 9. Probar todo en el navegador contra el backend real con datos demo (`backend/scripts/cargar_datos_demo.py`), con un Administrador y un Operativo.
 5. Validaciones de negocio de la factura (por ejemplo, límites del SRI para consumidor final) se harán en el backend en el Sprint 2.
 ### C. Sprint 1: lo que bloquea el resto

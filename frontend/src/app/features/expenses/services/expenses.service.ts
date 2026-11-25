@@ -42,6 +42,23 @@ export interface NewExpenseInput {
   receiptNumber?: string;
 }
 
+/** Datos del formulario de edición; la fecha es `AAAA-MM-DD` y el proveedor va por RUC o cédula. */
+export interface EditExpenseInput {
+  date: string;
+  categoryId: number;
+  providerRuc: string;
+  providerName: string;
+  total: number;
+  paymentMethod: ExpensePaymentMethod;
+  description: string;
+  receiptNumber: string;
+}
+
+/** Fecha del gasto en Ecuador como `AAAA-MM-DD` (para el campo `<input type="date">`). */
+export function expenseDay(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
+}
+
 /** Categoría a la que van los gastos cuya categoría no existe (una de las 7 predefinidas del backend). */
 const FALLBACK_CATEGORY = 'Otros gastos operativos';
 
@@ -93,6 +110,43 @@ export class ExpensesService {
     ).pipe(
       map((items) => items.map(toExpense)),
       tap((expenses) => this.#expenses.set(expenses)),
+    );
+  }
+
+  /**
+   * Edita un gasto enviando solo los campos que cambiaron. Si cambia el RUC o la cédula del
+   * proveedor, lo busca o lo crea antes; sin RUC, el gasto queda sin proveedor.
+   * Devuelve `null` si no había nada que cambiar.
+   */
+  updateExpense(current: Expense, edit: EditExpenseInput): Observable<Expense | null> {
+    const changes: Record<string, unknown> = {};
+    if (edit.date !== expenseDay(current.date)) changes['date'] = `${edit.date}T12:00:00`;
+    if (edit.categoryId !== current.categoryId) changes['categoryId'] = edit.categoryId;
+    if (edit.total !== current.total) changes['total'] = edit.total;
+    if (edit.paymentMethod !== current.paymentMethod) changes['paymentMethod'] = edit.paymentMethod;
+    if (edit.description.trim() !== current.description) changes['description'] = edit.description.trim();
+    const receipt = edit.receiptNumber.trim() || null;
+    if (receipt !== (current.receiptNumber ?? null)) changes['receiptNumber'] = receipt;
+
+    const ruc = edit.providerRuc.trim();
+    const supplier$: Observable<Supplier | null | undefined> =
+      ruc === current.providerRuc
+        ? of(undefined) // sin cambios de proveedor
+        : ruc
+          ? this.suppliers.findOrCreate({ identification: ruc, name: edit.providerName.trim() })
+          : of(null);
+
+    return supplier$.pipe(
+      switchMap((supplier) => {
+        if (supplier !== undefined) changes['supplierId'] = supplier?.id ?? null;
+        if (!Object.keys(changes).length) return of(null);
+        return this.http
+          .patch<ExpenseDto>(`${this.expensesUrl}/${encodeURIComponent(current.id)}`, changes)
+          .pipe(
+            map(toExpense),
+            tap((expense) => this.#expenses.update((list) => list.map((e) => (e.id === expense.id ? expense : e)))),
+          );
+      }),
     );
   }
 

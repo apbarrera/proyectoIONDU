@@ -83,7 +83,7 @@ class Gasto(Base):
         Integer,
         ForeignKey(
             "empresa.id_empresa",
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
             name="gasto_id_empresa_fkey",
         ),
         nullable=False,

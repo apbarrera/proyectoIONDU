@@ -356,7 +356,16 @@ del SRI, "secuencial registrado") y con los datos actuales: por ejemplo, tras co
 `PATCH /api/customers/{id}`. Queda en `por_enviar` y el worker la envía; en `messages` queda constancia del número
 que reemplaza.
 
-Pendiente: anular ventas (RF-2.7).
+**Anular una venta (RF-2.7):** `POST /api/sales/{id}/void` con `{ "reason": "Cliente devolvió el producto" }`.
+**Solo el Administrador** (`403 FORBIDDEN` para otros roles). La venta no se borra: queda con `status: "anulada"` y
+el motivo, la fecha y quién la anuló se agregan a `observation`. **Devuelve el stock** de cada producto con un
+movimiento de inventario de tipo `anulacion`, y deja de contar en el dashboard. Responde `200` con `Sale`.
+
+| Error | Cuándo |
+|---|---|
+| `409 SALE_HAS_INVOICE` | Tiene una factura autorizada o en proceso en el SRI: se anula con una nota de crédito, no desde aquí. Con factura rechazada o sin factura sí se puede |
+| `409 SALE_ALREADY_VOIDED` | Ya estaba anulada |
+| `422` | Motivo vacío |
 
 ## 9. Cambios que implica en el frontend
 
@@ -467,6 +476,7 @@ Empaque, Mantenimiento, Arriendo y Otros gastos operativos (`predefined: true`).
 | ✅ | `GET /api/expenses/{id}` | Un gasto | `200` o `404` |
 | ✅ | `POST /api/expenses` | Registra un gasto manual | `201` con `Expense` |
 | ✅ | `PATCH /api/expenses/{id}` | Edita solo los campos enviados (`supplierId: null` quita el proveedor) | `200` con `Expense` |
+| ✅ | `POST /api/expenses/{id}/void` | **Solo Administrador** (RF-3.7). Anula el gasto: `{ "reason": "Registrado dos veces" }`. No se borra: queda `status: "anulado"` con el motivo al final de `description`, y deja de contar en el dashboard. Ya no se puede editar (`409 EXPENSE_VOIDED`); anularlo otra vez → `409 EXPENSE_ALREADY_VOIDED` | `200` con `Expense` |
 
 Cuerpo de `POST /api/expenses`:
 
@@ -505,7 +515,7 @@ historial siempre cuadra con el stock (DECISIONES 2.15). Registrar un movimiento
 
 | Estado | Método y ruta | Qué hace | Respuesta |
 |---|---|---|---|
-| ✅ | `GET /api/inventory/movements` | Historial paginado, el más reciente primero. Filtros: `productId`, `type` (`entrada`, `salida`, `ajuste`, `venta`), `from`, `to` (fechas de Ecuador) | `200` con `Page<InventoryMovement>` |
+| ✅ | `GET /api/inventory/movements` | Historial paginado, el más reciente primero. Filtros: `productId`, `type` (`entrada`, `salida`, `ajuste`, `venta`, `anulacion`), `from`, `to` (fechas de Ecuador) | `200` con `Page<InventoryMovement>` |
 | ✅ | `GET /api/inventory/movements/{id}` | Un movimiento | `200` o `404` |
 | ✅ | `POST /api/inventory/movements` | Entrada o salida manual (RF-4.3): `{ "productId", "type": "entrada" \| "salida", "quantity" (> 0), "reason" }` | `201` con `InventoryMovement` |
 | ✅ | `POST /api/inventory/adjustments` | **Solo Administrador** (RF-4.8). Ajuste al conteo físico: `{ "productId", "newStock" (≥ 0), "reason" }`. Se envía el stock real, no la diferencia | `201` con `StockAdjustment` |
@@ -524,6 +534,7 @@ Objeto `InventoryMovement` (igual que el modelo del frontend):
 ```
 
 - `quantity` lleva signo: **positiva si entra** al inventario, **negativa si sale** (ventas, salidas y ajustes a la baja).
+- `anulacion`: stock que vuelve al anular una venta (positivo).
 - `resultingStock`: stock del producto justo después de ese movimiento.
 - Para la pantalla de ajustes: `GET /api/inventory/movements?type=ajuste`.
 

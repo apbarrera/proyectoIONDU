@@ -15,7 +15,8 @@ SALIDA = "SALIDA"
 VENTA = "VENTA"
 AJUSTE_ENTRADA = "AJUSTE_ENTRADA"
 AJUSTE_SALIDA = "AJUSTE_SALIDA"
-QUE_ENTRAN = (ENTRADA, AJUSTE_ENTRADA)
+ANULACION_VENTA = "ANULACION_VENTA"  # devuelve el stock de una venta anulada
+QUE_ENTRAN = (ENTRADA, AJUSTE_ENTRADA, ANULACION_VENTA)
 
 Fila = tuple[MovimientoInventario, Producto, Decimal, str | None]
 

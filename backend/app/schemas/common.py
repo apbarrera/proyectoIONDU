@@ -60,3 +60,9 @@ class Page[T](ApiModel):
     total: int
     page: int
     page_size: int
+
+
+class VoidRequest(ApiInput):
+    """Cuerpo para anular una venta o un gasto: el motivo queda en el historial."""
+
+    reason: Text255

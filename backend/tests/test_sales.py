@@ -462,8 +462,8 @@ def _factura(db, empresa_id: int, id_venta: int, estado: str, mensajes=None):
     factura = Factura(
         id_empresa=empresa_id,
         id_venta=id_venta,
-        numero_comprobante="001-001-000000007",
-        clave_acceso="1" * 49,
+        numero_comprobante=f"001-001-{id_venta:09d}",
+        clave_acceso=f"{id_venta:049d}",
         estado_autorizacion=estado,
         mensajes_sri=mensajes or [],
         subtotal=Decimal("4.50"),
@@ -498,7 +498,7 @@ def test_la_venta_dice_quien_la_registro_y_su_factura(client, db, empresas, cata
     detalle = client.get(f"/api/sales/{venta['id']}", headers=_h(vendedor)).json()
     factura = detalle["invoice"]
     assert (factura["invoiceNumber"], factura["authorizationStatus"]) == (
-        "001-001-000000007",
+        f"001-001-{venta['id']:09d}",
         "rechazada",
     )
     assert factura["messages"][0]["message"] == "ERROR SECUENCIAL REGISTRADO"
@@ -506,3 +506,59 @@ def test_la_venta_dice_quien_la_registro_y_su_factura(client, db, empresas, cata
     historial = client.get("/api/sales", headers=_h(vendedor)).json()["items"]
     assert historial[0]["invoice"]["authorizationStatus"] == "rechazada"
     assert client.get(f"/api/sales/{venta['id']}/invoice", headers=_h(vendedor)).json() == factura
+
+
+# ---------- Anular (RF-2.7) ----------
+def test_anular_una_venta_devuelve_el_stock(client, db, empresas, catalogo, vendedor):
+    a, _ = empresas
+    venta = _vender(
+        client,
+        vendedor,
+        [
+            {"productId": catalogo["cafe"], "quantity": 2},
+            {"productId": catalogo["azucar"], "quantity": 3},
+        ],
+    ).json()
+    assert (_stock(db, catalogo["cafe"]), _stock(db, catalogo["azucar"])) == (8, 2)
+
+    url = f"/api/sales/{venta['id']}/void"
+    response = client.post(url, json={"reason": "Cliente devolvió"}, headers=_h(vendedor))
+    assert response.status_code == 200, response.text
+    anulada = response.json()
+    assert anulada["status"] == "anulada"
+    assert "Cliente devolvió" in anulada["observation"]
+    assert (_stock(db, catalogo["cafe"]), _stock(db, catalogo["azucar"])) == (10, 5)
+
+    movimientos = client.get(
+        "/api/inventory/movements", params={"type": "anulacion"}, headers=_h(vendedor)
+    ).json()["items"]
+    assert sorted(m["quantity"] for m in movimientos) == [2, 3]  # entran de vuelta
+    otra_vez = client.post(url, json={"reason": "X"}, headers=_h(vendedor))
+    assert (otra_vez.status_code, otra_vez.json()["error"]["code"]) == (409, "SALE_ALREADY_VOIDED")
+    # Sigue en el historial, pero ya no cuenta como ingreso.
+    assert client.get("/api/dashboard", headers=_h(vendedor)).json()["salesCount"] == 0
+
+
+def test_no_se_anula_una_venta_con_factura_en_el_sri(client, db, empresas, catalogo, vendedor):
+    a, _ = empresas
+    for estado, esperado in (("autorizada", 409), ("por_autorizar", 409), ("rechazada", 200)):
+        venta = _vender(client, vendedor, [{"productId": catalogo["cafe"], "quantity": 1}]).json()
+        _factura(db, a, venta["id"], estado)
+        response = client.post(
+            f"/api/sales/{venta['id']}/void", json={"reason": "Prueba"}, headers=_h(vendedor)
+        )
+        assert response.status_code == esperado, (estado, response.text)
+        if esperado == 409:
+            assert response.json()["error"]["code"] == "SALE_HAS_INVOICE"
+
+
+def test_solo_el_administrador_anula_ventas(client, empresas, catalogo, vendedor, nuevo_usuario):
+    from app.models.rol import OPERATIVO
+
+    a, _ = empresas
+    venta = _vender(client, vendedor, [{"productId": catalogo["cafe"], "quantity": 1}]).json()
+    operador = nuevo_usuario(a, rol=OPERATIVO)
+    response = client.post(
+        f"/api/sales/{venta['id']}/void", json={"reason": "X"}, headers=_h(operador)
+    )
+    assert (response.status_code, response.json()["error"]["code"]) == (403, "FORBIDDEN")

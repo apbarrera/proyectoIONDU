@@ -8,9 +8,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
-from app.api.deps import ContextoActual, DbSession, EmpresaId
+from app.api.deps import ContextoActual, DbSession, EmpresaId, SoloAdministrador
 from app.core.errors import ForbiddenError
-from app.schemas.common import Page
+from app.schemas.common import Page, VoidRequest
 from app.schemas.venta import PaymentMethod, Sale, SaleCreate
 from app.services.venta import VentaService
 
@@ -54,3 +54,16 @@ def list_sales(
 @router.get("/sales/{id}", response_model=Sale)
 def get_sale(id: SaleId, empresa_id: EmpresaId, db: DbSession):
     return VentaService(db, empresa_id).obtener(id)
+
+
+# RF-2.7: solo el Administrador anula; la venta queda en el historial como "anulada".
+@router.post("/sales/{id}/void", response_model=Sale)
+def void_sale(id: SaleId, datos: VoidRequest, contexto: SoloAdministrador, db: DbSession):
+    if contexto.usuario is None:
+        raise ForbiddenError(
+            "Para anular ventas debes iniciar sesión con tu usuario.",
+            code="USER_SESSION_REQUIRED",
+        )
+    return VentaService(db, contexto.empresa_id).anular(
+        id, datos.reason, contexto.usuario.id, contexto.nombre
+    )

@@ -10,6 +10,7 @@ import uuid
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import TIMEZONE
@@ -31,6 +32,7 @@ from app.sri.totales import Linea, TarifaIva, calcular_totales
 CONSUMIDOR_FINAL = "CONSUMIDOR FINAL"
 ORIGEN_MANUAL = "MANUAL"
 MOVIMIENTO_VENTA = "VENTA"
+MOVIMIENTO_ANULACION = "ANULACION_VENTA"  # devuelve el stock de una venta anulada
 _ZONA = ZoneInfo(TIMEZONE)
 
 # Relación entre el código de porcentaje del SRI y su tarifa.
@@ -118,6 +120,7 @@ def _rango_del_dia(
 class VentaService:
     def __init__(self, db: Session, empresa_id: int):
         self._db = db
+        self._empresa_id = empresa_id
         self._repo = VentaRepository(db, empresa_id)
         self._clientes = ClienteRepository(db, empresa_id)
 
@@ -159,6 +162,56 @@ class VentaService:
         venta, cliente, factura, creado_por = encontrada
         lineas = self._repo.detalles([id_venta]).get(id_venta, [])
         return _a_sale(venta, cliente, lineas, factura, creado_por)
+
+    # ---------- anular (RF-2.7) ----------
+    def anular(self, id_venta: int, motivo: str, id_usuario: uuid.UUID, quien: str | None) -> Sale:
+        """Anula la venta: devuelve el stock y la conserva en el historial como `anulada`."""
+        try:
+            # El mismo candado que la emisión de facturas: no se anula mientras se factura.
+            self._db.execute(select(func.pg_advisory_xact_lock(self._empresa_id, id_venta)))
+            encontrada = self._repo.obtener(id_venta)
+            if encontrada is None:
+                raise NotFoundError("La venta no existe.")
+            venta, _cliente, factura, _creado_por = encontrada
+            if venta.estado == "ANULADA":
+                raise ConflictError("La venta ya está anulada.", code="SALE_ALREADY_VOIDED")
+            if factura is not None and factura.estado_autorizacion != "rechazada":
+                raise ConflictError(
+                    "La venta tiene una factura autorizada o en proceso en el SRI: se anula "
+                    "emitiendo una nota de crédito, no desde aquí.",
+                    code="SALE_HAS_INVOICE",
+                )
+
+            lineas = self._repo.detalles([id_venta]).get(id_venta, [])
+            ids = sorted({d.id_producto for d, _ in lineas if d.id_producto is not None})
+            productos = self._repo.bloquear_productos(ids)
+            for detalle, _producto in lineas:
+                producto = productos.get(detalle.id_producto)
+                if producto is None:
+                    continue  # línea de servicio: no mueve inventario
+                producto.stock_actual += detalle.cantidad
+                self._repo.agregar(
+                    MovimientoInventario(
+                        id_producto=producto.id_producto,
+                        id_usuario=id_usuario,
+                        tipo_movimiento=MOVIMIENTO_ANULACION,
+                        cantidad=detalle.cantidad,
+                        motivo=f"Anulación de venta #{id_venta}",
+                    )
+                )
+
+            fecha = datetime.now(_ZONA).strftime("%d/%m/%Y %H:%M")
+            nota = f"ANULADA el {fecha} por {quien or 'usuario'}: {motivo}"
+            venta.observacion = (f"{venta.observacion} | {nota}" if venta.observacion else nota)[
+                :255
+            ]
+            venta.estado = "ANULADA"
+            self._repo.guardar_pendientes()
+            self._db.commit()
+        except Exception:
+            self._db.rollback()
+            raise
+        return self.obtener(id_venta)
 
     # ---------- registrar ----------
     def crear(self, datos: SaleCreate, id_usuario: uuid.UUID) -> Sale:

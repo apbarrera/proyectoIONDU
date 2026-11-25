@@ -11,7 +11,7 @@ from pydantic import Field, PlainSerializer
 
 from app.schemas.common import ApiInput, ApiModel, Quantity, Text255
 
-MovementType = Literal["entrada", "salida", "ajuste", "venta"]
+MovementType = Literal["entrada", "salida", "ajuste", "venta", "anulacion"]
 
 # Cantidad con signo: positiva si entra al inventario, negativa si sale.
 SignedQuantity = Annotated[Decimal, PlainSerializer(float, return_type=float, when_used="json")]

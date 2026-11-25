@@ -1,3 +1,5 @@
+import type { Invoice } from '../../billing/models/invoice.model';
+
 export type PaymentMethod = 'efectivo' | 'tarjeta_debito' | 'tarjeta_credito' | 'transferencia';
 export type SaleStatus = 'completada' | 'anulada';
 
@@ -25,6 +27,8 @@ export interface Sale {
   paymentMethod: PaymentMethod;
   status: SaleStatus;
   observation?: string;
-  /** El backend todavía no devuelve quién registró la venta. */
+  /** Nombre de quien registró la venta en la empresa. */
   createdBy?: string;
+  /** Factura electrónica de la venta; `undefined` si todavía no se factura. */
+  invoice?: Invoice;
 }

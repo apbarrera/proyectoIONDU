@@ -4,7 +4,8 @@ import { Observable, catchError, of, switchMap, throwError } from 'rxjs';
 
 import { environment } from '../../../../environments/environment';
 import { SKIP_ERROR_TOAST } from '../../../core/utils/api-error.util';
-import { CreateCustomerInput, Customer } from '../models/customer.model';
+import { PageDto, fetchAllPages } from '../../../core/utils/pagination.util';
+import { CreateCustomerInput, Customer, UpdateCustomerInput } from '../models/customer.model';
 
 /** Identificación del consumidor final que exige el SRI (13 nueves). */
 export const FINAL_CONSUMER_ID = '9999999999999';
@@ -29,12 +30,32 @@ export class CustomersApiService {
       );
   }
 
+  /** Todos los clientes de la empresa (de 100 en 100). */
+  list(): Observable<Customer[]> {
+    return fetchAllPages<Customer>((page) =>
+      this.http.get<PageDto<Customer>>(this.baseUrl, {
+        params: new HttpParams().set('page', page).set('pageSize', 100),
+      }),
+    );
+  }
+
   create(input: CreateCustomerInput): Observable<Customer> {
     return this.http.post<Customer>(this.baseUrl, {
       identification: input.identification,
+      ...(input.identificationType
+        ? { identificationType: input.identificationType }
+        : {}),
       name: input.name,
       email: input.email || null,
+      address: input.address || null,
+      phone: input.phone || null,
     });
+  }
+
+
+  /** Actualiza solo los campos enviados (`PATCH /api/customers/{id}`). */
+  update(id: number, changes: UpdateCustomerInput): Observable<Customer> {
+    return this.http.patch<Customer>(`${this.baseUrl}/${id}`, changes);
   }
 
   /**

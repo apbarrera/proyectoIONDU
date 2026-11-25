@@ -1,4 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { SalesService } from '../../services/sales.service';
 import { BillingService } from '../../../billing/services/billing.service';
@@ -6,6 +7,8 @@ import { Sale, PaymentMethod } from '../../models/sale.model';
 import { Invoice } from '../../../billing/models/invoice.model';
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_TONES } from '../../../billing/models/invoice-status.const';
 import { ToastService } from '../../../../core/services/toast.service';
+import { AuthService } from '../../../../core/services/auth.service';
+import { FormField } from '../../../../shared/components/form-field/form-field';
 import { PageHeader } from '../../../../shared/components/page-header/page-header';
 import { Button } from '../../../../shared/components/button/button';
 import { DataTable, DataTableColumn } from '../../../../shared/components/data-table/data-table';
@@ -47,6 +50,11 @@ export interface SaleRow extends Sale {
   invoice: Invoice | undefined;
 }
 
+/** Una venta se anula aquí si no tiene factura o si el SRI la rechazó (si no, va nota de crédito). */
+export function canVoid(row: SaleRow): boolean {
+  return row.status === 'completada' && (!row.invoice || row.invoice.status === 'rechazada');
+}
+
 function matchesFilter(row: SaleRow, filter: InvoiceFilter): boolean {
   const status = row.invoice?.status;
   switch (filter) {
@@ -65,7 +73,7 @@ function matchesFilter(row: SaleRow, filter: InvoiceFilter): boolean {
 
 @Component({
   selector: 'app-sales-history',
-  imports: [RouterLink, PageHeader, Button, DataTable, Modal, StatusBadge, Icon],
+  imports: [FormsModule, RouterLink, PageHeader, Button, DataTable, Modal, StatusBadge, Icon, FormField],
   templateUrl: './sales-history.html',
   styleUrl: './sales-history.scss',
 })
@@ -73,6 +81,10 @@ export class SalesHistory {
   private salesService = inject(SalesService);
   private billingService = inject(BillingService);
   private toast = inject(ToastService);
+  private auth = inject(AuthService);
+
+  readonly isAdmin = this.auth.isAdmin;
+  readonly canVoid = canVoid;
 
   readonly filters = FILTERS;
   readonly paymentLabels = PAYMENT_LABELS;
@@ -84,13 +96,19 @@ export class SalesHistory {
   selectedId = signal<string | null>(null);
   busy = signal(false);
   loading = signal(true);
+  /** Formulario de anulación abierto dentro del detalle. */
+  voiding = signal(false);
+  voidReason = signal('');
 
   rows = computed<SaleRow[]>(() => {
     const invoiceBySale = new Map<string, Invoice>();
     for (const invoice of this.billingService.invoices()) {
       if (invoice.saleId) invoiceBySale.set(invoice.saleId, invoice);
     }
-    return this.salesService.sales().map((sale) => ({ ...sale, invoice: invoiceBySale.get(sale.id) }));
+    // La factura emitida en esta sesión es más reciente que la que trajo el historial.
+    return this.salesService
+      .sales()
+      .map((sale) => ({ ...sale, invoice: invoiceBySale.get(sale.id) ?? sale.invoice }));
   });
 
   visibleRows = computed(() => this.rows().filter((row) => matchesFilter(row, this.filter())));
@@ -109,14 +127,17 @@ export class SalesHistory {
     { key: 'customerName', header: 'Cliente', cell: (s) => s.customerName, sortable: true },
     { key: 'total', header: 'Total', cell: (s) => `$${s.total.toFixed(2)}`, align: 'right' },
     { key: 'paymentMethod', header: 'Pago', cell: (s) => PAYMENT_LABELS[s.paymentMethod] },
+    { key: 'createdBy', header: 'Usuario', cell: (s) => s.createdBy ?? '—', sortable: true },
     {
       key: 'invoice',
       header: 'Factura',
-      cell: (s) => (s.invoice ? INVOICE_STATUS_LABELS[s.invoice.status] : 'Sin factura'),
+      cell: (s) => (s.status === 'anulada' ? 'Anulada' : s.invoice ? INVOICE_STATUS_LABELS[s.invoice.status] : 'Sin factura'),
       badge: (s) =>
-        s.invoice
-          ? { label: INVOICE_STATUS_LABELS[s.invoice.status], tone: INVOICE_STATUS_TONES[s.invoice.status] }
-          : { label: 'Sin factura', tone: 'neutral' },
+        s.status === 'anulada'
+          ? { label: 'Anulada', tone: 'danger' }
+          : s.invoice
+            ? { label: INVOICE_STATUS_LABELS[s.invoice.status], tone: INVOICE_STATUS_TONES[s.invoice.status] }
+            : { label: 'Sin factura', tone: 'neutral' },
     },
   ];
 
@@ -133,6 +154,33 @@ export class SalesHistory {
 
   close(): void {
     this.selectedId.set(null);
+    this.cancelVoid();
+  }
+
+  startVoid(): void {
+    this.voidReason.set('');
+    this.voiding.set(true);
+  }
+
+  cancelVoid(): void {
+    this.voiding.set(false);
+    this.voidReason.set('');
+  }
+
+  /** Anula la venta (solo Administrador). El backend devuelve el stock y guarda el motivo. */
+  confirmVoid(row: SaleRow): void {
+    const reason = this.voidReason().trim();
+    if (this.busy() || reason.length < 3) return;
+    this.busy.set(true);
+    this.salesService.voidSale(row.id, reason).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.cancelVoid();
+        this.toast.success(`Venta #${row.folio} anulada. El stock se devolvió al inventario.`);
+      },
+      // El interceptor ya mostró el motivo del error.
+      error: () => this.busy.set(false),
+    });
   }
 
   /** Emite la factura de una venta registrada sin ella. El cliente sale de la propia venta. */

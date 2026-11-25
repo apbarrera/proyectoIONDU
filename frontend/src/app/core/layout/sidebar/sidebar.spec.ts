@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { NavItem } from './nav-items.const';
+import { NAV_ITEMS, NavItem } from './nav-items.const';
 import { SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN, Sidebar } from './sidebar';
 
 const key = (name: string) => new KeyboardEvent('keydown', { key: name });
@@ -97,5 +97,17 @@ describe('Sidebar', () => {
 
     component.onEscape();
     expect(closed).toHaveBeenCalledTimes(1);
+  });
+
+  it('el Operativo no ve las secciones exclusivas del Administrador', () => {
+    const linksOperativo = NAV_ITEMS.filter((item) => item.roles.includes('operator')).flatMap((item) => [
+      item.link,
+      ...(item.children ?? []).filter((c) => !c.roles || c.roles.includes('operator')).map((c) => c.link),
+    ]);
+
+    expect(linksOperativo).not.toContain('/dashboard');
+    expect(linksOperativo).not.toContain('/recommendations');
+    expect(linksOperativo).not.toContain('/inventory/adjustments');
+    expect(linksOperativo).toContain('/inventory/movements');
   });
 });

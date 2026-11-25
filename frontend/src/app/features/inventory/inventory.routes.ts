@@ -3,6 +3,7 @@ import { Products } from './pages/products/products';
 import { Movements } from './pages/movements/movements';
 import { Adjustments } from './pages/adjustments/adjustments';
 import { Alerts } from './pages/alerts/alerts';
+import { roleGuard } from '../../core/guards/role.guard';
 
 export const INVENTORY_ROUTES: Routes = [
   { path: '', redirectTo: 'products', pathMatch: 'full' },
@@ -11,6 +12,6 @@ export const INVENTORY_ROUTES: Routes = [
   { path: 'recipes', redirectTo: 'products' },
   { path: 'production', redirectTo: 'products' },
   { path: 'movements', component: Movements },
-  { path: 'adjustments', component: Adjustments },
+  { path: 'adjustments', component: Adjustments, canActivate: [roleGuard(['admin'])] },
   { path: 'alerts', component: Alerts },
 ];

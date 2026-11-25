@@ -24,6 +24,8 @@ describe('SalesService', () => {
     paymentMethod: 'efectivo',
     status: 'completada',
     observation: 'Entrega',
+    createdBy: 'Admin Demo',
+    invoice: null as unknown,
   });
 
   beforeEach(() => {
@@ -77,5 +79,46 @@ describe('SalesService', () => {
     req.flush(dto(9));
 
     expect(service.sales()[0].id).toBe('9');
+  });
+
+  it('trae quién registró la venta y el estado de su factura', () => {
+    const conFactura = {
+      ...dto(3),
+      invoice: {
+        id: 4,
+        saleId: 3,
+        invoiceNumber: '001-001-000000004',
+        accessKey: null,
+        authorizationStatus: 'rechazada',
+        authorizationNumber: null,
+        authorizationDate: null,
+        messages: [{ identifier: '43', message: 'Clave registrada', additionalInformation: null, type: 'ERROR' }],
+        issueDate: '2026-11-22T10:00:30-05:00',
+        subtotal: 24,
+        taxes: 3.6,
+        total: 27.6,
+      },
+    };
+    service.getSales().subscribe();
+    httpMock.expectOne(() => true).flush({ items: [conFactura, dto(1)], total: 2, page: 1, pageSize: 100 });
+
+    const [facturada, sinFactura] = service.sales();
+    expect(facturada.createdBy).toBe('Admin Demo');
+    expect(facturada.invoice?.status).toBe('rechazada');
+    expect(facturada.invoice?.rejectionReason).toBe('Clave registrada');
+    expect(sinFactura.invoice).toBeUndefined();
+  });
+
+  it('voidSale envía el motivo y reemplaza la venta anulada', () => {
+    service.getSales().subscribe();
+    httpMock.expectOne(() => true).flush({ items: [dto(1)], total: 1, page: 1, pageSize: 100 });
+
+    service.voidSale('1', '  Error de cobro ').subscribe();
+    const req = httpMock.expectOne('/api/sales/1/void');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ reason: 'Error de cobro' });
+    req.flush({ ...dto(1), status: 'anulada' });
+
+    expect(service.sales()[0].status).toBe('anulada');
   });
 });

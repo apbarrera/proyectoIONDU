@@ -139,10 +139,12 @@ Estado por módulo (24/11/2026). Un servicio "real" usa `HttpClient` contra `/ap
 - Se eliminaron `expenses.mock.ts`, `expenses-history.mock.ts`, `inventory-movements.mock.ts`, `products.mock.ts` y `tenant.mock.ts`.
 - Pruebas nuevas: `expenses.service.spec.ts`, `inventory-api.service.spec.ts`, `dashboard.service.spec.ts` (incluye las reglas de recomendaciones), `tenant.service.spec.ts`. A las pruebas de los componentes que ahora usan HTTP se les agregó `provideHttpClient()` y `provideHttpClientTesting()`.
 
-**Límites actuales por falta de soporte en el backend** (ver "Pendientes del backend para el frontend", sección 2.G):
-- El historial solo muestra el estado de las facturas emitidas en la sesión del navegador.
-- No se puede reintentar una factura rechazada: se quitó el botón.
-- La venta no trae quién la registró: se quitó la columna "Usuario".
+**Fase 2 (25/11/2026), resuelto en el frontend:**
+- El historial de ventas muestra el estado real de la factura (viene en `Sale.invoice`), la columna "Usuario" (`createdBy`) y permite **reintentar** una factura rechazada.
+- **Anular ventas** (solo Administrador, con motivo): sin factura o con factura rechazada. Con factura autorizada o en proceso se requiere nota de crédito.
+- **Anular gastos** (solo Administrador, con motivo) desde el detalle del historial; los anulados no cuentan en los totales.
+- **Clientes** (`/sales/customers`): listar, crear y editar con `GET/POST/PATCH /api/customers`.
+- El Operativo ya no ve en el menú Dashboard, Recomendaciones ni Ajustes de inventario, y esas rutas tienen `roleGuard`.
 
 **Verificación:** `tsc --noEmit` (app y pruebas) y `ngc --noEmit` (plantillas) pasan sin errores. **Las pruebas con `ng test` no se corrieron**: Angular CLI exige Node 22.22.3, 24.15 o 26 y la computadora usada tenía 24.8.0. Correr `npx ng test --no-watch` en `frontend/` antes de confiar en estos cambios y revisar el CI. Tampoco se probó la interfaz en el navegador contra un backend real.
 
@@ -191,9 +193,9 @@ El código de facturación está listo para probarse contra el SRI apenas llegue
 3. Probar la instalación de la PWA y el service worker en Chrome.
 4. Ya están conectados todos los módulos que tienen backend. Lo que sigue simulado no tiene dónde guardarse todavía: gestión de usuarios, auditoría, bandeja de gastos por correo (IMAP), agente de IA, y recetas y producción (ver la tabla "Frontend: conexión con la API").
 5. Pasar `Product.id`, `User.tenantId` y los demás IDs de `string` a `number`, como pide `API.md` sección 9 (hoy los servicios convierten con `String(...)` y `Number(...)`).
-6. Ocultar en el menú lo que el backend restringe al Administrador (dashboard, recomendaciones y ajustes de inventario): hoy el Operativo entra y ve el error 403. Solo la pantalla Empresa ya deshabilita los botones.
+6. ✅ Ocultar en el menú lo que el backend restringe al Administrador (dashboard, recomendaciones y ajustes de inventario).
 7. Nueva venta: la vista previa del IVA usa una tasa fija del 15 %; mostrar el IVA real por producto (`vatPercentageCode`) y soportar líneas de concepto libre.
-8. Editar y desactivar gastos y proveedores (el backend ya tiene `PATCH`), y listar y editar clientes (`GET/PATCH /api/customers`): hoy solo se pueden crear.
+8. Editar gastos y proveedores (el backend ya tiene `PATCH`). ✅ Anular gastos y ✅ listar y editar clientes.
 9. Probar todo en el navegador contra el backend real con datos demo (`backend/scripts/cargar_datos_demo.py`), con un Administrador y un Operativo.
 5. Validaciones de negocio de la factura (por ejemplo, límites del SRI para consumidor final) se harán en el backend en el Sprint 2.
 ### C. Sprint 1: lo que bloquea el resto
@@ -258,10 +260,10 @@ Detectados al conectar Ventas y Facturación (24/11/2026). Cada uno bloquea una 
 
 | # | Falta en el backend | Efecto hoy en el frontend |
 |---|---|---|
-| 1 | Resumen de la factura (estado, número) dentro de `Sale`, o un `GET /api/invoices` | El historial solo conoce las facturas emitidas en la sesión del navegador; las demás aparecen como "Sin factura". Los filtros por estado no sirven con el historial completo |
-| 2 | Reintentar una factura rechazada (hoy `POST /api/sales/{id}/invoice` responde `409` "La venta ya tiene una factura registrada") | Se quitó el botón "Reintentar emisión" y la corrección de la cédula o RUC |
-| 3 | `createdBy` (nombre del usuario) en `Sale` | Se quitó la columna "Usuario" del historial |
-| 4 | Anular ventas (RF-2.7) | No hay botón de anular |
+| 1 | ✅ Resumen de la factura dentro de `Sale` | Conectado en el historial (25/11/2026) |
+| 2 | ✅ Reintentar una factura rechazada | Botón "Reintentar emisión" en el detalle. Falta corregir la cédula o RUC desde ahí (se hace en Clientes) |
+| 3 | ✅ `createdBy` en `Sale` | Columna "Usuario" en el historial |
+| 4 | ✅ Anular ventas (RF-2.7) | Botón "Anular venta" para el Administrador |
 | 5 | Prueba real con el SRI de pruebas (requiere el `.p12` y el RUC del cliente) | Las facturas no se han autorizado contra el SRI real |
 | 6 | Reintentos del worker para facturas en `por_enviar` o `por_autorizar` | Esas facturas quedan "En proceso" hasta que el worker las resuelva; la pantalla no se actualiza sola |
 

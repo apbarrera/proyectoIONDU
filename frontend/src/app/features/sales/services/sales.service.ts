@@ -4,6 +4,7 @@ import { EMPTY, Observable, expand, map, reduce, tap } from 'rxjs';
 
 import { environment } from '../../../../environments/environment';
 import { PaymentMethod, Sale, SaleLineItem, SaleStatus } from '../models/sale.model';
+import { InvoiceDto, invoiceFromDto } from '../../billing/models/invoice.mapper';
 
 interface SaleItemDto {
   productId: number | null;
@@ -26,6 +27,8 @@ interface SaleDto {
   paymentMethod: PaymentMethod;
   status: SaleStatus;
   observation: string | null;
+  createdBy: string | null;
+  invoice: InvoiceDto | null;
 }
 
 interface SalePageDto {
@@ -94,6 +97,19 @@ export class SalesService {
     );
   }
 
+  /**
+   * Anula la venta (solo Administrador): el backend devuelve el stock y la deja como `anulada`.
+   * Una venta con factura autorizada o en proceso no se anula aquí (requiere nota de crédito).
+   */
+  voidSale(id: string, reason: string): Observable<Sale> {
+    return this.http
+      .post<SaleDto>(`${this.baseUrl}/${encodeURIComponent(id)}/void`, { reason: reason.trim() })
+      .pipe(
+        map((dto) => this.toSale(dto)),
+        tap((sale) => this.#sales.update((list) => list.map((s) => (s.id === sale.id ? sale : s)))),
+      );
+  }
+
   private toSale(dto: SaleDto): Sale {
     const items: SaleLineItem[] = dto.items.map((item) => ({
       productId: item.productId === null ? '' : String(item.productId),
@@ -103,7 +119,7 @@ export class SalesService {
       subtotal: item.subtotal,
     }));
 
-    return {
+    const sale: Sale = {
       id: String(dto.id),
       folio: String(dto.id).padStart(6, '0'),
       date: dto.date,
@@ -117,6 +133,9 @@ export class SalesService {
       paymentMethod: dto.paymentMethod,
       status: dto.status,
       observation: dto.observation ?? undefined,
+      createdBy: dto.createdBy ?? undefined,
     };
+    if (dto.invoice) sale.invoice = invoiceFromDto(dto.invoice, sale);
+    return sale;
   }
 }

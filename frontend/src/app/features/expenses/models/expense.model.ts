@@ -5,6 +5,7 @@ export type ExpensePaymentMethod =
   | 'transferencia'
   | 'cheque';
 export type ExpenseSourceType = 'manual' | 'email';
+export type ExpenseStatus = 'confirmado' | 'borrador' | 'anulado';
 
 export interface ExpenseCategory {
   id: number;
@@ -38,4 +39,6 @@ export interface Expense {
   description: string;
   receiptNumber?: string;
   sourceType: ExpenseSourceType;
+  /** Un gasto anulado queda en el historial pero no cuenta en los totales. */
+  status: ExpenseStatus;
 }

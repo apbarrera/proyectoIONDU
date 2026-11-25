@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
-import { SalesHistory } from './sales-history';
+import { SalesHistory, SaleRow, canVoid } from './sales-history';
 
 const saleDto = (id: number, date: string) => ({
   id,
@@ -17,6 +17,8 @@ const saleDto = (id: number, date: string) => ({
   paymentMethod: 'tarjeta_credito',
   status: 'completada',
   observation: null,
+  createdBy: 'Admin Demo',
+  invoice: null,
 });
 
 describe('SalesHistory', () => {
@@ -80,5 +82,37 @@ describe('SalesHistory', () => {
     expect(component.rows()[1].invoice).toBeUndefined();
     component.filter.set('authorized');
     expect(component.visibleRows().length).toBe(1);
+  });
+
+  it('solo permite anular ventas sin factura o con factura rechazada', () => {
+    const base = component.rows()[0];
+    const conEstado = (status: 'autorizada' | 'pendiente' | 'rechazada'): SaleRow => ({
+      ...base,
+      invoice: { ...({} as NonNullable<SaleRow['invoice']>), status },
+    });
+
+    expect(canVoid(base)).toBe(true);
+    expect(canVoid(conEstado('rechazada'))).toBe(true);
+    expect(canVoid(conEstado('autorizada'))).toBe(false);
+    expect(canVoid(conEstado('pendiente'))).toBe(false);
+    expect(canVoid({ ...base, status: 'anulada' })).toBe(false);
+  });
+
+  it('anula la venta con el motivo escrito', () => {
+    component.voidReason.set('Cliente devolvió el producto');
+    component.confirmVoid(component.rows()[1]);
+
+    const req = httpMock.expectOne('/api/sales/1/void');
+    expect(req.request.body).toEqual({ reason: 'Cliente devolvió el producto' });
+    req.flush({ ...saleDto(1, '2026-11-21T10:00:00-05:00'), status: 'anulada' });
+
+    expect(component.rows()[1].status).toBe('anulada');
+    expect(component.voiding()).toBe(false);
+  });
+
+  it('no envía la anulación sin un motivo', () => {
+    component.voidReason.set(' ');
+    component.confirmVoid(component.rows()[0]);
+    httpMock.expectNone('/api/sales/2/void');
   });
 });

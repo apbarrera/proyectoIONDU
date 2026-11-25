@@ -52,7 +52,13 @@ describe('CustomersApiService', () => {
       .expectOne((r) => r.url === '/api/customers/lookup')
       .flush(null, { status: 404, statusText: 'Not Found' });
     const create = httpMock.expectOne((r) => r.url === '/api/customers' && r.method === 'POST');
-    expect(create.request.body).toEqual({ identification: '1710000009', name: 'Juan Pérez', email: null });
+    expect(create.request.body).toEqual({
+      identification: '1710000009',
+      name: 'Juan Pérez',
+      email: null,
+      address: null,
+      phone: null,
+    });
     create.flush(customer);
 
     expect(result!.id).toBe(5);

@@ -36,9 +36,16 @@
     <div class="sale-detail__header">
       <div>
         <p class="sale-detail__folio">Venta #{{ sale.folio }}</p>
-        <p class="sale-detail__meta">{{ formatDate(sale.date) }} · {{ sale.customerName }} · {{ paymentLabels[sale.paymentMethod] }}</p>
+        <p class="sale-detail__meta">
+          {{ formatDate(sale.date) }} · {{ sale.customerName }} · {{ paymentLabels[sale.paymentMethod] }}
+          @if (sale.createdBy) {
+            · Registrada por {{ sale.createdBy }}
+          }
+        </p>
       </div>
-      @if (sale.invoice; as invoice) {
+      @if (sale.status === 'anulada') {
+        <app-status-badge label="Anulada" tone="danger" />
+      } @else if (sale.invoice; as invoice) {
         <app-status-badge [label]="statusLabels[invoice.status]" [tone]="statusTones[invoice.status]" />
       } @else {
         <app-status-badge label="Sin factura" tone="neutral" />
@@ -74,6 +81,10 @@
       <div class="sale-detail__total"><span>Total</span><span>${{ sale.total.toFixed(2) }}</span></div>
     </div>
 
+    @if (sale.observation) {
+      <p class="sale-detail__observation">{{ sale.observation }}</p>
+    }
+
     <h3 class="sale-detail__subtitle">Factura electrónica</h3>
 
     @if (sale.invoice; as invoice) {
@@ -93,16 +104,54 @@
       </ul>
 
       <div class="sale-detail__action">
-        <app-button [loading]="busy()" (clicked)="downloadRide(sale)">Descargar RIDE (PDF)</app-button>
+        @if (invoice.status === 'rechazada') {
+          @if (sale.status === 'completada') {
+            <app-button [loading]="busy()" (clicked)="issueInvoice(sale)">Reintentar emisión</app-button>
+          }
+        } @else {
+          <app-button [loading]="busy()" (clicked)="downloadRide(sale)">Descargar RIDE (PDF)</app-button>
+        }
       </div>
+    } @else if (sale.status === 'anulada') {
+      <p class="sale-detail__hint">La venta está anulada: no se puede facturar.</p>
     } @else {
-      <p class="sale-detail__hint">
-        Esta venta no tiene una factura emitida en esta sesión. Si ya se facturó antes, el sistema
-        avisará al intentar emitirla de nuevo.
-      </p>
+      <p class="sale-detail__hint">Esta venta todavía no tiene factura electrónica.</p>
       <div class="sale-detail__action">
         <app-button [loading]="busy()" (clicked)="issueInvoice(sale)">Emitir factura electrónica</app-button>
       </div>
+    }
+
+    @if (isAdmin() && canVoid(sale)) {
+      <h3 class="sale-detail__subtitle">Anular venta</h3>
+      @if (voiding()) {
+        <app-form-field
+          label="Motivo de la anulación"
+          hint="Queda en el historial de la venta. El stock vuelve al inventario."
+          required
+        >
+          <textarea
+            rows="2"
+            maxlength="255"
+            [ngModel]="voidReason()"
+            (ngModelChange)="voidReason.set($event)"
+          ></textarea>
+        </app-form-field>
+        <div class="sale-detail__action sale-detail__action--split">
+          <app-button variant="ghost" [disabled]="busy()" (clicked)="cancelVoid()">Cancelar</app-button>
+          <app-button
+            variant="danger"
+            [loading]="busy()"
+            [disabled]="voidReason().trim().length < 3"
+            (clicked)="confirmVoid(sale)"
+          >
+            Confirmar anulación
+          </app-button>
+        </div>
+      } @else {
+        <div class="sale-detail__action">
+          <app-button variant="secondary" (clicked)="startVoid()">Anular venta</app-button>
+        </div>
+      }
     }
   }
 </app-modal>

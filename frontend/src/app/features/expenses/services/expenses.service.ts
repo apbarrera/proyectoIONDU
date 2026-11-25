@@ -9,6 +9,7 @@ import {
   ExpenseCategory,
   ExpensePaymentMethod,
   ExpenseSourceType,
+  ExpenseStatus,
   Supplier,
 } from '../models/expense.model';
 import { SuppliersApiService } from './suppliers-api.service';
@@ -25,7 +26,7 @@ interface ExpenseDto {
   description: string;
   paymentMethod: ExpensePaymentMethod;
   receiptNumber: string | null;
-  status: string;
+  status: ExpenseStatus;
   source: 'manual' | 'correo';
 }
 
@@ -59,6 +60,7 @@ function toExpense(dto: ExpenseDto): Expense {
     description: dto.description,
     receiptNumber: dto.receiptNumber ?? undefined,
     sourceType: source,
+    status: dto.status,
   };
 }
 
@@ -76,7 +78,11 @@ export class ExpensesService {
   #categories = signal<ExpenseCategory[]>([]);
   readonly categories = this.#categories.asReadonly();
 
-  readonly totalExpenses = computed(() => this.#expenses().reduce((sum, e) => sum + e.total, 0));
+  readonly totalExpenses = computed(() =>
+    this.#expenses()
+      .filter((e) => e.status !== 'anulado')
+      .reduce((sum, e) => sum + e.total, 0),
+  );
 
   /** Descarga todos los gastos (el más reciente primero) y actualiza `expenses`. */
   getExpenses(): Observable<Expense[]> {
@@ -88,6 +94,16 @@ export class ExpensesService {
       map((items) => items.map(toExpense)),
       tap((expenses) => this.#expenses.set(expenses)),
     );
+  }
+
+  /** Anula el gasto (solo Administrador): queda en el historial como `anulado`, con el motivo. */
+  voidExpense(id: string, reason: string): Observable<Expense> {
+    return this.http
+      .post<ExpenseDto>(`${this.expensesUrl}/${encodeURIComponent(id)}/void`, { reason: reason.trim() })
+      .pipe(
+        map(toExpense),
+        tap((expense) => this.#expenses.update((list) => list.map((e) => (e.id === expense.id ? expense : e)))),
+      );
   }
 
   /** Categorías de la empresa; la primera vez el backend crea las 7 predefinidas. */

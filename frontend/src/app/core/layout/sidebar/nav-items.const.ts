@@ -27,6 +27,7 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: 'Historial de ventas', link: '/sales/history' },
       { label: 'Nueva venta', link: '/sales/new' },
+      { label: 'Clientes', link: '/sales/customers' },
     ],
   },
   {
@@ -48,12 +49,14 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: 'Productos', link: '/inventory/products' },
       { label: 'Movimientos', link: '/inventory/movements' },
-      { label: 'Ajustes', link: '/inventory/adjustments' },
+      // Los ajustes de stock son exclusivos del Administrador (el backend responde 403).
+      { label: 'Ajustes', link: '/inventory/adjustments', roles: ['admin'] },
       { label: 'Alertas de stock', link: '/inventory/alerts' },
     ],
   },
   { label: 'Agente IA', icon: 'ai', link: '/ai', roles: BOTH },
-  { label: 'Recomendaciones', icon: 'recommendations', link: '/recommendations', roles: BOTH },
+  // Las recomendaciones salen del dashboard financiero, exclusivo del Administrador.
+  { label: 'Recomendaciones', icon: 'recommendations', link: '/recommendations', roles: ['admin'] },
   {
     label: 'Configuración',
     icon: 'settings',

@@ -9,6 +9,76 @@
 <app-data-table
   [columns]="columns"
   [rows]="expensesService.expenses()"
+  [trackBy]="trackById"
+  [clickableRows]="true"
   emptyTitle="Todavía no se han registrado gastos."
   searchPlaceholder="Buscar por proveedor, categoría…"
+  (rowClick)="open($event)"
 />
+
+<app-modal [open]="!!selected()" title="Detalle del gasto" (closed)="close()">
+  @if (selected(); as expense) {
+    <div class="expense-detail__header">
+      <div>
+        <p class="expense-detail__amount">${{ expense.total.toFixed(2) }}</p>
+        <p class="expense-detail__meta">{{ formatDate(expense.date) }} · {{ paymentLabels[expense.paymentMethod] }}</p>
+      </div>
+      @if (expense.status === 'anulado') {
+        <app-status-badge label="Anulado" tone="danger" />
+      } @else {
+        <app-status-badge label="Registrado" tone="success" />
+      }
+    </div>
+
+    <dl class="expense-detail__data">
+      <div><dt>Categoría</dt><dd>{{ expense.category }}</dd></div>
+      <div>
+        <dt>Proveedor</dt>
+        <dd>
+          {{ expense.providerName || 'Sin proveedor' }}
+          @if (expense.providerRuc) {
+            · {{ expense.providerRuc }}
+          }
+        </dd>
+      </div>
+      @if (expense.receiptNumber) {
+        <div><dt>Comprobante</dt><dd>{{ expense.receiptNumber }}</dd></div>
+      }
+      <div><dt>Descripción</dt><dd>{{ expense.description }}</dd></div>
+    </dl>
+
+    @if (isAdmin() && expense.status !== 'anulado') {
+      @if (voiding()) {
+        <div class="expense-detail__void">
+          <app-form-field
+            label="Motivo de la anulación"
+            hint="Queda en el historial. El gasto deja de contar en los totales."
+            required
+          >
+            <textarea
+              rows="2"
+              maxlength="255"
+              [ngModel]="voidReason()"
+              (ngModelChange)="voidReason.set($event)"
+            ></textarea>
+          </app-form-field>
+          <div class="expense-detail__actions">
+            <app-button variant="ghost" [disabled]="busy()" (clicked)="cancelVoid()">Cancelar</app-button>
+            <app-button
+              variant="danger"
+              [loading]="busy()"
+              [disabled]="voidReason().trim().length < 3"
+              (clicked)="confirmVoid(expense)"
+            >
+              Confirmar anulación
+            </app-button>
+          </div>
+        </div>
+      } @else {
+        <div class="expense-detail__actions">
+          <app-button variant="secondary" (clicked)="startVoid()">Anular gasto</app-button>
+        </div>
+      }
+    }
+  }
+</app-modal>

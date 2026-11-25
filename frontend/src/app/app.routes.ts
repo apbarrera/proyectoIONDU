@@ -62,6 +62,7 @@ export const routes: Routes = [
       },
       {
         path: 'recommendations',
+        canActivate: [roleGuard(['admin'])],
         loadChildren: () =>
           import('./features/recommendations/recommendations.routes').then((m) => m.RECOMMENDATIONS_ROUTES),
       },

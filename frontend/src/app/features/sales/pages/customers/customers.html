@@ -1,0 +1,72 @@
+<app-page-header
+  title="Clientes"
+  subtitle="Consulta y actualiza los datos de tus clientes para facturar."
+  [breadcrumb]="[{ label: 'Ventas', link: '/sales/history' }, { label: 'Clientes' }]"
+>
+  <app-button (clicked)="openNew()">
+    <app-icon name="plus" [size]="18" />
+    Nuevo cliente
+  </app-button>
+</app-page-header>
+
+<app-data-table
+  [columns]="columns"
+  [rows]="customers()"
+  [trackBy]="trackById"
+  [clickableRows]="true"
+  emptyTitle="Todavía no hay clientes. Se crean al vender o con «Nuevo cliente»."
+  searchPlaceholder="Buscar por nombre o identificación…"
+  (rowClick)="openEdit($event)"
+/>
+
+<app-modal
+  [open]="editing() !== null"
+  [title]="editingCustomer() ? 'Editar cliente' : 'Nuevo cliente'"
+  (closed)="close()"
+>
+  <form class="customers__form" [formGroup]="form" (ngSubmit)="save()" novalidate>
+    <app-form-field label="Tipo de identificación" required>
+      <select formControlName="identificationType">
+        @for (type of identificationTypes; track type.value) {
+          <option [value]="type.value">{{ type.label }}</option>
+        }
+      </select>
+    </app-form-field>
+
+    <app-form-field
+      label="Número de identificación"
+      hint="Introduce el número correspondiente al tipo seleccionado."
+      [error]="fieldError('identification')"
+      required
+    >
+      <input formControlName="identification" autocomplete="off" />
+    </app-form-field>
+
+    <app-form-field label="Nombre o razón social" [error]="fieldError('name')" required>
+      <input formControlName="name" autocomplete="off" />
+    </app-form-field>
+
+    <app-form-field label="Dirección">
+      <input formControlName="address" autocomplete="off" />
+    </app-form-field>
+
+    <app-form-field label="Teléfono" [error]="fieldError('phone')">
+      <input formControlName="phone" type="tel" autocomplete="off" />
+    </app-form-field>
+
+    <app-form-field
+      label="Correo"
+      hint="Aquí se envía la factura electrónica."
+      [error]="fieldError('email')"
+    >
+      <input formControlName="email" type="email" autocomplete="off" />
+    </app-form-field>
+
+    <div class="customers__actions">
+      <app-button variant="ghost" [disabled]="saving()" (clicked)="close()">
+        Cancelar
+      </app-button>
+      <app-button type="submit" [loading]="saving()">Guardar</app-button>
+    </div>
+  </form>
+</app-modal>

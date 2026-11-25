@@ -9,9 +9,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
-from app.api.deps import ContextoActual, DbSession, EmpresaId
+from app.api.deps import ContextoActual, DbSession, EmpresaId, SoloAdministrador
 from app.core.errors import ForbiddenError
-from app.schemas.common import Page
+from app.schemas.common import Page, VoidRequest
 from app.schemas.gasto import (
     Expense,
     ExpenseCategory,
@@ -131,3 +131,10 @@ def create_expense(datos: ExpenseCreate, contexto: ContextoActual, db: DbSession
 def update_expense(id: Id, datos: ExpenseUpdate, contexto: ContextoActual, db: DbSession):
     _id_usuario(contexto)
     return GastoService(db, contexto.empresa_id).actualizar(id, datos)
+
+
+# RF-3.7: solo el Administrador anula; el gasto queda en el historial como "anulado".
+@router.post("/expenses/{id}/void", response_model=Expense)
+def void_expense(id: Id, datos: VoidRequest, contexto: SoloAdministrador, db: DbSession):
+    _id_usuario(contexto)
+    return GastoService(db, contexto.empresa_id).anular(id, datos.reason, contexto.nombre)

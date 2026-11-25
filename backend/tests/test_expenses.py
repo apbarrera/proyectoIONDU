@@ -238,3 +238,37 @@ def test_cada_empresa_ve_solo_sus_gastos(client, empresas, usuario):
     gasto = _gasto(client, usuario, _categoria(client, a)).json()
     assert client.get(f"/api/expenses/{gasto['id']}", headers=_h(b)).status_code == 404
     assert client.get("/api/expenses", headers=_h(b)).json()["total"] == 0
+
+
+# ---------- Anular (RF-3.7) ----------
+def test_anular_un_gasto(client, empresas, usuario, nuevo_usuario):
+    from app.models.rol import OPERATIVO
+
+    a, _ = empresas
+    gasto = _gasto(client, usuario, _categoria(client, a), total=40).json()
+    url = f"/api/expenses/{gasto['id']}"
+
+    operador = nuevo_usuario(a, rol=OPERATIVO)
+    no = client.post(f"{url}/void", json={"reason": "Duplicado"}, headers=con_token(operador))
+    assert (no.status_code, no.json()["error"]["code"]) == (403, "FORBIDDEN")
+    assert (
+        client.post(f"{url}/void", json={"reason": ""}, headers=con_token(usuario)).status_code
+        == 422
+    )
+
+    response = client.post(f"{url}/void", json={"reason": "Duplicado"}, headers=con_token(usuario))
+    assert response.status_code == 200, response.text
+    anulado = response.json()
+    assert anulado["status"] == "anulado"
+    assert "ANULADO" in anulado["description"] and "Duplicado" in anulado["description"]
+
+    otra_vez = client.post(f"{url}/void", json={"reason": "X"}, headers=con_token(usuario))
+    assert (otra_vez.status_code, otra_vez.json()["error"]["code"]) == (
+        409,
+        "EXPENSE_ALREADY_VOIDED",
+    )
+    editar = client.patch(url, json={"total": 1}, headers=con_token(usuario))
+    assert (editar.status_code, editar.json()["error"]["code"]) == (409, "EXPENSE_VOIDED")
+    # Sigue en el historial, pero ya no cuenta en el dashboard.
+    assert client.get("/api/expenses", headers=_h(a)).json()["total"] == 1
+    assert client.get("/api/dashboard", headers=_h(a)).json()["expenses"] == 0

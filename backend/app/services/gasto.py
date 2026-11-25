@@ -33,6 +33,7 @@ from app.services.venta import _rango_del_dia
 from app.sri.identificacion import CONSUMIDOR_FINAL, TipoIdentificacion, validar_identificacion
 
 PREDEFINIDA = "PREDEFINIDA"
+ANULADO = "ANULADO"
 DEL_USUARIO = "USUARIO"
 CATEGORIAS_PREDEFINIDAS = (  # RF-3.5
     "Materia prima",
@@ -314,6 +315,8 @@ class GastoService:
         if encontrado is None:
             raise NotFoundError("El gasto no existe.")
         gasto = encontrado[0]
+        if gasto.estado == ANULADO:
+            raise ConflictError("Un gasto anulado no se puede editar.", code="EXPENSE_VOIDED")
         cambios = datos.model_dump(exclude_unset=True)
         _vacio_no_permitido(
             cambios,
@@ -338,5 +341,20 @@ class GastoService:
         for campo, valor in cambios.items():
             columna, convertir = columnas[campo]
             setattr(gasto, columna, convertir(valor) if valor is not None else None)
+        self._db.commit()
+        return self.obtener(id_gasto)
+
+    def anular(self, id_gasto: int, motivo: str, quien: str | None) -> Expense:
+        """RF-3.7: el gasto no se borra; queda `anulado`, con el motivo, y deja de contar."""
+        encontrado = self._repo.obtener(id_gasto)
+        if encontrado is None:
+            raise NotFoundError("El gasto no existe.")
+        gasto = encontrado[0]
+        if gasto.estado == ANULADO:
+            raise ConflictError("El gasto ya está anulado.", code="EXPENSE_ALREADY_VOIDED")
+        fecha = datetime.now(_ZONA).strftime("%d/%m/%Y %H:%M")
+        nota = f"[ANULADO el {fecha} por {quien or 'usuario'}: {motivo}]"
+        gasto.concepto = f"{gasto.concepto} {nota}"
+        gasto.estado = ANULADO
         self._db.commit()
         return self.obtener(id_gasto)

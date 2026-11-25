@@ -53,6 +53,17 @@ Si el dominio está en Cloudflare con el proxy activado (nube naranja), usar el 
 
 Plantilla en [`.env.example`](../.env.example). **Nunca** se suben al repositorio el archivo `.env`, ni certificados `.p12`/`.pfx`; el `.gitignore` ya los excluye.
 
+### Llave maestra (`MASTER_ENCRYPTION_KEY`) — importante
+
+Cifra los certificados `.p12` de las empresas y sus contraseñas dentro de la base de datos.
+
+1. Generarla **una vez por ambiente** (staging y producción tienen llaves distintas):
+   `docker compose run --rm api python -m app.core.cifrado` (imprime 44 caracteres en base64).
+2. Cargarla en las variables de entorno del despliegue (Coolify: **Environment Variables**).
+3. **Respaldarla en un gestor de contraseñas fuera del servidor.** Si se pierde, los certificados guardados no se
+   pueden recuperar y cada empresa tendría que volver a subir su `.p12`.
+4. No cambiarla con certificados ya guardados: se dejarían de poder descifrar.
+
 ## Qué incluye la imagen del frontend
 
 - Compila con Node 22 y sirve con Nginx Alpine (imagen final pequeña).
@@ -68,6 +79,7 @@ Plantilla en [`.env.example`](../.env.example). **Nunca** se suben al repositori
 3. Esquema de base de datos con migraciones, y Supabase Auth.
 4. Conectar a Supabase por el **Session Pooler** (`*.pooler.supabase.com:5432`): la conexión directa es solo IPv6 y Docker en un VPS sale normalmente por IPv4.
 5. Guardar los `.p12` cifrados (AES-GCM) en la base o en Supabase Storage: así ningún contenedor necesita volúmenes.
+   El cifrado ya está implementado (`backend/app/core/cifrado.py`); falta la columna en la base.
 
 ## Comandos útiles
 

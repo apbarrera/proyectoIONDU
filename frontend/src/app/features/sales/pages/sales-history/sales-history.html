@@ -56,7 +56,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (item of sale.items; track item.productId) {
+          @for (item of sale.items; track $index) {
             <tr>
               <td>{{ item.productName }}</td>
               <td>{{ item.quantity }}</td>
@@ -92,25 +92,16 @@
         }
       </ul>
 
-      @if (invoice.status === 'rechazada') {
-        <div class="sale-detail__action">
-          <label class="sale-detail__label" for="retry-id">Corrige la cédula o el RUC antes de reintentar</label>
-          <input id="retry-id" class="sale-detail__input" inputmode="numeric" [ngModel]="idDraft()" (ngModelChange)="idDraft.set($event)" [attr.aria-invalid]="!!idError()" />
-          @if (idError()) {
-            <p class="sale-detail__error" role="alert">{{ idError() }}</p>
-          }
-          <app-button [loading]="busy()" [disabled]="!!idError()" (clicked)="retryInvoice(sale)">Reintentar emisión</app-button>
-        </div>
-      }
-    } @else {
-      <p class="sale-detail__hint">Esta venta se registró sin factura electrónica. Puedes emitirla ahora.</p>
       <div class="sale-detail__action">
-        <label class="sale-detail__label" for="issue-id">Cédula o RUC del cliente</label>
-        <input id="issue-id" class="sale-detail__input" inputmode="numeric" [ngModel]="idDraft()" (ngModelChange)="idDraft.set($event)" [attr.aria-invalid]="!!idError()" />
-        @if (idError()) {
-          <p class="sale-detail__error" role="alert">{{ idError() }}</p>
-        }
-        <app-button [loading]="busy()" [disabled]="!!idError()" (clicked)="issueInvoice(sale)">Emitir factura electrónica</app-button>
+        <app-button [loading]="busy()" (clicked)="downloadRide(sale)">Descargar RIDE (PDF)</app-button>
+      </div>
+    } @else {
+      <p class="sale-detail__hint">
+        Esta venta no tiene una factura emitida en esta sesión. Si ya se facturó antes, el sistema
+        avisará al intentar emitirla de nuevo.
+      </p>
+      <div class="sale-detail__action">
+        <app-button [loading]="busy()" (clicked)="issueInvoice(sale)">Emitir factura electrónica</app-button>
       </div>
     }
   }

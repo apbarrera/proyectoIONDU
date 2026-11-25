@@ -1,10 +1,12 @@
-export type ProductType = 'simple' | 'insumo';
+export type ProductType = 'venta' | 'insumo' | 'ambos';
 
 export interface Product {
   id: string;
   sku: string;
   name: string;
+  description?: string | null;
   category: string;
+  categoryId?: number;
   type: ProductType;
   unit: string;
   salePrice: number | null;

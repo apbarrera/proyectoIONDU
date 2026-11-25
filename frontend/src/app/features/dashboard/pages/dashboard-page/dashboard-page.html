@@ -25,11 +25,11 @@
   </app-card>
 
   <app-card title="Productos con stock bajo">
-    @if (productsService.lowStockProducts().length === 0) {
+    @if (summary().inventory.lowStockProducts.length === 0) {
       <app-empty-state icon="check-circle" title="Todo el inventario está saludable." />
     } @else {
       <ul class="dashboard-page__list">
-        @for (product of productsService.lowStockProducts(); track product.id) {
+        @for (product of summary().inventory.lowStockProducts; track product.productId) {
           <li>
             <span class="dashboard-page__list-name">{{ product.name }}</span>
             <span class="dashboard-page__list-meta dashboard-page__list-meta--warn">{{ product.currentStock }} / {{ product.minStock }} {{ product.unit }}</span>
@@ -38,6 +38,25 @@
       </ul>
       <a routerLink="/inventory/alerts" class="dashboard-page__link">Ver todas las alertas <app-icon name="arrow-right" [size]="16" /></a>
     }
+  </app-card>
+
+  <app-card title="Gastos por categoría">
+    @if (summary().expensesByCategory.length === 0) {
+      <app-empty-state icon="inventory" title="Sin gastos en este período." />
+    } @else {
+      <ul class="dashboard-page__list">
+        @for (category of summary().expensesByCategory; track category.categoryId) {
+          <li>
+            <span class="dashboard-page__list-name">{{ category.name }}</span>
+            <span class="dashboard-page__list-meta">${{ category.total.toFixed(2) }}</span>
+          </li>
+        }
+      </ul>
+    }
+    <p class="dashboard-page__recommendations-text">
+      Valor del inventario: ${{ summary().inventory.inventoryValue.toFixed(2) }} ·
+      {{ summary().inventory.activeProducts }} productos activos.
+    </p>
   </app-card>
 
   <app-card title="Recomendaciones">

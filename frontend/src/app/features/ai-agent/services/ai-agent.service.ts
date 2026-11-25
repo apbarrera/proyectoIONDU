@@ -89,8 +89,6 @@ export class AiAgentService {
       const expense = interaction.proposal.expense;
       const amount = overrides?.amount ?? expense.amount;
       const category = overrides?.category ?? expense.category;
-      const ivaRate = this.tenant.tenant().ivaRate;
-      const ivaAmount = Math.round(amount * ivaRate * 100) / 100;
 
       this.expenses
         .createExpense({
@@ -98,12 +96,9 @@ export class AiAgentService {
           category,
           providerName: expense.providerName,
           providerRuc: '',
-          amount,
-          ivaAmount,
-          total: Math.round((amount + ivaAmount) * 100) / 100,
+          total: amount,
           paymentMethod: 'efectivo',
           description: `Gasto registrado por el Agente IA a partir de: "${interaction.instruction}"`,
-          sourceType: 'manual',
         })
         .subscribe();
     }

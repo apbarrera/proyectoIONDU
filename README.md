@@ -17,8 +17,41 @@ PWA para PyMEs ecuatorianas: facturación electrónica, ventas, gastos, inventar
 
 ```bash
 cp .env.example .env
+# Completar en .env: POSTGRES_PASSWORD, APP_ENV=development, las tres conexiones
+# (DATABASE_URL, WORKER_DATABASE_URL, MIGRATION_DATABASE_URL; ver la nota en .env.example)
+# y DEV_USER_ID=11111111-1111-1111-1111-111111111111
 docker compose up --build
-# abrir http://localhost:8080
+# abrir http://localhost:8080 (API interactiva en http://localhost:8080/api/docs)
+```
+
+Base local por primera vez (desde `backend/`, con Docker encendido). En la computadora la base
+está en `127.0.0.1:15432`, así que las conexiones se pasan con ese host en vez de `db`:
+
+```powershell
+$env:DATABASE_URL = "postgresql+psycopg://iondu:<POSTGRES_PASSWORD>@127.0.0.1:15432/iondu"
+$env:MIGRATION_DATABASE_URL = $env:DATABASE_URL; $env:WORKER_DATABASE_URL = $env:DATABASE_URL
+$env:APP_ENV = "development"
+.venv\Scripts\python.exe scripts\bootstrap_local_auth.py   # auth.users local (en vez de Supabase)
+.venv\Scripts\alembic.exe upgrade head                     # crea el esquema completo
+.venv\Scripts\python.exe -m scripts.cargar_datos_demo      # cafetería demo con un mes de datos
+```
+
+## Pruebas del backend
+
+Corren con un usuario **restringido** (`iondu_test_runner`, sin SUPERUSER ni BYPASSRLS), igual que en
+el CI, para demostrar que las políticas RLS aíslan a cada empresa. Crearlo una vez (con Docker encendido),
+eligiendo una clave:
+
+```powershell
+docker exec proyectoiondu-db-1 psql -U iondu -d postgres -c "CREATE DATABASE iondu_test OWNER iondu" -c "CREATE ROLE iondu_test_runner LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<clave>'"
+docker exec proyectoiondu-db-1 psql -U iondu -d iondu_test -c "GRANT CONNECT, CREATE, TEMP ON DATABASE iondu_test TO iondu_test_runner" -c "GRANT USAGE, CREATE ON SCHEMA public TO iondu_test_runner"
+```
+
+Luego, desde `backend/`:
+
+```powershell
+$env:TEST_DATABASE_URL = "postgresql+psycopg://iondu_test_runner:<clave>@127.0.0.1:15432/iondu_test"
+.venv\Scripts\python.exe -m pytest -q
 ```
 
 ## Ejecutar sin Docker (desarrollo del frontend)

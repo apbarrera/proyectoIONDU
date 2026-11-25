@@ -8,9 +8,9 @@
 ARG PYTHON_VERSION=3.12
 
 # ---------- Etapa 1: dependencias ----------
-# Cuando se agregue la firma XAdES-BES del SRI (python-xmlsec), instalar aquí
-# build-essential, pkg-config, libxml2-dev y libxmlsec1-dev, y las librerías
-# de ejecución (libxml2, libxmlsec1-openssl) en la etapa runtime.
+# Todas las dependencias se instalan como wheels precompilados: la firma XAdES-BES
+# del SRI usa lxml y cryptography (app/sri/xades.py), sin python-xmlsec ni
+# librerías del sistema.
 FROM python:${PYTHON_VERSION}-slim-bookworm AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -21,12 +21,16 @@ COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
 
 # ---------- Etapa de pruebas: docker build --target test . ----------
+# Primero la revisión de código (Ruff) y luego las pruebas; si algo falla, falla el build.
 FROM builder AS test
 COPY requirements-dev.txt .
 RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements-dev.txt
 WORKDIR /src
+COPY pyproject.toml alembic.ini ./
 COPY app ./app
+COPY alembic ./alembic
 COPY tests ./tests
+RUN ruff check . && ruff format --check .
 RUN python -m pytest -q
 
 # ---------- Etapa 2: runtime ----------
@@ -48,6 +52,9 @@ RUN groupadd --system --gid 10001 app \
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY --chown=app:app app ./app
+# Alembic se ejecuta desde un entorno administrativo separado, nunca desde API o worker.
+COPY --chown=app:app alembic.ini ./
+COPY --chown=app:app alembic ./alembic
 
 USER app
 EXPOSE 8000

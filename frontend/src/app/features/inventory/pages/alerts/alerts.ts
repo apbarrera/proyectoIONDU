@@ -15,6 +15,10 @@ import { Icon } from '../../../../shared/components/icon/icon';
 export class Alerts {
   productsService = inject(ProductsService);
 
+  constructor() {
+    this.productsService.refresh();
+  }
+
   severity(currentStock: number, minStock: number): 'danger' | 'warning' {
     return currentStock <= 0 ? 'danger' : currentStock <= minStock * 0.5 ? 'danger' : 'warning';
   }

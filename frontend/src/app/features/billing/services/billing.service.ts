@@ -1,137 +1,96 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, map, switchMap, tap } from 'rxjs';
-import { Invoice, InvoiceCustomer, InvoiceStatus } from '../models/invoice.model';
-import { Sale, SaleLineItem } from '../../sales/models/sale.model';
-import { INVOICES_MOCK } from '../../../mocks/billing.mock';
-import { simulateRequest } from '../../../core/services/mock-http.util';
-import { generateId } from '../../../core/utils/id.util';
-import { BillingAdapterService } from './billing-adapter.service';
-import { AuditService } from '../../../core/services/audit.service';
-import { AuthService } from '../../../core/services/auth.service';
-import { TenantService } from '../../../core/services/tenant.service';
+import { HttpClient } from '@angular/common/http';
+import { Observable, map, tap } from 'rxjs';
 
-export interface NewInvoiceInput {
-  saleId?: string;
-  customer: InvoiceCustomer;
-  items: SaleLineItem[];
+import { environment } from '../../../../environments/environment';
+import { Invoice, InvoiceStatus } from '../models/invoice.model';
+import { Sale } from '../../sales/models/sale.model';
+
+type BackendInvoiceStatus = 'autorizada' | 'rechazada' | 'por_enviar' | 'por_autorizar';
+
+interface InvoiceDto {
+  id: number;
+  saleId: number;
+  invoiceNumber: string;
+  accessKey: string;
+  authorizationStatus: BackendInvoiceStatus;
+  authorizationNumber: string | null;
+  authorizationDate: string | null;
+  messages: { identifier: string; message: string; additionalInformation: string | null; type: string }[];
+  issueDate: string;
+  subtotal: number;
+  taxes: number;
+  total: number;
 }
 
+const STATUS_MAP: Record<BackendInvoiceStatus, InvoiceStatus> = {
+  autorizada: 'autorizada',
+  rechazada: 'rechazada',
+  por_enviar: 'procesando',
+  por_autorizar: 'pendiente',
+};
+
+/**
+ * Facturas electrónicas emitidas por el backend (`POST /api/sales/{id}/invoice`).
+ *
+ * Todavía no existe un endpoint para listar facturas ni la venta trae su estado, así que
+ * `invoices` solo contiene las emitidas en esta sesión del navegador.
+ */
 @Injectable({ providedIn: 'root' })
 export class BillingService {
-  private adapter = inject(BillingAdapterService);
-  private audit = inject(AuditService);
-  private auth = inject(AuthService);
-  private tenant = inject(TenantService);
+  private readonly http = inject(HttpClient);
+  private readonly salesUrl = `${environment.apiUrl}/sales`;
 
-  #invoices = signal<Invoice[]>(INVOICES_MOCK);
+  #invoices = signal<Invoice[]>([]);
   readonly invoices = this.#invoices.asReadonly();
 
-  getInvoices(): Observable<Invoice[]> {
-    return simulateRequest(this.#invoices());
-  }
-
-  getInvoice(id: string): Invoice | undefined {
-    return this.#invoices().find((i) => i.id === id);
-  }
-
-  createDraft(input: NewInvoiceInput): Observable<Invoice> {
-    const ivaRate = this.tenant.tenant().ivaRate;
-    const subtotal = Math.round(input.items.reduce((sum, i) => sum + i.subtotal, 0) * 100) / 100;
-    const iva = Math.round(subtotal * ivaRate * 100) / 100;
-    const now = new Date().toISOString();
-
-    const invoice: Invoice = {
-      id: generateId(),
-      saleId: input.saleId,
-      numero: this.#nextNumero(),
-      claveAcceso: null,
-      customer: input.customer,
-      items: input.items,
-      subtotal,
-      iva,
-      total: Math.round((subtotal + iva) * 100) / 100,
-      status: 'borrador',
-      statusHistory: [{ status: 'borrador', timestamp: now }],
-      createdAt: now,
-      createdBy: this.auth.currentUser()?.fullName ?? 'Usuario',
-    };
-
-    this.#invoices.update((list) => [invoice, ...list]);
-    return simulateRequest(invoice);
-  }
-
-  /** Factura vinculada a una venta, si la tiene. */
   getInvoiceForSale(saleId: string): Invoice | undefined {
     return this.#invoices().find((i) => i.saleId === saleId);
   }
 
-  /** Crea la factura de una venta y la envía a autorización. Se usa al vender y al emitir después. */
-  invoiceSale(sale: Sale, customer: InvoiceCustomer): Observable<Invoice> {
-    return this.createDraft({ saleId: sale.id, customer, items: sale.items }).pipe(
-      switchMap((draft) => this.emit(draft.id)),
-    );
-  }
-
-  /** Reintenta una factura rechazada, opcionalmente corrigiendo antes los datos del cliente. */
-  retry(invoiceId: string, customer?: InvoiceCustomer): Observable<Invoice> {
-    if (customer) {
-      this.#invoices.update((list) => list.map((inv) => (inv.id === invoiceId ? { ...inv, customer } : inv)));
-    }
-    return this.emit(invoiceId);
-  }
-
-  /** Walks a draft invoice through borrador → procesando → pendiente → autorizada/rechazada. */
-  emit(invoiceId: string): Observable<Invoice> {
-    this.#transition(invoiceId, 'procesando');
-
-    return simulateRequest(null, { minDelay: 900, maxDelay: 1300 }).pipe(
-      tap(() => this.#transition(invoiceId, 'pendiente')),
-      switchMap(() => this.adapter.submit(invoiceId)),
-      tap((result) => this.#finalize(invoiceId, result.status, result.claveAcceso, result.rejectionReason)),
-      map(() => this.getInvoice(invoiceId)!),
-    );
-  }
-
-  #transition(invoiceId: string, status: InvoiceStatus): void {
-    this.#invoices.update((list) =>
-      list.map((inv) =>
-        inv.id === invoiceId
-          ? { ...inv, status, statusHistory: [...inv.statusHistory, { status, timestamp: new Date().toISOString() }] }
-          : inv,
+  /**
+   * Emite la factura electrónica de una venta: el backend arma el XML, lo firma con el `.p12`
+   * de la empresa, lo envía al SRI y genera el RIDE. El cliente sale de la propia venta.
+   */
+  invoiceSale(sale: Sale, email = ''): Observable<Invoice> {
+    return this.http.post<InvoiceDto>(`${this.salesUrl}/${encodeURIComponent(sale.id)}/invoice`, {}).pipe(
+      map((dto) => this.toInvoice(dto, sale, email)),
+      tap((invoice) =>
+        this.#invoices.update((list) => [invoice, ...list.filter((i) => i.saleId !== invoice.saleId)]),
       ),
     );
   }
 
-  #finalize(invoiceId: string, status: InvoiceStatus, claveAcceso: string, rejectionReason?: string): void {
-    const now = new Date().toISOString();
-    this.#invoices.update((list) =>
-      list.map((inv) =>
-        inv.id === invoiceId
-          ? {
-              ...inv,
-              status,
-              claveAcceso,
-              rejectionReason,
-              authorizedAt: status === 'autorizada' ? now : inv.authorizedAt,
-              statusHistory: [...inv.statusHistory, { status, timestamp: now }],
-            }
-          : inv,
-      ),
-    );
-
-    const invoice = this.getInvoice(invoiceId);
-    const user = this.auth.currentUser();
-    this.audit.log({
-      userId: user?.id ?? '',
-      userName: user?.fullName ?? 'Usuario',
-      module: 'facturacion',
-      action: status === 'autorizada' ? 'Factura autorizada' : 'Factura rechazada',
-      description: `Factura ${invoice?.numero} fue ${status === 'autorizada' ? 'autorizada' : 'rechazada'} por el servicio de facturación.`,
+  /** Descarga el RIDE (PDF) de la factura de una venta. */
+  downloadRide(saleId: string): Observable<Blob> {
+    return this.http.get(`${this.salesUrl}/${encodeURIComponent(saleId)}/invoice/ride`, {
+      responseType: 'blob',
     });
   }
 
-  #nextNumero(): string {
-    const seq = this.#invoices().length + 99;
-    return `001-001-${String(seq).padStart(9, '0')}`;
+  private toInvoice(dto: InvoiceDto, sale: Sale, email: string): Invoice {
+    const status = STATUS_MAP[dto.authorizationStatus];
+    const errors = dto.messages.filter((m) => m.type === 'ERROR').map((m) => m.message);
+
+    return {
+      id: String(dto.id),
+      saleId: String(dto.saleId),
+      numero: dto.invoiceNumber,
+      claveAcceso: dto.accessKey,
+      customer: {
+        rucOrCedula: sale.customerIdentification ?? '9999999999999',
+        razonSocial: sale.customerName,
+        email,
+      },
+      items: sale.items,
+      subtotal: dto.subtotal,
+      iva: dto.taxes,
+      total: dto.total,
+      status,
+      statusHistory: [{ status, timestamp: dto.authorizationDate ?? dto.issueDate }],
+      rejectionReason: status === 'rechazada' ? (errors.join(' ') || 'El SRI rechazó la factura.') : undefined,
+      createdAt: dto.issueDate,
+      authorizedAt: dto.authorizationDate ?? undefined,
+    };
   }
 }

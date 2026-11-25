@@ -9,7 +9,7 @@ const CATALOG = [
 ] as const;
 
 const CUSTOMERS = ['Consumidor Final', 'Cafetería Buen Día', 'Panadería La Espiga', 'Eventos Martínez', 'Consumidor Final'];
-const PAYMENTS = ['efectivo', 'tarjeta', 'transferencia'] as const;
+const PAYMENTS = ['efectivo', 'tarjeta_debito', 'tarjeta_credito', 'transferencia'] as const;
 const CASHIERS = ['Juan Carlos Pérez', 'María Fernanda Salazar'];
 
 const HISTORY_DAYS = 45;

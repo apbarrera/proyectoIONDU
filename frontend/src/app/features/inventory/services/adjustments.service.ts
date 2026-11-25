@@ -1,63 +1,72 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, throwError } from 'rxjs';
-import { StockAdjustment } from '../models/adjustment.model';
-import { simulateRequest } from '../../../core/services/mock-http.util';
-import { generateId } from '../../../core/utils/id.util';
-import { ProductsService } from './products.service';
-import { AuditService } from '../../../core/services/audit.service';
-import { AuthService } from '../../../core/services/auth.service';
+import { HttpClient } from '@angular/common/http';
+import { Observable, map, tap } from 'rxjs';
 
+import { environment } from '../../../../environments/environment';
+import { StockAdjustment } from '../models/adjustment.model';
+import { MovementsService } from './movements.service';
+import { ProductsService } from './products.service';
+
+interface StockAdjustmentDto {
+  id: number;
+  productId: number;
+  productName: string;
+  previousStock: number;
+  newStock: number;
+  quantityDelta: number;
+  reason: string;
+  date: string;
+  createdBy: string;
+}
+
+function toAdjustment(dto: StockAdjustmentDto): StockAdjustment {
+  return { ...dto, id: String(dto.id), productId: String(dto.productId) };
+}
+
+/** Ajustes al conteo físico (`POST /api/inventory/adjustments`, solo Administrador). */
 @Injectable({ providedIn: 'root' })
 export class AdjustmentsService {
-  private products = inject(ProductsService);
-  private audit = inject(AuditService);
-  private auth = inject(AuthService);
+  private readonly http = inject(HttpClient);
+  private readonly movementsApi = inject(MovementsService);
+  private readonly products = inject(ProductsService);
+  private readonly baseUrl = `${environment.apiUrl}/inventory/adjustments`;
 
   #adjustments = signal<StockAdjustment[]>([]);
   readonly adjustments = this.#adjustments.asReadonly();
 
+  /**
+   * El historial de ajustes sale de los movimientos de tipo `ajuste`: el stock anterior es el
+   * resultante menos la cantidad (que lleva signo).
+   */
   getAdjustments(): Observable<StockAdjustment[]> {
-    return simulateRequest(this.#adjustments());
+    return this.movementsApi.getMovements('ajuste').pipe(
+      map((movements) =>
+        movements.map((m) => ({
+          id: m.id,
+          productId: m.productId,
+          productName: m.productName,
+          previousStock: Math.round((m.resultingStock - m.quantity) * 1000) / 1000,
+          newStock: m.resultingStock,
+          quantityDelta: m.quantity,
+          reason: m.reference,
+          date: m.date,
+          createdBy: m.createdBy,
+        })),
+      ),
+      tap((adjustments) => this.#adjustments.set(adjustments)),
+    );
   }
 
+  /** Fija el stock real del producto. Se envía el stock nuevo, no la diferencia. */
   createAdjustment(productId: string, newStock: number, reason: string): Observable<StockAdjustment> {
-    const product = this.products.getProduct(productId);
-    if (!product) return throwError(() => new Error('Producto no encontrado.'));
-
-    const previousStock = product.currentStock;
-    const delta = Math.round((newStock - previousStock) * 1000) / 1000;
-    const user = this.auth.currentUser();
-    const userName = user?.fullName ?? 'Usuario';
-
-    this.products.applyStockChange({
-      productId,
-      delta,
-      type: 'ajuste',
-      reference: `Ajuste manual: ${reason}`,
-      createdBy: userName,
-    });
-
-    const adjustment: StockAdjustment = {
-      id: generateId(),
-      productId,
-      productName: product.name,
-      previousStock,
-      newStock,
-      quantityDelta: delta,
-      reason,
-      date: new Date().toISOString(),
-      createdBy: userName,
-    };
-    this.#adjustments.update((list) => [adjustment, ...list]);
-
-    this.audit.log({
-      userId: user?.id ?? '',
-      userName,
-      module: 'inventario',
-      action: 'Ajustó inventario',
-      description: `${userName} ajustó el stock de ${product.name} de ${previousStock} a ${newStock} ${product.unit}.`,
-    });
-
-    return simulateRequest(adjustment);
+    return this.http
+      .post<StockAdjustmentDto>(this.baseUrl, { productId: Number(productId), newStock, reason: reason.trim() })
+      .pipe(
+        map(toAdjustment),
+        tap((adjustment) => {
+          this.#adjustments.update((list) => [adjustment, ...list]);
+          this.products.refresh();
+        }),
+      );
   }
 }

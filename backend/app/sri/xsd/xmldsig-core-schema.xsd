@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  IONDU · Reemplazo MÍNIMO del esquema de firma XML del W3C (xmldsig-core-schema.xsd).
+
+  factura_V2.1.0.xsd (SRI) lo importa solo para el elemento opcional ds:Signature.
+  Este reemplazo acepta ese elemento con cualquier contenido (processContents="skip"),
+  así se validan facturas SIN firmar sin descargar el esquema real del W3C, que a su
+  vez pide otros archivos por internet. NO valida el contenido de la firma.
+  Ver docs/DECISIONES.md, 2.19.
+-->
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+	targetNamespace="http://www.w3.org/2000/09/xmldsig#"
+	elementFormDefault="qualified">
+	<xsd:element name="Signature">
+		<xsd:complexType>
+			<xsd:sequence>
+				<xsd:any processContents="skip" minOccurs="0" maxOccurs="unbounded"/>
+			</xsd:sequence>
+			<xsd:anyAttribute processContents="skip"/>
+		</xsd:complexType>
+	</xsd:element>
+</xsd:schema>

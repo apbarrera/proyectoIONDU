@@ -4,16 +4,20 @@
   [breadcrumb]="[{ label: 'Configuración', link: '/settings/company' }, { label: 'Empresa' }]"
 />
 
+@if (!isAdmin()) {
+  <p class="company__notice" role="note">Solo el Administrador puede modificar los datos de la empresa.</p>
+}
+
 <app-card title="Datos generales">
   <form [formGroup]="form" class="company__form">
     <app-form-field label="Razón social" required>
       <input formControlName="businessName" />
     </app-form-field>
-    <app-form-field label="Nombre comercial" required>
+    <app-form-field label="Nombre comercial">
       <input formControlName="tradeName" />
     </app-form-field>
-    <app-form-field label="RUC" required hint="13 dígitos">
-      <input formControlName="ruc" />
+    <app-form-field label="RUC" hint="No se puede cambiar: va dentro de cada clave de acceso.">
+      <input [value]="tenant()?.ruc ?? ''" readonly />
     </app-form-field>
     <app-form-field label="Actividad económica">
       <input formControlName="economicActivity" />
@@ -21,29 +25,82 @@
     <app-form-field label="Dirección">
       <input formControlName="address" />
     </app-form-field>
-    <app-form-field label="Teléfono">
-      <input formControlName="phone" />
-    </app-form-field>
-    <app-form-field label="Correo">
+    <app-form-field label="Correo" required>
       <input type="email" formControlName="email" />
     </app-form-field>
   </form>
 
-  <app-button (clicked)="save()">Guardar cambios</app-button>
+  <app-button [loading]="savingGeneral()" [disabled]="!isAdmin()" (clicked)="save()">Guardar cambios</app-button>
+</app-card>
+
+<div class="company__spacer"></div>
+
+<app-card title="Configuración de facturación">
+  @if (!tenant()?.billing) {
+    <p class="company__signature-status">
+      <app-icon name="warning" [size]="16" /> Todavía no configuras la facturación: sin ella no se pueden emitir facturas.
+    </p>
+  }
+  <form [formGroup]="billingForm" class="company__form">
+    <app-form-field label="Ambiente" required hint="Pruebas no tiene validez legal.">
+      <select formControlName="environment">
+        <option value="pruebas">Pruebas (SRI de pruebas)</option>
+        <option value="produccion">Producción</option>
+      </select>
+    </app-form-field>
+    <app-form-field label="Establecimiento" required hint="3 dígitos">
+      <input formControlName="establishment" inputmode="numeric" maxlength="3" />
+    </app-form-field>
+    <app-form-field label="Punto de emisión" required hint="3 dígitos">
+      <input formControlName="emissionPoint" inputmode="numeric" maxlength="3" />
+    </app-form-field>
+    <app-form-field label="Contribuyente especial" hint="Número de resolución. Déjalo vacío si no aplica.">
+      <input formControlName="specialTaxpayer" inputmode="numeric" maxlength="13" />
+    </app-form-field>
+    <label class="company__check"><input type="checkbox" formControlName="requiredToKeepAccounts" /> Obligado a llevar contabilidad</label>
+    <label class="company__check"><input type="checkbox" formControlName="rimpe" /> Régimen RIMPE</label>
+  </form>
+
+  <app-button [loading]="savingBilling()" [disabled]="!isAdmin()" (clicked)="saveBilling()">Guardar facturación</app-button>
 </app-card>
 
 <div class="company__spacer"></div>
 
 <app-card title="Firma electrónica">
   <p class="company__signature-status">
-    @if (tenant().electronicSignature.configured) {
-      <app-icon name="check-circle" [size]="16" /> Firma configurada — {{ tenant().electronicSignature.fileName }} (vence
-      {{ tenant().electronicSignature.expiresAt }})
-    } @else {
-      <app-icon name="warning" [size]="16" /> No hay una firma electrónica configurada.
+    @if (tenant()?.electronicSignature; as signature) {
+      @if (signature.configured && !signature.expired) {
+        <app-icon name="check-circle" [size]="16" /> Firma configurada — vence el {{ signature.expiresAt }}
+        @if (signature.expiresSoon) {
+          (vence pronto: renuévala)
+        }
+      } @else if (signature.expired) {
+        <app-icon name="warning" [size]="16" /> La firma venció el {{ signature.expiresAt }}. Sube una nueva.
+      } @else {
+        <app-icon name="warning" [size]="16" /> No hay una firma electrónica configurada.
+      }
     }
   </p>
-  <p class="company__signature-note">
-    La firma electrónica se utilizará para autorizar la facturación con el SRI cuando se conecte la integración real.
-  </p>
+
+  <div class="company__form">
+    <app-form-field label="Archivo de firma (.p12)" hint="Máximo 5 MiB. Se guarda cifrado; nunca en disco.">
+      <input type="file" accept=".p12" (change)="onCertificateSelected($event)" />
+    </app-form-field>
+    <app-form-field label="Contraseña de la firma">
+      <input
+        type="password"
+        autocomplete="off"
+        [value]="certificatePassword()"
+        (input)="certificatePassword.set($any($event.target).value)"
+      />
+    </app-form-field>
+  </div>
+
+  <app-button
+    [loading]="uploading()"
+    [disabled]="!isAdmin() || !certificateFile() || !certificatePassword()"
+    (clicked)="uploadCertificate()"
+  >
+    Subir firma
+  </app-button>
 </app-card>

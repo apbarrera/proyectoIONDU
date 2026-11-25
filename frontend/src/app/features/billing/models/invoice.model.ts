@@ -28,5 +28,5 @@ export interface Invoice {
   rejectionReason?: string;
   createdAt: string;
   authorizedAt?: string;
-  createdBy: string;
+  createdBy?: string;
 }

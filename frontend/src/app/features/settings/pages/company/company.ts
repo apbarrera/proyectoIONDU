@@ -1,9 +1,9 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { TenantService } from '../../../../core/services/tenant.service';
 import { ToastService } from '../../../../core/services/toast.service';
-import { AuditService } from '../../../../core/services/audit.service';
 import { AuthService } from '../../../../core/services/auth.service';
+import { BillingEnvironment } from '../../../../core/models/tenant.model';
 import { PageHeader } from '../../../../shared/components/page-header/page-header';
 import { Button } from '../../../../shared/components/button/button';
 import { Card } from '../../../../shared/components/card/card';
@@ -19,37 +19,124 @@ import { Icon } from '../../../../shared/components/icon/icon';
 export class Company {
   private tenantService = inject(TenantService);
   private toast = inject(ToastService);
-  private audit = inject(AuditService);
   private auth = inject(AuthService);
   private fb = inject(FormBuilder);
 
   tenant = this.tenantService.tenant;
+  loading = signal(true);
+  savingGeneral = signal(false);
+  savingBilling = signal(false);
+  uploading = signal(false);
+
+  /** Solo el Administrador modifica la empresa; el backend responde 403 a los demás. */
+  isAdmin = computed(() => this.auth.currentUser()?.role === 'admin');
+
+  certificateFile = signal<File | null>(null);
+  certificatePassword = signal('');
 
   form = this.fb.nonNullable.group({
-    businessName: [this.tenant().businessName, Validators.required],
-    tradeName: [this.tenant().tradeName, Validators.required],
-    ruc: [this.tenant().ruc, [Validators.required, Validators.pattern(/^\d{13}$/)]],
-    economicActivity: [this.tenant().economicActivity],
-    address: [this.tenant().address],
-    phone: [this.tenant().phone],
-    email: [this.tenant().email, Validators.email],
+    businessName: ['', Validators.required],
+    tradeName: [''],
+    economicActivity: [''],
+    address: [''],
+    email: ['', [Validators.required, Validators.email]],
   });
 
+  billingForm = this.fb.nonNullable.group({
+    environment: ['pruebas' as BillingEnvironment, Validators.required],
+    establishment: ['001', [Validators.required, Validators.pattern(/^\d{3}$/)]],
+    emissionPoint: ['001', [Validators.required, Validators.pattern(/^\d{3}$/)]],
+    requiredToKeepAccounts: [false],
+    rimpe: [false],
+    specialTaxpayer: ['', Validators.pattern(/^\d{1,13}$/)],
+  });
+
+  constructor() {
+    this.tenantService.getTenant().subscribe({
+      next: (tenant) => {
+        this.form.patchValue({
+          businessName: tenant.businessName,
+          tradeName: tenant.tradeName ?? '',
+          economicActivity: tenant.economicActivity ?? '',
+          address: tenant.address ?? '',
+          email: tenant.email,
+        });
+        if (tenant.billing) {
+          this.billingForm.patchValue({
+            ...tenant.billing,
+            specialTaxpayer: tenant.billing.specialTaxpayer ?? '',
+          });
+        }
+        this.loading.set(false);
+      },
+      error: () => this.loading.set(false),
+    });
+  }
+
   save(): void {
-    if (this.form.invalid) {
+    if (this.form.invalid || this.savingGeneral()) {
       this.form.markAllAsTouched();
       return;
     }
-    this.tenantService.updateTenant(this.form.getRawValue()).subscribe(() => {
-      this.toast.success('Datos de la empresa actualizados.');
-      const user = this.auth.currentUser();
-      this.audit.log({
-        userId: user?.id ?? '',
-        userName: user?.fullName ?? 'Usuario',
-        module: 'configuracion',
-        action: 'Actualizó configuración',
-        description: `${user?.fullName} modificó la configuración de la empresa.`,
+    const raw = this.form.getRawValue();
+    this.savingGeneral.set(true);
+    this.tenantService
+      .updateTenant({
+        businessName: raw.businessName.trim(),
+        tradeName: raw.tradeName.trim() || null,
+        economicActivity: raw.economicActivity.trim() || null,
+        address: raw.address.trim() || null,
+        email: raw.email.trim(),
+      })
+      .subscribe({
+        next: () => {
+          this.toast.success('Datos de la empresa actualizados.');
+          this.savingGeneral.set(false);
+        },
+        // El interceptor ya mostró el motivo del error.
+        error: () => this.savingGeneral.set(false),
       });
+  }
+
+  saveBilling(): void {
+    if (this.billingForm.invalid || this.savingBilling()) {
+      this.billingForm.markAllAsTouched();
+      return;
+    }
+    const raw = this.billingForm.getRawValue();
+    this.savingBilling.set(true);
+    this.tenantService
+      .saveBillingSettings({ ...raw, specialTaxpayer: raw.specialTaxpayer.trim() || null })
+      .subscribe({
+        next: () => {
+          this.toast.success('Configuración de facturación guardada.');
+          this.savingBilling.set(false);
+        },
+        error: () => this.savingBilling.set(false),
+      });
+  }
+
+  onCertificateSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.certificateFile.set(input.files?.[0] ?? null);
+  }
+
+  uploadCertificate(): void {
+    const file = this.certificateFile();
+    const password = this.certificatePassword();
+    if (!file || !password || this.uploading()) return;
+
+    this.uploading.set(true);
+    this.tenantService.uploadCertificate(file, password).subscribe({
+      next: () => {
+        this.toast.success('Firma electrónica guardada.');
+        this.certificateFile.set(null);
+        this.certificatePassword.set('');
+        this.uploading.set(false);
+        // Vuelve a pedir la empresa para ver el nuevo estado y vencimiento de la firma.
+        this.tenantService.getTenant().subscribe();
+      },
+      error: () => this.uploading.set(false),
     });
   }
 }

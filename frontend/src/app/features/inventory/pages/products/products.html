@@ -1,252 +1,129 @@
 <app-page-header
   title="Productos"
-  subtitle="Productos e insumos de tu inventario."
+  subtitle="Administra los productos para venta y los insumos de tu inventario."
   [breadcrumb]="[{ label: 'Inventario', link: '/inventory/products' }, { label: 'Productos' }]"
 >
-  <app-button (clicked)="openNew()">+ Nuevo producto</app-button>
+  <app-button (clicked)="openCreate()">+ Nuevo producto</app-button>
 </app-page-header>
 
 <div class="products__filters">
-  <button
-    type="button"
-    class="products__filter"
+  <button type="button" class="products__filter"
     [class.products__filter--active]="typeFilter() === 'todos'"
-    (click)="typeFilter.set('todos')"
-  >
-    Todos
-  </button>
-  <button
-    type="button"
-    class="products__filter"
-    [class.products__filter--active]="typeFilter() === 'simple'"
-    (click)="typeFilter.set('simple')"
-  >
-    Productos
-  </button>
-  <button
-    type="button"
-    class="products__filter"
+    (click)="typeFilter.set('todos')">Todos</button>
+  <button type="button" class="products__filter"
+    [class.products__filter--active]="typeFilter() === 'venta'"
+    (click)="typeFilter.set('venta')">Para venta</button>
+  <button type="button" class="products__filter"
     [class.products__filter--active]="typeFilter() === 'insumo'"
-    (click)="typeFilter.set('insumo')"
-  >
-    Insumos
-  </button>
+    (click)="typeFilter.set('insumo')">Insumos</button>
+  <button type="button" class="products__filter"
+    [class.products__filter--active]="typeFilter() === 'ambos'"
+    (click)="typeFilter.set('ambos')">Venta e insumo</button>
 </div>
 
-<app-data-table
-  [columns]="columns"
-  [rows]="filteredProducts()"
-  [clickableRows]="true"
-  emptyTitle="No hay productos en esta categoría."
-  searchPlaceholder="Buscar producto…"
-  (rowClick)="openEdit($event)"
-/>
+@if (loading()) {
+  <p class="products__message">Cargando productos y categorías...</p>
+} @else {
+  <app-data-table
+    [columns]="columns"
+    [rows]="filteredProducts()"
+    [clickableRows]="true"
+    emptyTitle="No hay productos en esta categoría."
+    searchPlaceholder="Buscar producto..."
+    (rowClick)="openEdit($event)"
+  />
+}
 
-<!-- Elegir: individual o carga masiva -->
-<app-modal [open]="chooserOpen()" title="Agregar productos" size="md" (closed)="chooserOpen.set(false)">
-  <div class="products__choices">
-    <button type="button" class="products__choice" (click)="chooseSingle()">
-      <app-icon name="package-single" [size]="28" />
-      <span class="products__choice-title">Producto individual</span>
-      <span class="products__choice-text">Completa un formulario para agregar un solo producto.</span>
-    </button>
-    <button type="button" class="products__choice" (click)="chooseBulk()">
-      <app-icon name="upload" [size]="28" />
-      <span class="products__choice-title">Carga desde un documento</span>
-      <span class="products__choice-text">Sube un archivo CSV o Excel para agregar muchos productos a la vez.</span>
-    </button>
-  </div>
-
-  <div modal-footer>
-    <app-button variant="secondary" (clicked)="chooserOpen.set(false)">Cancelar</app-button>
-  </div>
-</app-modal>
-
-<!-- Producto individual -->
 <app-modal
   [open]="formOpen()"
   [title]="editingId() ? 'Editar producto' : 'Nuevo producto'"
   size="lg"
   (closed)="close()"
 >
-  <form [formGroup]="form" class="products__form" (ngSubmit)="save()">
-    <app-form-field
-      label="Código"
-      [hint]="editingId() ? undefined : 'Déjalo vacío y se genera solo.'"
-      [error]="skuTaken() ? 'Ese código ya existe.' : null"
-    >
-      <input formControlName="sku" [placeholder]="editingId() ? '' : skuPlaceholder()" (input)="skuTaken.set(false)" />
-    </app-form-field>
-    <app-form-field label="Nombre" required>
-      <input formControlName="name" />
-    </app-form-field>
-    <app-form-field label="Categoría" hint="Elige una de la lista o escribe una nueva." required>
-      <input formControlName="category" list="products-categories" autocomplete="off" />
-    </app-form-field>
-    <app-form-field label="Tipo" required>
-      <select formControlName="type">
-        <option value="simple">Producto</option>
-        <option value="insumo">Insumo</option>
-      </select>
-    </app-form-field>
-    <app-form-field label="Unidad" required>
-      <input formControlName="unit" list="products-units" autocomplete="off" />
-    </app-form-field>
-    @if (form.controls.type.value !== 'insumo') {
-      <app-form-field label="Precio de venta">
-        <input type="number" step="0.01" formControlName="salePrice" />
-      </app-form-field>
-    }
-    <app-form-field label="Costo" required>
-      <input type="number" step="0.01" formControlName="cost" />
-    </app-form-field>
-    <app-form-field label="Stock actual" required>
-      <input type="number" step="0.01" formControlName="currentStock" />
-    </app-form-field>
-    <app-form-field label="Stock mínimo" required>
-      <input type="number" step="0.01" formControlName="minStock" />
+  <form [formGroup]="form" class="products__form">
+    <app-form-field label="Código (SKU)" required>
+      <input formControlName="sku" maxlength="25" />
     </app-form-field>
 
-    <datalist id="products-categories">
-      @for (category of categories(); track category) {
-        <option [value]="category"></option>
-      }
-    </datalist>
-    <datalist id="products-units">
-      @for (unit of unitSuggestions; track unit) {
-        <option [value]="unit"></option>
-      }
-    </datalist>
+    <app-form-field label="Nombre" required>
+      <input formControlName="name" maxlength="150" />
+    </app-form-field>
+
+    <app-form-field label="Descripción">
+      <textarea formControlName="description" rows="2"></textarea>
+    </app-form-field>
+
+    <div class="products__category">
+      <app-form-field label="Categoría" required>
+        <select formControlName="categoryId">
+          <option [ngValue]="0" disabled>Selecciona una categoría</option>
+          @for (category of categories(); track category.id) {
+            <option [ngValue]="category.id">{{ category.name }}</option>
+          }
+        </select>
+      </app-form-field>
+      <button type="button" class="products__text-button" (click)="toggleCategoryForm()">
+        {{ categoryFormOpen() ? 'Cancelar' : '+ Nueva categoría' }}
+      </button>
+    </div>
+
+    @if (categoryFormOpen()) {
+      <div class="products__new-category">
+        <div [formGroup]="categoryForm">
+          <app-form-field label="Nombre de la nueva categoría" required>
+            <input formControlName="name" maxlength="100" />
+          </app-form-field>
+          <button type="button" class="products__text-button"
+            [disabled]="creatingCategory()" (click)="createCategory()">
+            {{ creatingCategory() ? 'Creando...' : 'Crear categoría' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    <app-form-field label="Tipo" required>
+      <select formControlName="type">
+        <option value="venta">Producto para venta</option>
+        <option value="insumo">Insumo</option>
+        <option value="ambos">Venta e insumo</option>
+      </select>
+    </app-form-field>
+
+    <app-form-field label="Unidad" required>
+      <input formControlName="unit" maxlength="20" />
+    </app-form-field>
+
+    @if (form.controls.type.value !== 'insumo') {
+      <app-form-field label="Precio de venta">
+        <input type="number" min="0" step="0.01" formControlName="salePrice" />
+      </app-form-field>
+    }
+
+    <app-form-field label="Costo" required>
+      <input type="number" min="0" step="0.01" formControlName="cost" />
+    </app-form-field>
+
+    <app-form-field label="Stock actual" required>
+      <input type="number" min="0" step="0.01" formControlName="currentStock"
+        [readonly]="!!editingId()" />
+    </app-form-field>
+
+    <app-form-field label="Stock mínimo" required>
+      <input type="number" min="0" step="0.01" formControlName="minStock" />
+    </app-form-field>
+
+    @if (editingId()) {
+      <label class="products__active">
+        <input type="checkbox" formControlName="active" />
+        Producto activo
+      </label>
+    }
   </form>
 
   <div modal-footer>
     <app-button variant="secondary" (clicked)="close()">Cancelar</app-button>
-    <app-button (clicked)="save()">Guardar</app-button>
-  </div>
-</app-modal>
-
-<!-- Carga desde un documento -->
-<app-modal [open]="importOpen()" title="Cargar productos desde un documento" size="lg" (closed)="closeImport()">
-  <div class="import">
-    <fieldset class="import__step">
-      <legend class="import__heading">1. Elige el formato de tu archivo</legend>
-      <div class="import__formats">
-        <label class="import__format" [class.import__format--active]="importFormat() === 'xlsx'">
-          <input
-            type="radio"
-            name="import-format"
-            value="xlsx"
-            [checked]="importFormat() === 'xlsx'"
-            (change)="setFormat('xlsx', fileInput)"
-          />
-          <app-icon name="file-xls" [size]="24" />
-          <span class="import__format-text">
-            <span class="import__format-title">Excel (.xlsx)</span>
-            <span class="import__format-note">Recomendado</span>
-          </span>
-        </label>
-        <label class="import__format" [class.import__format--active]="importFormat() === 'csv'">
-          <input
-            type="radio"
-            name="import-format"
-            value="csv"
-            [checked]="importFormat() === 'csv'"
-            (change)="setFormat('csv', fileInput)"
-          />
-          <app-icon name="file-csv" [size]="24" />
-          <span class="import__format-text">
-            <span class="import__format-title">CSV (.csv)</span>
-            <span class="import__format-note">Texto separado por comas o punto y coma</span>
-          </span>
-        </label>
-      </div>
-    </fieldset>
-
-    <section class="import__step" aria-labelledby="import-template-title">
-      <h3 class="import__heading" id="import-template-title">2. Descarga la plantilla</h3>
-      <p class="import__help">
-        Tiene las columnas en el orden correcto y dos filas de ejemplo{{
-          importFormat() === 'xlsx' ? ', más una hoja con las instrucciones de cada campo' : ''
-        }}. Bórralas antes de subir tu archivo.
-      </p>
-      <div>
-        <app-button variant="secondary" (clicked)="downloadTemplate()">
-          <app-icon name="download" [size]="18" />
-          Descargar plantilla {{ importFormat() === 'xlsx' ? 'Excel' : 'CSV' }}
-        </app-button>
-      </div>
-      <p class="import__help import__help--columns">
-        Orden de las columnas: Código, Nombre*, Categoría*, Tipo, Unidad, Precio de venta, Costo, Stock actual, Stock
-        mínimo. (*obligatorias)
-      </p>
-    </section>
-
-    <section class="import__step" aria-labelledby="import-file-title">
-      <h3 class="import__heading" id="import-file-title">3. Sube tu archivo</h3>
-      <app-form-field label="Archivo" hint="Hasta 1000 productos y 2 MB.">
-        <input #fileInput type="file" [accept]="acceptedFiles()" (change)="onFileSelected($event)" />
-      </app-form-field>
-    </section>
-
-    @if (reading()) {
-      <p class="import__status" role="status">Leyendo {{ importFileName() }}…</p>
-    }
-
-    @if (importResult(); as result) {
-      @if (result.fileErrors.length > 0) {
-        <ul class="import__errors" role="alert">
-          @for (error of result.fileErrors; track error) {
-            <li>{{ error }}</li>
-          }
-        </ul>
-      } @else {
-        <section class="import__result" aria-labelledby="import-result-title">
-          <h3 class="import__heading" id="import-result-title">Revisa antes de importar</h3>
-          <p class="import__summary" role="status">
-            <strong>{{ validRows().length }}</strong>
-            {{ validRows().length === 1 ? 'producto listo' : 'productos listos' }} para importar
-            @if (invalidRows().length > 0) {
-              · <span class="import__summary-bad">{{ invalidRows().length }} con errores (se omitirán)</span>
-            }
-          </p>
-
-          @if (previewRows().length > 0) {
-            <ul class="import__preview" role="list">
-              @for (row of previewRows(); track row.line) {
-                <li class="import__preview-item">
-                  <span class="import__preview-name">{{ row.product!.name }}</span>
-                  <span class="import__preview-meta">
-                    {{ row.product!.category }} · {{ typeLabels[row.product!.type] }} · Stock
-                    {{ row.product!.currentStock }} {{ row.product!.unit }}
-                  </span>
-                </li>
-              }
-            </ul>
-            @if (validRows().length > previewRows().length) {
-              <p class="import__help">y {{ validRows().length - previewRows().length }} más…</p>
-            }
-          }
-
-          @if (invalidRows().length > 0) {
-            <h4 class="import__subheading">Filas con errores</h4>
-            <ul class="import__errors">
-              @for (row of listedErrors(); track row.line) {
-                <li><strong>Fila {{ row.line }}:</strong> {{ row.errors.join(' ') }}</li>
-              }
-            </ul>
-            @if (hiddenErrorCount() > 0) {
-              <p class="import__help">y {{ hiddenErrorCount() }} filas más con errores.</p>
-            }
-          }
-        </section>
-      }
-    }
-  </div>
-
-  <div modal-footer>
-    <app-button variant="secondary" (clicked)="closeImport()">Cancelar</app-button>
-    <app-button [disabled]="validRows().length === 0 || reading()" (clicked)="confirmImport()">
-      Importar {{ validRows().length }} {{ validRows().length === 1 ? 'producto' : 'productos' }}
+    <app-button (clicked)="save()">
+      {{ saving() ? 'Guardando...' : 'Guardar' }}
     </app-button>
   </div>
 </app-modal>

@@ -1,9 +1,13 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { Observable, of, switchMap } from 'rxjs';
 import { SalesService } from '../../services/sales.service';
+import { CustomersApiService, FINAL_CONSUMER_ID } from '../../services/customers-api.service';
+import { Customer } from '../../models/customer.model';
 import { BillingService } from '../../../billing/services/billing.service';
-import { ProductsService } from '../../../inventory/services/products.service';
+import { ProductsApiService } from '../../../inventory/services/products-api.service';
+import { Product } from '../../../inventory/models/product.model';
 import { TenantService } from '../../../../core/services/tenant.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { PaymentMethod } from '../../models/sale.model';
@@ -22,7 +26,6 @@ interface CartLine {
   availableStock: number;
 }
 
-const FINAL_CONSUMER_ID = '9999999999';
 const ID_PATTERN = /^\d{10}(\d{3})?$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -33,14 +36,18 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   styleUrl: './new-sale.scss',
 })
 export class NewSale {
-  productsService = inject(ProductsService);
+  private productsApi = inject(ProductsApiService);
+  private customersApi = inject(CustomersApiService);
   private salesService = inject(SalesService);
   private billingService = inject(BillingService);
   private tenant = inject(TenantService);
   private toast = inject(ToastService);
   private router = inject(Router);
 
-  sellableProducts = computed(() => this.productsService.products().filter((p) => p.salePrice != null && p.active));
+  products = signal<Product[]>([]);
+  productsLoading = signal(true);
+
+  sellableProducts = computed(() => this.products().filter((p) => p.salePrice != null && p.active));
 
   selectedProductId = signal('');
   customerName = signal('');
@@ -53,9 +60,12 @@ export class NewSale {
   rucOrCedula = signal(FINAL_CONSUMER_ID);
   email = signal('');
 
+  /** Cliente ya registrado para la identificación escrita (autocompleta nombre y correo). */
+  foundCustomer = signal<Customer | null>(null);
+
   cart = signal<CartLine[]>([]);
 
-  ivaRate = this.tenant.tenant().ivaRate;
+  ivaRate = this.tenant.ivaRate;
 
   subtotal = computed(() => Math.round(this.cart().reduce((sum, l) => sum + l.unitPrice * l.quantity, 0) * 100) / 100);
   ivaAmount = computed(() => Math.round(this.subtotal() * this.ivaRate * 100) / 100);
@@ -72,10 +82,49 @@ export class NewSale {
     return EMAIL_PATTERN.test(value) ? '' : 'El correo no es válido.';
   });
 
-  canConfirm = computed(() => this.cart().length > 0 && !this.idError() && !this.emailError());
+  /** Con factura y un cliente que todavía no existe, hace falta su nombre para registrarlo. */
+  nameError = computed(() => {
+    if (!this.#needsCustomer() || this.foundCustomer() || this.customerName().trim()) return '';
+    return 'Escribe el nombre del cliente para registrarlo.';
+  });
+
+  canConfirm = computed(
+    () => this.cart().length > 0 && !this.idError() && !this.emailError() && !this.nameError(),
+  );
+
+  constructor() {
+    this.productsApi.getProducts().subscribe({
+      next: (products) => {
+        this.products.set(products);
+        this.productsLoading.set(false);
+      },
+      error: () => this.productsLoading.set(false),
+    });
+  }
+
+  /** Al escribir una cédula o RUC completo, busca si el cliente ya existe y lo autocompleta. */
+  onIdentificationChange(value: string): void {
+    this.rucOrCedula.set(value);
+    this.foundCustomer.set(null);
+
+    const id = value.trim();
+    if (!ID_PATTERN.test(id) || id === FINAL_CONSUMER_ID) return;
+
+    this.customersApi.lookup(id).subscribe({
+      // Ignora la respuesta si el usuario ya cambió el número mientras llegaba.
+      next: (customer) => {
+        if (customer && this.rucOrCedula().trim() === id) {
+          this.foundCustomer.set(customer);
+          this.customerName.set(customer.name);
+          if (customer.email && !this.email()) this.email.set(customer.email);
+        }
+      },
+      error: () => undefined,
+    });
+  }
 
   addToCart(): void {
-    const product = this.productsService.getProduct(this.selectedProductId());
+    const product = this.products().find((p) => p.id === this.selectedProductId());
     if (!product || product.salePrice == null) return;
 
     this.cart.update((lines) => {
@@ -110,41 +159,60 @@ export class NewSale {
     if (!this.canConfirm() || this.submitting()) return;
     this.submitting.set(true);
 
-    const customer = {
-      rucOrCedula: this.rucOrCedula().trim(),
-      razonSocial: this.customerName().trim() || 'Consumidor Final',
-      email: this.email().trim(),
-    };
     const invoice = this.emitInvoice();
+    const email = this.email().trim();
 
-    this.salesService
-      .createSale({
-        customerName: this.customerName(),
-        items: this.cart().map((l) => ({ productId: l.productId, quantity: l.quantity })),
-        paymentMethod: this.paymentMethod(),
-        observation: this.observation() || undefined,
-      })
+    this.#resolveCustomer(email)
+      .pipe(
+        switchMap((customer) =>
+          this.salesService.createSale({
+            customerId: customer?.id ?? null,
+            items: this.cart().map((l) => ({ productId: Number(l.productId), quantity: l.quantity })),
+            paymentMethod: this.paymentMethod(),
+            observation: this.observation() || undefined,
+          }),
+        ),
+      )
       .subscribe({
         next: (sale) => {
           this.toast.success(`Venta #${sale.folio} registrada por $${sale.total.toFixed(2)}.`);
           this.submitting.set(false);
           this.router.navigateByUrl('/sales/history');
 
-          // La factura se emite en segundo plano: el historial muestra su estado en vivo.
+          // La factura se emite en segundo plano: el historial muestra su estado.
           if (invoice) {
-            this.billingService.invoiceSale(sale, customer).subscribe({
+            this.billingService.invoiceSale(sale, email).subscribe({
               next: (result) =>
                 result.status === 'autorizada'
                   ? this.toast.success(`Factura ${result.numero} autorizada.`)
-                  : this.toast.error(`Factura ${result.numero} rechazada. Puedes reintentarla desde el historial.`),
-              error: () => this.toast.error('No se pudo emitir la factura. Puedes reintentarla desde el historial.'),
+                  : result.status === 'rechazada'
+                    ? this.toast.error(`Factura ${result.numero} rechazada: ${result.rejectionReason}`)
+                    : this.toast.info(`Factura ${result.numero} enviada al SRI; queda pendiente de autorización.`),
+              // El interceptor ya mostró el motivo del error.
+              error: () => undefined,
             });
           }
         },
-        error: (err: Error) => {
-          this.toast.error(err.message);
-          this.submitting.set(false);
-        },
+        // El interceptor ya mostró el mensaje del backend.
+        error: () => this.submitting.set(false),
       });
+  }
+
+  #needsCustomer(): boolean {
+    const id = this.rucOrCedula().trim();
+    return this.emitInvoice() && ID_PATTERN.test(id) && id !== FINAL_CONSUMER_ID;
+  }
+
+  /** Cliente de la venta: el registrado, uno nuevo, o `null` para consumidor final. */
+  #resolveCustomer(email: string): Observable<Customer | null> {
+    if (!this.#needsCustomer()) return of(null);
+    const found = this.foundCustomer();
+    if (found) return of(found);
+
+    return this.customersApi.findOrCreate({
+      identification: this.rucOrCedula().trim(),
+      name: this.customerName().trim(),
+      email: email || null,
+    });
   }
 }

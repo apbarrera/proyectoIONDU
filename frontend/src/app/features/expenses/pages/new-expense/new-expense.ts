@@ -1,15 +1,25 @@
-import { Component, computed, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Component, inject, signal } from '@angular/core';
+import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ExpensesService } from '../../services/expenses.service';
+import { SuppliersApiService } from '../../services/suppliers-api.service';
+import { ExpensePaymentMethod } from '../../models/expense.model';
 import { ToastService } from '../../../../core/services/toast.service';
-import { TenantService } from '../../../../core/services/tenant.service';
 import { PageHeader } from '../../../../shared/components/page-header/page-header';
 import { Button } from '../../../../shared/components/button/button';
 import { Card } from '../../../../shared/components/card/card';
 import { FormField } from '../../../../shared/components/form-field/form-field';
 
-const CATEGORIES = ['Insumos', 'Servicios', 'Empaques', 'Arriendo', 'Nómina', 'Marketing', 'Otros'];
+const RUC_PATTERN = /^\d{10}(\d{3})?$/;
+
+/** El proveedor es opcional, pero si se escribe el RUC o la cédula hace falta también el nombre. */
+function supplierPair(group: AbstractControl): ValidationErrors | null {
+  const ruc = (group.get('providerRuc')?.value as string).trim();
+  const name = (group.get('providerName')?.value as string).trim();
+  if (!ruc && !name) return null;
+  if (!RUC_PATTERN.test(ruc)) return { providerRuc: true };
+  return name ? null : { providerName: true };
+}
 
 @Component({
   selector: 'app-new-expense',
@@ -19,56 +29,78 @@ const CATEGORIES = ['Insumos', 'Servicios', 'Empaques', 'Arriendo', 'Nómina', '
 })
 export class NewExpense {
   private expensesService = inject(ExpensesService);
-  private tenant = inject(TenantService);
+  private suppliersApi = inject(SuppliersApiService);
   private toast = inject(ToastService);
   private router = inject(Router);
   private fb = inject(FormBuilder);
 
-  categories = CATEGORIES;
+  categories = this.expensesService.categories;
+  submitting = signal(false);
 
-  form = this.fb.nonNullable.group({
-    date: [new Date().toISOString().slice(0, 10), Validators.required],
-    category: ['Insumos', Validators.required],
-    providerName: ['', Validators.required],
-    providerRuc: [''],
-    amount: [0, [Validators.required, Validators.min(0.01)]],
-    paymentMethod: ['efectivo' as const, Validators.required],
-    description: ['', Validators.required],
-    observation: [''],
-  });
+  form = this.fb.nonNullable.group(
+    {
+      date: [new Date().toISOString().slice(0, 10), Validators.required],
+      category: ['', Validators.required],
+      providerRuc: [''],
+      providerName: [''],
+      total: [0, [Validators.required, Validators.min(0.01)]],
+      paymentMethod: ['efectivo' as ExpensePaymentMethod, Validators.required],
+      description: ['', Validators.required],
+      receiptNumber: [''],
+    },
+    { validators: supplierPair },
+  );
 
-  ivaAmount = computed(() => {
-    const amount = this.form.controls.amount.value || 0;
-    return Math.round(amount * this.tenant.tenant().ivaRate * 100) / 100;
-  });
+  constructor() {
+    this.expensesService.loadCategories().subscribe((categories) => {
+      if (!this.form.controls.category.value && categories.length) {
+        this.form.controls.category.setValue(categories[0].name);
+      }
+    });
+  }
 
-  total = computed(() => Math.round(((this.form.controls.amount.value || 0) + this.ivaAmount()) * 100) / 100);
+  /** Al escribir un RUC o cédula completo, autocompleta el nombre si el proveedor ya existe. */
+  onSupplierIdChange(): void {
+    const ruc = this.form.controls.providerRuc.value.trim();
+    if (!RUC_PATTERN.test(ruc)) return;
+
+    this.suppliersApi.lookup(ruc).subscribe({
+      next: (supplier) => {
+        if (supplier && this.form.controls.providerRuc.value.trim() === ruc) {
+          this.form.controls.providerName.setValue(supplier.name);
+        }
+      },
+      error: () => undefined,
+    });
+  }
 
   save(): void {
-    if (this.form.invalid) {
+    if (this.form.invalid || this.submitting()) {
       this.form.markAllAsTouched();
       return;
     }
     const raw = this.form.getRawValue();
-    const ivaAmount = Math.round(raw.amount * this.tenant.tenant().ivaRate * 100) / 100;
+    this.submitting.set(true);
 
     this.expensesService
       .createExpense({
-        date: new Date(raw.date).toISOString(),
+        // Sin zona horaria el backend toma la hora de Ecuador.
+        date: `${raw.date}T12:00:00`,
         category: raw.category,
         providerName: raw.providerName,
         providerRuc: raw.providerRuc,
-        amount: raw.amount,
-        ivaAmount,
-        total: Math.round((raw.amount + ivaAmount) * 100) / 100,
+        total: raw.total,
         paymentMethod: raw.paymentMethod,
         description: raw.description,
-        observation: raw.observation || undefined,
-        sourceType: 'manual',
+        receiptNumber: raw.receiptNumber || undefined,
       })
-      .subscribe(() => {
-        this.toast.success('Gasto registrado.');
-        this.router.navigateByUrl('/expenses/history');
+      .subscribe({
+        next: () => {
+          this.toast.success('Gasto registrado.');
+          this.router.navigateByUrl('/expenses/history');
+        },
+        // El interceptor ya mostró el motivo del error.
+        error: () => this.submitting.set(false),
       });
   }
 }

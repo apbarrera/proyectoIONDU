@@ -67,12 +67,18 @@
       [ngModel]="customerName()"
       (ngModelChange)="customerName.set($event)"
       placeholder="Consumidor Final"
+      [attr.aria-invalid]="!!nameError()"
+      [attr.aria-describedby]="nameError() ? 'sale-customer-error' : null"
     />
+    @if (nameError()) {
+      <p id="sale-customer-error" class="new-sale__error" role="alert">{{ nameError() }}</p>
+    }
 
     <label class="new-sale__label" for="sale-payment">Método de pago</label>
     <select id="sale-payment" class="new-sale__input" [ngModel]="paymentMethod()" (ngModelChange)="paymentMethod.set($event)">
       <option value="efectivo">Efectivo</option>
-      <option value="tarjeta">Tarjeta</option>
+      <option value="tarjeta_debito">Tarjeta de débito</option>
+      <option value="tarjeta_credito">Tarjeta de crédito</option>
       <option value="transferencia">Transferencia</option>
     </select>
 
@@ -102,7 +108,7 @@
             [attr.aria-invalid]="!!idError()"
             [attr.aria-describedby]="idError() ? 'sale-ruc-error' : null"
             [ngModel]="rucOrCedula()"
-            (ngModelChange)="rucOrCedula.set($event)"
+            (ngModelChange)="onIdentificationChange($event)"
           />
           @if (idError()) {
             <p id="sale-ruc-error" class="new-sale__error" role="alert">{{ idError() }}</p>

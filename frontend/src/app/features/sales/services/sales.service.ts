@@ -1,29 +1,55 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, throwError } from 'rxjs';
-import { PaymentMethod, Sale, SaleLineItem } from '../models/sale.model';
-import { SALES_MOCK } from '../../../mocks/sales.mock';
-import { simulateRequest } from '../../../core/services/mock-http.util';
-import { generateId } from '../../../core/utils/id.util';
-import { ProductsService } from '../../inventory/services/products.service';
-import { AuditService } from '../../../core/services/audit.service';
-import { AuthService } from '../../../core/services/auth.service';
-import { TenantService } from '../../../core/services/tenant.service';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { EMPTY, Observable, expand, map, reduce, tap } from 'rxjs';
 
-export interface NewSaleInput {
+import { environment } from '../../../../environments/environment';
+import { PaymentMethod, Sale, SaleLineItem, SaleStatus } from '../models/sale.model';
+
+interface SaleItemDto {
+  productId: number | null;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+
+interface SaleDto {
+  id: number;
+  date: string;
+  customerId: number | null;
   customerName: string;
-  items: { productId: string; quantity: number }[];
+  customerIdentification: string | null;
+  items: SaleItemDto[];
+  subtotal: number;
+  ivaAmount: number;
+  total: number;
+  paymentMethod: PaymentMethod;
+  status: SaleStatus;
+  observation: string | null;
+}
+
+interface SalePageDto {
+  items: SaleDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** Línea de producto: el precio y el IVA los pone el backend a partir del producto. */
+export interface NewSaleInput {
+  /** `null` = consumidor final. */
+  customerId: number | null;
+  items: { productId: number; quantity: number }[];
   paymentMethod: PaymentMethod;
   observation?: string;
 }
 
 @Injectable({ providedIn: 'root' })
 export class SalesService {
-  private products = inject(ProductsService);
-  private audit = inject(AuditService);
-  private auth = inject(AuthService);
-  private tenant = inject(TenantService);
+  private readonly http = inject(HttpClient);
+  private readonly baseUrl = `${environment.apiUrl}/sales`;
 
-  #sales = signal<Sale[]>(SALES_MOCK);
+  #sales = signal<Sale[]>([]);
   readonly sales = this.#sales.asReadonly();
 
   readonly totalRevenue = computed(() =>
@@ -32,89 +58,65 @@ export class SalesService {
       .reduce((sum, s) => sum + s.total, 0),
   );
 
+  /** Descarga todo el historial (de 100 en 100) y actualiza `sales`. */
   getSales(): Observable<Sale[]> {
-    return simulateRequest(this.#sales());
+    const getPage = (page: number) =>
+      this.http.get<SalePageDto>(this.baseUrl, {
+        params: new HttpParams().set('page', page).set('pageSize', 100),
+      });
+
+    return getPage(1).pipe(
+      expand((result) =>
+        result.page * result.pageSize < result.total ? getPage(result.page + 1) : EMPTY,
+      ),
+      reduce((all, result) => [...all, ...result.items], [] as SaleDto[]),
+      map((items) => items.map((item) => this.toSale(item))),
+      tap((sales) => this.#sales.set(sales)),
+    );
   }
 
-  /**
-   * Orchestrates the full sale side-effect chain: decrement stock per line item,
-   * write the sale, then log the audit entry — mirrors the DAG every other
-   * mutating service in the app follows (domain service → movements → audit).
-   */
+  /** Registra la venta: el backend descuenta el stock y guarda el movimiento en una sola transacción. */
   createSale(input: NewSaleInput): Observable<Sale> {
-    if (input.items.length === 0) {
-      return throwError(() => new Error('Agrega al menos un producto a la venta.'));
-    }
-
-    const shortage = input.items.find((item) => {
-      const product = this.products.getProduct(item.productId);
-      return !product || product.currentStock < item.quantity;
-    });
-    if (shortage) {
-      const product = this.products.getProduct(shortage.productId);
-      return throwError(() => new Error(`Stock insuficiente de ${product?.name ?? 'producto'}.`));
-    }
-
-    const user = this.auth.currentUser();
-    const userName = user?.fullName ?? 'Usuario';
-    const ivaRate = this.tenant.tenant().ivaRate;
-
-    const lineItems: SaleLineItem[] = input.items.map((item) => {
-      const product = this.products.getProduct(item.productId)!;
-      const unitPrice = product.salePrice ?? 0;
-      return {
-        productId: product.id,
-        productName: product.name,
+    const body = {
+      customerId: input.customerId,
+      items: input.items.map((item) => ({
+        productId: item.productId,
         quantity: item.quantity,
-        unitPrice,
-        subtotal: Math.round(unitPrice * item.quantity * 100) / 100,
-      };
-    });
-
-    const subtotal = Math.round(lineItems.reduce((sum, i) => sum + i.subtotal, 0) * 100) / 100;
-    const ivaAmount = Math.round(subtotal * ivaRate * 100) / 100;
-    const total = Math.round((subtotal + ivaAmount) * 100) / 100;
-
-    const sale: Sale = {
-      id: generateId(),
-      folio: this.#nextFolio(),
-      date: new Date().toISOString(),
-      customerName: input.customerName || 'Consumidor Final',
-      items: lineItems,
-      subtotal,
-      ivaAmount,
-      total,
+        discount: 0,
+      })),
       paymentMethod: input.paymentMethod,
-      status: 'completada',
-      observation: input.observation,
-      createdBy: userName,
+      observation: input.observation?.trim() || null,
     };
 
-    lineItems.forEach((item) => {
-      this.products.applyStockChange({
-        productId: item.productId,
-        delta: -item.quantity,
-        type: 'venta',
-        reference: `Venta #${sale.folio}`,
-        createdBy: userName,
-      });
-    });
-
-    this.#sales.update((list) => [sale, ...list]);
-
-    this.audit.log({
-      userId: user?.id ?? '',
-      userName,
-      module: 'ventas',
-      action: 'Registró venta',
-      description: `${userName} registró la venta #${sale.folio} por $${total.toFixed(2)}.`,
-    });
-
-    return simulateRequest(sale);
+    return this.http.post<SaleDto>(this.baseUrl, body).pipe(
+      map((dto) => this.toSale(dto)),
+      tap((sale) => this.#sales.update((list) => [sale, ...list])),
+    );
   }
 
-  #nextFolio(): string {
-    const max = this.#sales().reduce((m, s) => Math.max(m, Number(s.folio)), 100);
-    return String(max + 1).padStart(6, '0');
+  private toSale(dto: SaleDto): Sale {
+    const items: SaleLineItem[] = dto.items.map((item) => ({
+      productId: item.productId === null ? '' : String(item.productId),
+      productName: item.productName,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      subtotal: item.subtotal,
+    }));
+
+    return {
+      id: String(dto.id),
+      folio: String(dto.id).padStart(6, '0'),
+      date: dto.date,
+      customerId: dto.customerId,
+      customerName: dto.customerName,
+      customerIdentification: dto.customerIdentification,
+      items,
+      subtotal: dto.subtotal,
+      ivaAmount: dto.ivaAmount,
+      total: dto.total,
+      paymentMethod: dto.paymentMethod,
+      status: dto.status,
+      observation: dto.observation ?? undefined,
+    };
   }
 }

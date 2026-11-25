@@ -1,0 +1,36 @@
+# ============================================================
+# IONDU · Configuración de herramientas del backend
+# Ruff revisa (ruff check) y formatea (ruff format) el código Python.
+# ============================================================
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E", "W",  # estilo básico (PEP 8)
+    "F",       # errores: imports/variables sin usar, nombres inexistentes
+    "I",       # orden de los imports
+    "B",       # errores sutiles comunes (bugbear)
+    "UP",      # sintaxis moderna de Python
+    "SIM",     # código que se puede simplificar
+    "N",       # convención de nombres
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Toda migración importa "op" y "sa" por convención, aunque esté vacía.
+"alembic/versions/*" = ["F401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+# La carpeta backend/alembic/ (migraciones) hace creer a Ruff que "alembic" es
+# código propio; es la librería.
+known-third-party = ["alembic"]
+
+[tool.ruff.lint.flake8-bugbear]
+# En FastAPI las dependencias se declaran como valor por defecto: es correcto.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

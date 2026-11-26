@@ -40,6 +40,8 @@ class UserCreated(ApiModel):
     # Solo si se creó una cuenta nueva. Si el correo ya tenía cuenta (por otra empresa),
     # es null: la persona entra con su contraseña de siempre.
     temporary_password: str | None
+    # Se envió por correo un enlace para que la persona elija su contraseña (SMTP_*).
+    invitation_sent: bool = False
 
 
 class PasswordReset(ApiModel):

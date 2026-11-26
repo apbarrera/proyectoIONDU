@@ -3,6 +3,54 @@
   subtitle="Sugerencias basadas en tus ventas, gastos e inventario. No modifican datos automáticamente."
 />
 
+<section class="recommendations__ai" aria-labelledby="ai-analysis-title">
+  <div class="recommendations__ai-head">
+    <div>
+      <h2 id="ai-analysis-title" class="recommendations__section-title">Análisis con IA</h2>
+      <p class="recommendations__ai-hint">
+        Compara este mes con el anterior a partir de tus ventas, gastos e inventario. Usa tokens del agente.
+      </p>
+    </div>
+    <app-button [loading]="recommendationsService.aiLoading()" (clicked)="recommendationsService.generateWithAi()">
+      <app-icon name="ai" [size]="18" />
+      {{ recommendationsService.aiAnalysis() ? 'Volver a analizar' : 'Generar análisis' }}
+    </app-button>
+  </div>
+
+  @if (recommendationsService.aiLoading()) {
+    <div class="recommendations__ai-thinking"><app-ai-thinking /></div>
+  } @else if (recommendationsService.aiAnalysis(); as ai) {
+    <p class="recommendations__ai-summary">{{ ai.analysis }}</p>
+    <div class="recommendations__list">
+      @for (rec of ai.recommendations; track rec.title) {
+        <div class="recommendations__card recommendations__card--ai">
+          <div class="recommendations__header">
+            <span class="recommendations__category">{{ rec.category }} · IA</span>
+            <app-status-badge [label]="'Prioridad ' + rec.priority" [tone]="priorityTones[rec.priority]" />
+          </div>
+          <h3 class="recommendations__title">{{ rec.title }}</h3>
+          <p class="recommendations__description">{{ rec.description }}</p>
+          @if (rec.dataUsed.length) {
+            <div class="recommendations__data-used">
+              <span>Datos utilizados:</span>
+              <ul>
+                @for (data of rec.dataUsed; track data) {
+                  <li>{{ data }}</li>
+                }
+              </ul>
+            </div>
+          }
+        </div>
+      }
+    </div>
+    <p class="recommendations__ai-meta">
+      Generado {{ ai.generatedAt | date: 'd MMM, HH:mm' }} con {{ ai.model }}. Son sugerencias: no cambian tus datos.
+    </p>
+  }
+</section>
+
+<h2 class="recommendations__section-title">Alertas automáticas</h2>
+
 @if (recommendationsService.recommendations().length === 0) {
   <app-empty-state icon="ai" title="No hay recomendaciones por ahora." description="IONDU seguirá analizando tu negocio y te avisará cuando detecte algo relevante." />
 } @else {

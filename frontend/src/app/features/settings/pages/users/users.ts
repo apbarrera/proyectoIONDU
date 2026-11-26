@@ -99,8 +99,11 @@ export class Users implements OnInit {
     this.userDirectory
       .createUser({ fullName: raw.fullName, email: raw.email, role: raw.role })
       .pipe(finalize(() => this.saving.set(false)))
-      .subscribe(({ user, temporaryPassword }) => {
+      .subscribe(({ user, temporaryPassword, invitationSent }) => {
         this.formOpen.set(false);
+        if (invitationSent) {
+          this.toast.success(`Enviamos a ${user.email} un enlace para que elija su contraseña.`);
+        }
         if (temporaryPassword) {
           this.credentials.set({
             fullName: user.fullName,

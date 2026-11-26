@@ -36,7 +36,7 @@ BACKEND = Path(__file__).resolve().parents[2]
 HOSTS_LOCALES = {"127.0.0.1", "localhost", "db", "postgres"}
 BASES_PERMITIDAS = {"postgres", "template0", "template1", "iondu_test", "iondu_migraciones"}
 PREFIJO = "iondu_pgauth_"
-HEAD = "f8c2e6a9b315"
+HEAD = "fd09a182da8d"
 PREVIA = "c4e6a8b0d215"
 
 CLAVES = {"iondu_app": "prueba_app", "iondu_auth": "prueba_auth", "iondu_worker": "prueba_worker"}

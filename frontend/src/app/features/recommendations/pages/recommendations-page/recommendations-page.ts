@@ -1,4 +1,8 @@
 import { Component, inject } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { Button } from '../../../../shared/components/button/button';
+import { Icon } from '../../../../shared/components/icon/icon';
+import { AiThinking } from '../../../ai-agent/components/ai-thinking/ai-thinking';
 import { RecommendationsService } from '../../services/recommendations.service';
 import { RecommendationPriority } from '../../models/recommendation.model';
 import { PageHeader } from '../../../../shared/components/page-header/page-header';
@@ -13,7 +17,7 @@ const PRIORITY_TONES: Record<RecommendationPriority, BadgeTone> = {
 
 @Component({
   selector: 'app-recommendations-page',
-  imports: [PageHeader, EmptyState, StatusBadge],
+  imports: [PageHeader, EmptyState, StatusBadge, Button, Icon, AiThinking, DatePipe],
   templateUrl: './recommendations-page.html',
   styleUrl: './recommendations-page.scss',
 })

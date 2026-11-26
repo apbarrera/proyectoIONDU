@@ -3,10 +3,16 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Path, Response
+from fastapi import APIRouter, BackgroundTasks, Path, Response
+from sqlalchemy import select
 
+from app.api.auth import EnviadorActual
 from app.api.deps import AuditorActual, AuthDbSession, DbSession, SoloAdministrador
+from app.core.config import get_settings
+from app.core.correo import enviar_sin_fallar
+from app.models import Empresa, Usuario
 from app.schemas.usuario import CompanyUser, PasswordReset, UserCreate, UserCreated, UserUpdate
+from app.services.recuperacion import INVITACION, ServicioRecuperacion, correo_invitacion
 from app.services.usuarios import UsuarioService
 
 router = APIRouter(prefix="/users", tags=["Usuarios"])
@@ -35,11 +41,44 @@ def create_user(
     db: DbSession,
     auth_db: AuthDbSession,
     auditor: AuditorActual,
+    enviador: EnviadorActual,
+    tareas: BackgroundTasks,
 ):
     # La respuesta puede traer la contraseña temporal: que nadie la guarde en caché.
     response.headers["Cache-Control"] = "no-store"
     creado = _servicio(db, contexto, auth_db).crear(datos)
     cuenta = "cuenta nueva" if creado.temporary_password else "cuenta existente"
+
+    # Cuenta nueva y correo configurado: además de la contraseña temporal, se envía
+    # un enlace para que la persona elija su propia contraseña.
+    if enviador is not None and creado.temporary_password:
+        # iondu_app solo puede leer id y email de usuario. No cargar el modelo completo.
+        usuario = Usuario(id=creado.user.id, email=creado.user.email)
+        enlace = ServicioRecuperacion(auth_db).crear_enlace(usuario, INVITACION)
+
+        # Consultar únicamente la columna permitida/necesaria.
+        nombre_empresa = db.scalar(
+            select(Empresa.razon_social).where(
+                Empresa.id_empresa == contexto.empresa_id
+            )
+        ) or "tu empresa"
+
+        correo = correo_invitacion(
+            get_settings().app_public_url,
+            enlace.token,
+            nombre_empresa,
+            creado.user.full_name,
+        )
+        tareas.add_task(
+            enviar_sin_fallar,
+            enviador,
+            enlace.destinatario,
+            correo.asunto,
+            correo.texto,
+            correo.html,
+        )
+        creado = creado.model_copy(update={"invitation_sent": True})
+
     auditor.registrar(
         "usuarios",
         "Creó usuario",

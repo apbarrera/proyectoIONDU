@@ -11,6 +11,7 @@ from app.api import (
     certificados,
     company,
     configuracion_facturacion,
+    correo,
     customers,
     dashboard,
     expenses,
@@ -19,6 +20,7 @@ from app.api import (
     inventory,
     me,
     products,
+    recomendaciones,
     sales,
     usuarios,
 )
@@ -90,4 +92,6 @@ app.include_router(company.router, prefix="/api")
 app.include_router(expenses.router, prefix="/api")
 app.include_router(inventory.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(recomendaciones.router, prefix="/api")
+app.include_router(correo.router, prefix="/api")
 app.include_router(configuracion_facturacion.router, prefix="/api")

@@ -1,6 +1,6 @@
 ﻿import { signal, WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { AuthService, AuthStatus } from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { Login } from './login';
@@ -18,7 +18,6 @@ describe('Login', () => {
     authStatus = signal<AuthStatus>('authenticated');
     loginMock = vi.fn().mockResolvedValue(undefined);
     defaultRouteMock = vi.fn().mockReturnValue('/dashboard');
-    navigateByUrlMock = vi.fn().mockResolvedValue(true);
     successToastMock = vi.fn();
 
     await TestBed.configureTestingModule({
@@ -32,10 +31,8 @@ describe('Login', () => {
             defaultRouteForCurrentUser: defaultRouteMock,
           },
         },
-        {
-          provide: Router,
-          useValue: { navigateByUrl: navigateByUrlMock },
-        },
+        // Router real (la plantilla usa routerLink); solo se espía la navegación.
+        provideRouter([]),
         {
           provide: ToastService,
           useValue: { success: successToastMock },
@@ -43,6 +40,7 @@ describe('Login', () => {
       ],
     }).compileComponents();
 
+    navigateByUrlMock = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true) as never;
     fixture = TestBed.createComponent(Login);
     component = fixture.componentInstance;
     fixture.detectChanges();

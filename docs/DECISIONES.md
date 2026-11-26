@@ -563,6 +563,32 @@
 - **Probado (26/11/2026):** venta de un agua, factura `001-001-000000001` autorizada por el worker en unos 30 s y RIDE
   descargado con el aviso.
 
+### 2.34 Límite mensual de tokens del agente por empresa
+- **Decisión (26/11/2026):** columna `empresa.limite_tokens_ia_mensual` (NULL = sin límite) que el Administrador
+  configura en Configuración → IA (`GET /api/ai/usage`, `PUT /api/ai/usage/limit`, auditado). El consumo se suma de
+  `consumo_tokens` por mes calendario de Ecuador. Con el límite alcanzado el agente responde 429
+  `AI_TOKEN_LIMIT_REACHED` sin llamar al modelo ni a la transcripción (RF-6.1, RF-6.14, RNF-12).
+- **Por qué se revisa antes y no después:** no se sabe cuánto consumirá la próxima llamada; el mes puede cerrar como
+  mucho una llamada por encima del límite. Desde el 80 % la pantalla avisa.
+
+### 2.35 Recomendaciones con IA
+- **Decisión (26/11/2026):** `POST /api/recommendations/ai` (Administrador) envía al modelo solo los indicadores del
+  dashboard de este mes y del anterior, con las variaciones ya calculadas ("subió"/"bajó" y %), y valida la
+  respuesta: análisis breve (RF-7.1) y hasta 5 recomendaciones (RF-7.2) cuyos "datos utilizados" salen de una lista
+  cerrada de lo que se envió (RF-7.4). No guarda ni cambia datos (RF-7.3); gasta tokens y respeta el límite, por eso
+  se pide con un botón y no al abrir la página. Las alertas por reglas siguen debajo.
+- **Probado con qwen2.5:7b:** sin las variaciones calculadas decía "los gastos aumentaron de $630 a $310"; con ellas,
+  las direcciones salen bien. Aún mezcla a veces el total de gastos con una categoría: es un modelo pequeño.
+
+### 2.36 Recuperación de contraseña e invitaciones por correo
+- **Decisión (26/11/2026):** tabla `restablecimiento_contrasena` con el SHA-256 de un token aleatorio de un solo uso
+  (30 minutos para recuperar, 7 días para invitar). Pedir el enlace responde lo mismo exista o no el correo y tiene
+  un máximo de 3 por hora. Al usarlo se cambia la contraseña, se quita el bloqueo, se cierran todas las sesiones y se
+  invalidan los demás enlaces. Al crear un usuario, además de la contraseña temporal, se le envía el enlace.
+- **Correo:** cualquier SMTP por `SMTP_*`; en local, **Mailpit** (bandeja en http://localhost:8025, solo en el
+  equipo). Sin `SMTP_HOST`, recuperar responde 503 `EMAIL_NOT_CONFIGURED` y los usuarios siguen con contraseña
+  temporal. Falta elegir el proveedor de producción.
+
 ## 3. Producto
 
 ### 3.1 Ventas y Facturación son un solo módulo

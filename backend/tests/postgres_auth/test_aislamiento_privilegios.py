@@ -335,10 +335,15 @@ def test_la_migracion_baja_y_sube_sin_alterar_el_resto(cluster):
             nuevas = conn.execute(
                 "SELECT tablename, policyname, roles::text FROM pg_policies "
                 "WHERE tablename NOT IN ('usuario', 'sesion_refresh') "
-                "AND NOT policyname = ANY(%s) ORDER BY 1",
+                "AND NOT policyname = ANY(%s) ORDER BY 1, 2",
                 (nombres_antes,),
             ).fetchall()
             assert nuevas == [
+                ("borrador_gasto", "borrador_gasto_app_tenant", "{iondu_app}"),
+                ("borrador_gasto", "borrador_gasto_worker_insert", "{iondu_worker}"),
+                ("buzon_correo", "buzon_correo_app_tenant", "{iondu_app}"),
+                ("buzon_correo", "buzon_correo_worker_select", "{iondu_worker}"),
+                ("buzon_correo", "buzon_correo_worker_update", "{iondu_worker}"),
                 ("rol", "rol_funciones_select", "{iondu_funciones}"),
                 ("usuario_empresa", "usuario_empresa_funciones_select", "{iondu_funciones}"),
             ]

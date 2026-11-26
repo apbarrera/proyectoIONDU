@@ -163,13 +163,13 @@ Estado por módulo (24/11/2026). Un servicio "real" usa `HttpClient` contra `/ap
 | Módulo (requisitos) | Estado | Falta |
 |---|---|---|
 | Infraestructura | Docker, base local, migraciones con permisos, CI, Ruff, `.gitattributes` | Desplegar en el VPS del cliente |
-| 1. Usuarios, roles y empresa | Inicio de sesión propio, gestión de usuarios, varias empresas por usuario, auditoría | Invitación y recuperación de contraseña por correo |
+| 1. Usuarios, roles y empresa | Inicio de sesión propio, gestión de usuarios, varias empresas por usuario, auditoría, **recuperación de contraseña e invitaciones por correo** (Mailpit en local) | Elegir el proveedor de correo de producción |
 | 2. Facturación y ventas | Ventas, clientes, emisión (XML, firma XAdES-BES, worker, RIDE en S3), reintentos, anulación. **SRI simulado** para demostración (`DECISIONES.md` 2.33) | Prueba real con el SRI de pruebas (requiere `.p12` y RUC habilitado) |
 | 3. Gastos | Categorías, proveedores, registrar, filtrar, editar y anular. **Compra que suma inventario** (RF-4.4) | Lectura de facturas por correo (IMAP, RF-3.2 y 3.3) |
 | 4. Productos e inventario | Productos, movimientos, ajustes, alertas, historial, compras desde gastos | Recetas y producción (por decidir si entran al MVP) |
 | 5. Dashboard | Indicadores reales, solo Administrador | — |
 | 6. Agente IA | Texto, foto y voz para gastos e inventario, siempre con confirmación. **Límite mensual de tokens** por empresa (RF-6.1, RF-6.14, RNF-12) | Probar con voces reales y con ruido; confirmar el `pattern` del esquema contra OpenAI antes de producción |
-| 7. Recomendaciones | Reglas fijas sobre el dashboard | Recomendaciones generadas con IA |
+| 7. Recomendaciones | Alertas por reglas y **análisis con IA** a demanda (`DECISIONES.md` 2.35) | — |
 
 ### A. Lo que depende del cliente o del equipo
 1. **Cliente:** certificado `.p12`, RUC habilitado para facturación electrónica, VPS (mínimo 2 vCPU y 4 GB) y dominio.
@@ -178,9 +178,7 @@ Estado por módulo (24/11/2026). Un servicio "real" usa `HttpClient` contra `/ap
 
 ### B. Código pendiente
 1. Gastos por correo (IMAP) en el worker, con borradores que el usuario confirma (RF-3.2, RF-3.3).
-2. Invitación y recuperación de contraseña por correo (necesita un servicio de envío de correo).
-3. Recomendaciones con IA (RF-7).
-4. Frontend: pasar los IDs de `string` a `number` (`API.md` sección 9); hoy los servicios convierten con `String(...)` y `Number(...)`.
+2. Frontend: pasar los IDs de `string` a `number` (`API.md` sección 9); hoy los servicios convierten con `String(...)` y `Number(...)`.
 
 ### C. Pruebas pendientes
 1. Instalar la PWA en el celular y comprobar el service worker y la limpieza de caché al cerrar sesión.

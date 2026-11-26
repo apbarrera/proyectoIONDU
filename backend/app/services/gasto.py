@@ -300,9 +300,20 @@ class GastoService:
         if supplier_id is not None and self._proveedores.obtener(supplier_id) is None:
             raise _error("supplierId", "El proveedor no existe.", "SUPPLIER_NOT_FOUND")
 
-    def crear(self, datos: ExpenseCreate, id_usuario: uuid.UUID) -> Expense:
+    def crear(
+        self,
+        datos: ExpenseCreate,
+        id_usuario: uuid.UUID,
+        *,
+        message_id_correo: str | None = None,
+        clave_acceso: str | None = None,
+    ) -> Expense:
+        """`message_id_correo` y `clave_acceso` solo vienen de un borrador del correo:
+        la base impide registrar dos veces la misma factura (RF-3.2)."""
         self._validar_relaciones(datos.category_id, datos.supplier_id)
         gasto = Gasto(
+            message_id_correo=message_id_correo,
+            clave_acceso=clave_acceso,
             id_categoria_gasto=datos.category_id,
             id_proveedor=datos.supplier_id,
             id_usuario=id_usuario,

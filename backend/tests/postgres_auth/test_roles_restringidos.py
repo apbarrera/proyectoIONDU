@@ -29,7 +29,7 @@ from tests.postgres_auth.conftest import (
 )
 
 ANTES = "c4e6a8b0d215"
-HEAD = "f8c2e6a9b315"
+HEAD = "fd09a182da8d"
 ROLES = ("iondu_funciones", "iondu_auth")
 ATRIBUTOS = {  # nombre en ALTER ROLE -> columna de pg_roles
     "LOGIN": "rolcanlogin",

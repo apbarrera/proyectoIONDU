@@ -21,6 +21,8 @@ export interface CreatedUser {
   user: User;
   /** Solo si se creó una cuenta nueva; se muestra una sola vez. */
   temporaryPassword: string | null;
+  /** Se envió por correo un enlace para que la persona elija su contraseña. */
+  invitationSent: boolean;
 }
 
 /** Usuarios de la empresa seleccionada (solo Administrador): /api/users. */
@@ -42,11 +44,15 @@ export class UserDirectoryService {
 
   createUser(input: NewUserInput): Observable<CreatedUser> {
     return this.http
-      .post<{ user: CompanyUserDto; temporaryPassword: string | null }>(this.baseUrl, input)
+      .post<{ user: CompanyUserDto; temporaryPassword: string | null; invitationSent?: boolean }>(
+        this.baseUrl,
+        input,
+      )
       .pipe(
         map((response) => ({
           user: this.#toUser(response.user),
           temporaryPassword: response.temporaryPassword,
+          invitationSent: response.invitationSent ?? false,
         })),
         tap(({ user }) => this.#upsert(user)),
       );

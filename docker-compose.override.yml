@@ -58,6 +58,31 @@ services:
     volumes:
       - storage-data:/data
 
+  # Correo de desarrollo: recibe todo lo que envía la API (recuperación de contraseña e
+  # invitaciones) sin mandarlo a internet. Bandeja en http://localhost:8025, solo en este
+  # equipo. En .env: SMTP_HOST=mailpit, SMTP_PORT=1025 y SMTP_STARTTLS=false.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    expose:
+      - "1025"
+    ports:
+      - "127.0.0.1:8025:8025"
+
+  # Servidor IMAP/SMTP de pruebas para la lectura de facturas por correo (RF-3.2).
+  # Opcional: perfil "correo". Acepta cualquier usuario y clave; los buzones se crean al
+  # recibir el primer correo. En Configuración → Empresa: servidor greenmail, puerto 3143,
+  # seguridad "ninguna". Para enviarle una factura: SMTP greenmail:3025.
+  greenmail:
+    image: greenmail/standalone:2.1.2
+    profiles: ["correo"]
+    restart: unless-stopped
+    environment:
+      GREENMAIL_OPTS: "-Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imap -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.auth.disabled"
+    expose:
+      - "3025"
+      - "3143"
+
   # Voz a texto para el agente de IA (Whisper, API de OpenAI /v1/audio/transcriptions).
   # Opcional: solo con el perfil "ia". Corre en CPU para no competir con Ollama por la GPU;
   # la primera vez descarga el modelo (~500 MB) y lo guarda en el volumen.

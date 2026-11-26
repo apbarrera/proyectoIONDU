@@ -15,6 +15,12 @@ export const routes: Routes = [
     loadChildren: () => import('./features/auth/auth.routes').then((m) => m.AUTH_ROUTES),
   },
   {
+    // Enlace del correo de recuperación o invitación: sin guardia, sirve con o sin sesión.
+    path: 'reset-password',
+    loadComponent: () =>
+      import('./features/auth/pages/reset-password/reset-password').then((m) => m.ResetPassword),
+  },
+  {
     path: 'select-company',
     canActivate: [companySelectionGuard],
     loadComponent: () =>

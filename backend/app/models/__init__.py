@@ -11,6 +11,7 @@ from app.models.categoria_gasto import CategoriaGasto  # noqa: F401
 from app.models.categoria_producto import CategoriaProducto  # noqa: F401
 from app.models.cliente import Cliente  # noqa: F401
 from app.models.consumo_tokens import ConsumoTokens  # noqa: F401
+from app.models.correo import BorradorGasto, BuzonCorreo  # noqa: F401
 from app.models.dashboard_financiero import DashboardFinanciero  # noqa: F401
 from app.models.detalle_venta import DetalleVenta  # noqa: F401
 from app.models.empresa import Empresa  # noqa: F401
@@ -22,6 +23,6 @@ from app.models.proveedor import Proveedor  # noqa: F401
 from app.models.recomendacion import Recomendacion  # noqa: F401
 from app.models.rol import Rol  # noqa: F401
 from app.models.secuencia_comprobante import SecuenciaComprobante  # noqa: F401
-from app.models.usuario import SesionRefresh, Usuario  # noqa: F401
+from app.models.usuario import RestablecimientoContrasena, SesionRefresh, Usuario  # noqa: F401
 from app.models.usuario_empresa import UsuarioEmpresa  # noqa: F401
 from app.models.venta import Venta  # noqa: F401

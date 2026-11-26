@@ -429,6 +429,26 @@
   es inmediata. `dashboard_financiero` queda para guardar cierres mensuales si luego se necesitan.
 - Los ingresos son las ventas completadas **con IVA**; los días se agrupan en hora de Ecuador.
 
+### 2.30 Gestión de usuarios por empresa
+- **Decisión (25/11/2026):** el Administrador gestiona los usuarios de **su** empresa desde Configuración > Usuarios
+  (`/api/users`): crear, editar nombre y rol, activar o desactivar y restablecer la contraseña. Cada usuario cambia la
+  suya en Preferencias (`POST /api/me/password`).
+- **Sin correo, contraseña temporal:** como todavía no se envían correos, al crear o restablecer se genera una
+  contraseña aleatoria de 16 caracteres que se muestra **una sola vez** al Administrador para que la entregue por un
+  canal privado. Cuando haya correo, se cambia por un enlace de invitación.
+- **Una cuenta, varias empresas:** el correo identifica a la persona. Si ya tiene cuenta por otra empresa, solo se le
+  agrega la pertenencia y conserva su contraseña. Desactivar quita el acceso a esta empresa, no a la cuenta.
+- **Protecciones:** nadie cambia su propio rol ni se desactiva; la empresa nunca se queda sin un Administrador activo;
+  y solo se restablece la contraseña de quien trabaja **únicamente** en esta empresa (si no, el Administrador de una
+  empresa podría tomar la cuenta con la que alguien entra a otra).
+- **RLS (migración `f7a2d4c8e915`):** políticas nuevas en `usuario_empresa` para que el Administrador vea, agregue y
+  modifique solo las pertenencias de la empresa seleccionada. La comprobación "es Administrador de esta empresa" está en
+  la función `SECURITY DEFINER` `app_es_admin_de`, porque una política sobre `usuario_empresa` no puede consultar la
+  misma tabla (recursión infinita). `app_usuario_en_otras_empresas` responde si alguien trabaja en otra empresa sin
+  revelar cuál. `iondu_app` puede insertar en `usuario` solo `id`, `email` y `password_hash`.
+- **Verificado con el rol real:** se probó la API conectada como `iondu_app` (sin privilegios) contra una base con
+  todas las migraciones; las pruebas automáticas corren como dueño de las tablas y no ejercitan el RLS.
+
 ## 3. Producto
 
 ### 3.1 Ventas y Facturación son un solo módulo

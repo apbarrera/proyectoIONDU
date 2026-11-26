@@ -150,6 +150,35 @@ se mantiene con una **cookie de renovación** (`iondu_refresh`, `HttpOnly`) que 
 | ✅ | `POST /api/auth/logout` | Revoca la cookie de renovación y la borra. Sin cookie no falla | `204` |
 | ✅ | `GET /api/me/companies` | Empresas activas del usuario, con su rol en cada una. **No** exige haber elegido empresa: sirve para mostrar el selector | `200` con `CompanyOption[]` |
 | ✅ | `GET /api/me` | Perfil del usuario en la empresa de la petición. Sirve para comprobar que el login funciona de punta a punta | `200` con `Me` |
+| ✅ | `POST /api/me/password` | Cuerpo `{ "currentPassword", "newPassword" }` (mínimo 10 caracteres). Cierra las demás sesiones del usuario y entrega una nueva para este navegador | `200` con `AuthToken` y la cookie |
+
+### Usuarios de la empresa (solo Administrador)
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/users` | Usuarios de la empresa seleccionada, activos e inactivos | `200` con `CompanyUser[]` |
+| ✅ | `POST /api/users` | Cuerpo `{ "email", "fullName", "role" }`. Si el correo no tiene cuenta, la crea con una contraseña temporal; si ya la tiene (por otra empresa), solo le da acceso a esta | `201` con `{ "user": CompanyUser, "temporaryPassword": string \| null }` |
+| ✅ | `PATCH /api/users/{id}` | Cuerpo con cualquiera de `fullName`, `role`, `active` | `200` con `CompanyUser` |
+| ✅ | `POST /api/users/{id}/reset-password` | Genera una contraseña temporal nueva, quita el bloqueo y cierra las sesiones del usuario | `200` con `{ "temporaryPassword" }` |
+
+Objeto `CompanyUser`:
+
+```json
+{ "id": "6f1c2a1e-…", "email": "luis@empresa.ec", "fullName": "Luis Pérez", "role": "operator", "active": true, "createdAt": "2026-11-25T10:00:00-05:00" }
+```
+
+La contraseña temporal se muestra **una sola vez** (respuestas con `Cache-Control: no-store`); el usuario la cambia
+con `POST /api/me/password`. Desactivar (`active: false`) quita el acceso solo a esta empresa.
+
+| HTTP | `code` | Cuándo |
+|---|---|---|
+| 404 | `USER_NOT_FOUND` | El usuario no pertenece a la empresa seleccionada |
+| 409 | `USER_ALREADY_MEMBER` | El correo ya es usuario de esta empresa |
+| 409 | `CANNOT_MODIFY_SELF` | El Administrador intenta cambiar su propio rol, desactivarse o restablecer su propia contraseña |
+| 409 | `LAST_ADMIN` | El cambio dejaría a la empresa sin un Administrador activo |
+| 409 | `USER_IN_OTHER_COMPANY` | Restablecer la contraseña de alguien que también trabaja en otra empresa (solo él puede cambiarla) |
+| 422 | `INVALID_EMAIL` | El correo no es válido |
+| 422 | `INVALID_CURRENT_PASSWORD` / `SAME_PASSWORD` | En `POST /api/me/password`: la contraseña actual no coincide o la nueva es igual |
 
 Objeto `AuthToken`:
 

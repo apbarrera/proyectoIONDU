@@ -119,7 +119,7 @@ Estado por módulo (24/11/2026). Un servicio "real" usa `HttpClient` contra `/ap
 | Empresa, configuración de facturación y firma electrónica | Real | `TenantService` |
 | Bandeja de gastos por correo | Simulado (falta IMAP en el worker). Al confirmar un borrador **sí** crea un gasto real | `ExpenseInboxService` |
 | Recetas y producción | Simulado (sin backend ni requisito); solo mueve el stock en memoria | `RecipesService`, `ProductionService` |
-| Usuarios (gestión) | Simulado (falta el backend) | `UserDirectoryService` |
+| Usuarios (gestión) y cambio de contraseña | Real | `UserDirectoryService`, `AuthService.changePassword` |
 | Auditoría | Simulado (falta el backend) | `AuditService` |
 | Agente de IA | Simulado (falta el sprint 4). Al confirmar una propuesta **sí** crea un gasto o un ajuste reales | `AiAgentService`, `AiNluMockService`, `AiConfigService` |
 
@@ -162,7 +162,7 @@ Estado por módulo (24/11/2026). Un servicio "real" usa `HttpClient` contra `/ap
 | Módulo (requisitos) | Avance | Hecho | Falta |
 |---|---|---|---|
 | Infraestructura | 90 % | Docker, base local, migraciones, CI, errores, Ruff | Desplegar en el VPS |
-| 1. Usuarios, roles y empresa | 75 % | Inicio de sesión propio, varias empresas por usuario y selector, rol y permiso de Administrador, `/api/me`, subir el certificado, datos y configuración de facturación de la empresa | Gestión de usuarios |
+| 1. Usuarios, roles y empresa | 95 % | Inicio de sesión propio, gestión de usuarios y cambio de contraseña, varias empresas por usuario y selector, rol y permiso de Administrador, `/api/me`, subir el certificado, datos y configuración de facturación de la empresa | Invitación y recuperación de contraseña por correo |
 | 2. Facturación y ventas | 85 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión, cifrado del `.p12` y firma XAdES-BES, clientes, registrar ventas, facturar la venta y descargar el RIDE | Reintentos del worker, anular ventas, prueba real con el SRI (`.p12`) |
 | 3. Gastos | 60 % | Categorías (7 predefinidas y propias), proveedores con RUC/cédula validados, registrar, filtrar y editar gastos | Lectura de facturas por correo (IMAP), anular gastos |
 | 4. Productos e inventario | 80 % | Categorías, productos (activar/desactivar, filtro de stock bajo), movimientos por venta, entradas y salidas manuales, ajustes del Administrador, historial con stock resultante | Compra que suma inventario (RF-4.4), recetas y producción |
@@ -193,7 +193,7 @@ El código de facturación está listo para probarse contra el SRI apenas llegue
 1. Revisión visual, pantalla por pantalla y en móvil, de Gastos, Inventario, Agente IA y Configuración. Se comprobó que no se desbordan y que cumplen accesibilidad, pero falta revisar su aspecto con ojo de diseño.
 2. Pulido con `impeccable` (`/impeccable init` y luego `audit` y `polish`).
 3. Probar la instalación de la PWA y el service worker en Chrome.
-4. Ya están conectados todos los módulos que tienen backend. Lo que sigue simulado no tiene dónde guardarse todavía: gestión de usuarios, auditoría, bandeja de gastos por correo (IMAP), agente de IA, y recetas y producción (ver la tabla "Frontend: conexión con la API").
+4. Ya están conectados todos los módulos que tienen backend. Lo que sigue simulado no tiene dónde guardarse todavía: auditoría, bandeja de gastos por correo (IMAP), agente de IA, y recetas y producción (ver la tabla "Frontend: conexión con la API").
 5. Pasar `Product.id`, `User.tenantId` y los demás IDs de `string` a `number`, como pide `API.md` sección 9 (hoy los servicios convierten con `String(...)` y `Number(...)`).
 6. ✅ Ocultar en el menú lo que el backend restringe al Administrador (dashboard, recomendaciones y ajustes de inventario).
 7. Nueva venta: la vista previa del IVA usa una tasa fija del 15 %; mostrar el IVA real por producto (`vatPercentageCode`) y soportar líneas de concepto libre.

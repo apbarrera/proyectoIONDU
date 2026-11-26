@@ -69,6 +69,20 @@ services:
     ports:
       - "127.0.0.1:8025:8025"
 
+  # Servidor IMAP/SMTP de pruebas para la lectura de facturas por correo (RF-3.2).
+  # Opcional: perfil "correo". Acepta cualquier usuario y clave; los buzones se crean al
+  # recibir el primer correo. En Configuración → Empresa: servidor greenmail, puerto 3143,
+  # seguridad "ninguna". Para enviarle una factura: SMTP greenmail:3025.
+  greenmail:
+    image: greenmail/standalone:2.1.2
+    profiles: ["correo"]
+    restart: unless-stopped
+    environment:
+      GREENMAIL_OPTS: "-Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imap -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.auth.disabled"
+    expose:
+      - "3025"
+      - "3143"
+
   # Voz a texto para el agente de IA (Whisper, API de OpenAI /v1/audio/transcriptions).
   # Opcional: solo con el perfil "ia". Corre en CPU para no competir con Ollama por la GPU;
   # la primera vez descarga el modelo (~500 MB) y lo guarda en el volumen.

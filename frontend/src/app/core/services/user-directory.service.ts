@@ -1,50 +1,98 @@
-import { Injectable, signal } from '@angular/core';
-import { Observable } from 'rxjs';
-import { User } from '../models/user.model';
-import { USERS_MOCK } from '../../mocks/users.mock';
-import { simulateRequest } from './mock-http.util';
-import { generateId } from '../utils/id.util';
-import { TENANT_ID } from '../../mocks/seed-ids.const';
+import { HttpClient } from '@angular/common/http';
+import { Injectable, inject, signal } from '@angular/core';
+import { Observable, map, tap } from 'rxjs';
+import { environment } from '../../../environments/environment';
+import { User, UserRole } from '../models/user.model';
+import { CompanyContextService } from './company-context.service';
 
 export type NewUserInput = Pick<User, 'email' | 'fullName' | 'role'>;
 
-/** Single source of truth for all app users — AuthService and the Settings > Usuarios CRUD both read/write here. */
+/** Usuario de la empresa tal como lo devuelve GET /api/users. */
+interface CompanyUserDto {
+  id: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface CreatedUser {
+  user: User;
+  /** Solo si se creó una cuenta nueva; se muestra una sola vez. */
+  temporaryPassword: string | null;
+}
+
+/** Usuarios de la empresa seleccionada (solo Administrador): /api/users. */
 @Injectable({ providedIn: 'root' })
 export class UserDirectoryService {
-  #users = signal<User[]>(USERS_MOCK);
+  private readonly http = inject(HttpClient);
+  private readonly companyContext = inject(CompanyContextService);
+  private readonly baseUrl = `${environment.apiUrl}/users`;
+
+  #users = signal<User[]>([]);
   readonly users = this.#users.asReadonly();
 
-  getUsers(): Observable<User[]> {
-    return simulateRequest(this.#users());
+  load(): Observable<User[]> {
+    return this.http.get<CompanyUserDto[]>(this.baseUrl).pipe(
+      map((list) => list.map((dto) => this.#toUser(dto))),
+      tap((users) => this.#users.set(users)),
+    );
   }
 
-  findByEmail(email: string): User | undefined {
-    return this.#users().find((u) => u.email.toLowerCase() === email.toLowerCase());
-  }
-
-  createUser(input: NewUserInput): Observable<User> {
-    const user: User = {
-      id: generateId(),
-      email: input.email,
-      fullName: input.fullName,
-      role: input.role,
-      tenantId: TENANT_ID,
-      active: true,
-      avatarInitials: initialsFor(input.fullName),
-      createdAt: new Date().toISOString(),
-    };
-    this.#users.update((list) => [user, ...list]);
-    return simulateRequest(user);
+  createUser(input: NewUserInput): Observable<CreatedUser> {
+    return this.http
+      .post<{ user: CompanyUserDto; temporaryPassword: string | null }>(this.baseUrl, input)
+      .pipe(
+        map((response) => ({
+          user: this.#toUser(response.user),
+          temporaryPassword: response.temporaryPassword,
+        })),
+        tap(({ user }) => this.#upsert(user)),
+      );
   }
 
   updateUser(id: string, changes: Partial<Pick<User, 'fullName' | 'role'>>): Observable<User> {
-    this.#users.update((list) => list.map((u) => (u.id === id ? { ...u, ...changes } : u)));
-    return simulateRequest(this.#users().find((u) => u.id === id)!);
+    return this.#patch(id, changes);
   }
 
   setActive(id: string, active: boolean): Observable<User> {
-    this.#users.update((list) => list.map((u) => (u.id === id ? { ...u, active } : u)));
-    return simulateRequest(this.#users().find((u) => u.id === id)!);
+    return this.#patch(id, { active });
+  }
+
+  /** Genera una contraseña temporal nueva y cierra las sesiones abiertas del usuario. */
+  resetPassword(id: string): Observable<string> {
+    return this.http
+      .post<{ temporaryPassword: string }>(`${this.baseUrl}/${id}/reset-password`, null)
+      .pipe(map((response) => response.temporaryPassword));
+  }
+
+  #patch(id: string, body: Partial<Pick<User, 'fullName' | 'role' | 'active'>>): Observable<User> {
+    return this.http.patch<CompanyUserDto>(`${this.baseUrl}/${id}`, body).pipe(
+      map((dto) => this.#toUser(dto)),
+      tap((user) => this.#upsert(user)),
+    );
+  }
+
+  #upsert(user: User): void {
+    this.#users.update((list) =>
+      list.some((u) => u.id === user.id)
+        ? list.map((u) => (u.id === user.id ? user : u))
+        : [user, ...list],
+    );
+  }
+
+  #toUser(dto: CompanyUserDto): User {
+    return {
+      id: dto.id,
+      email: dto.email,
+      fullName: dto.fullName,
+      role: dto.role,
+      tenantId: String(this.companyContext.selectedCompanyId() ?? ''),
+      active: dto.active,
+      avatarInitials: initialsFor(dto.fullName),
+      createdAt: dto.createdAt,
+    };
   }
 }
 

@@ -1,6 +1,6 @@
 <app-page-header
   title="Preferencias"
-  subtitle="Personaliza cómo se ve IONDU para ti."
+  subtitle="Personaliza cómo se ve IONDU y la seguridad de tu cuenta."
   [breadcrumb]="[{ label: 'Configuración', link: '/settings/company' }, { label: 'Preferencias' }]"
 />
 
@@ -19,4 +19,29 @@
       </button>
     }
   </div>
+</app-card>
+
+<app-card title="Seguridad">
+  <p class="preferences__description">
+    Cambia tu contraseña. Al guardarla se cerrará tu sesión en los demás dispositivos.
+  </p>
+  <form class="preferences__password" [formGroup]="passwordForm" (ngSubmit)="changePassword()">
+    <app-form-field label="Contraseña actual" required [error]="fieldError('currentPassword')">
+      <input type="password" formControlName="currentPassword" autocomplete="current-password" />
+    </app-form-field>
+    <app-form-field
+      label="Contraseña nueva"
+      required
+      [hint]="'Mínimo ' + minLength + ' caracteres.'"
+      [error]="fieldError('newPassword')"
+    >
+      <input type="password" formControlName="newPassword" autocomplete="new-password" />
+    </app-form-field>
+    <app-form-field label="Repite la contraseña nueva" required [error]="fieldError('confirmPassword')">
+      <input type="password" formControlName="confirmPassword" autocomplete="new-password" />
+    </app-form-field>
+    <div class="preferences__actions">
+      <app-button type="submit" [loading]="changingPassword()">Cambiar contraseña</app-button>
+    </div>
+  </form>
 </app-card>

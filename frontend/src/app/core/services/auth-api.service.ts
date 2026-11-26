@@ -28,4 +28,13 @@ export class AuthApiService {
   logout(): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/logout`, null, { withCredentials: true });
   }
+
+  /** Cambia la contraseña del usuario de la sesión (exige el token de acceso). */
+  changePassword(currentPassword: string, newPassword: string): Observable<AuthTokenResponse> {
+    return this.http.post<AuthTokenResponse>(
+      `${environment.apiUrl}/me/password`,
+      { currentPassword, newPassword },
+      { withCredentials: true },
+    );
+  }
 }

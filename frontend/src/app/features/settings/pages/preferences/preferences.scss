@@ -35,3 +35,19 @@
 .preferences__icon {
   font-size: 1.5rem;
 }
+
+app-card + app-card {
+  display: block;
+  margin-top: var(--space-5);
+}
+
+.preferences__password {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 420px;
+}
+
+.preferences__actions {
+  display: flex;
+  justify-content: flex-start;
+}

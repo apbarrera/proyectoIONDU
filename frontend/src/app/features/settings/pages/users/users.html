@@ -21,7 +21,7 @@
       <input formControlName="fullName" />
     </app-form-field>
     <app-form-field label="Correo" required>
-      <input type="email" formControlName="email" [readOnly]="!!editingId()" />
+      <input type="email" formControlName="email" autocomplete="off" />
     </app-form-field>
     <app-form-field label="Rol" required>
       <select formControlName="role">
@@ -34,12 +34,34 @@
   <div modal-footer>
     @if (editingId(); as id) {
       @if (userDirectory.users().find((u) => u.id === id); as editingUser) {
-        <app-button variant="ghost" (clicked)="toggleActive(editingUser)">
-          {{ editingUser.active ? 'Desactivar' : 'Activar' }}
-        </app-button>
+        @if (!isCurrentUser(editingUser.id)) {
+          <app-button variant="ghost" (clicked)="resetPassword(editingUser)">Restablecer contraseña</app-button>
+          <app-button variant="ghost" (clicked)="toggleActive(editingUser)">
+            {{ editingUser.active ? 'Desactivar' : 'Activar' }}
+          </app-button>
+        }
       }
     }
     <app-button variant="secondary" (clicked)="close()">Cancelar</app-button>
-    <app-button (clicked)="save()">Guardar</app-button>
+    <app-button [loading]="saving()" (clicked)="save()">Guardar</app-button>
+  </div>
+</app-modal>
+
+<app-modal [open]="!!credentials()" title="Contraseña temporal" size="sm" [closeOnBackdrop]="false" (closed)="closeCredentials()">
+  @if (credentials(); as c) {
+    <p class="users__credentials-intro">
+      Entrégale estos datos a <strong>{{ c.fullName }}</strong> por un canal privado. La contraseña
+      <strong>no se volverá a mostrar</strong>; pídele que la cambie en Preferencias al entrar.
+    </p>
+    <dl class="users__credentials">
+      <dt>Correo</dt>
+      <dd>{{ c.email }}</dd>
+      <dt>Contraseña</dt>
+      <dd><code class="users__password">{{ c.password }}</code></dd>
+    </dl>
+  }
+  <div modal-footer>
+    <app-button variant="secondary" (clicked)="copyPassword()">Copiar contraseña</app-button>
+    <app-button (clicked)="closeCredentials()">Listo</app-button>
   </div>
 </app-modal>

@@ -105,6 +105,17 @@ export class AuthService {
     }
   }
 
+  /**
+   * Cambia la contraseña. El servidor cierra las demás sesiones y entrega una nueva
+   * para este navegador, que reemplaza al token actual.
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const session = await firstValueFrom(
+      this.authApi.changePassword(currentPassword, newPassword),
+    );
+    this.tokens.set(session);
+  }
+
   /** La sesión venció y no se pudo renovar (lo detecta el interceptor). */
   handleSessionExpired(): void {
     this.#resetSession();

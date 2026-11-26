@@ -29,6 +29,8 @@ x-backend-env: &backend-env
   STORAGE_BUCKET: ${STORAGE_BUCKET:-rides}
   # Llave maestra para descifrar los .p12 en memoria al firmar (api y worker).
   MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY:-}
+  # Facturación de demostración sin .p12 (ids de empresa; solo en ambiente de pruebas).
+  SRI_SIMULADO_EMPRESAS: ${SRI_SIMULADO_EMPRESAS:-}
 
 services:
   # ---------------- Frontend (público) ----------------

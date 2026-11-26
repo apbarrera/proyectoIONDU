@@ -6,6 +6,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     Identity,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -41,6 +42,10 @@ class Empresa(Base):
             """,
             name=conv("empresa_certificado_par_check"),
         ),
+        CheckConstraint(
+            "limite_tokens_ia_mensual IS NULL OR limite_tokens_ia_mensual >= 0",
+            name=conv("empresa_limite_tokens_ia_check"),
+        ),
     )
 
     id_empresa: Mapped[int] = mapped_column(
@@ -65,6 +70,9 @@ class Empresa(Base):
     certificado_p12_cifrado: Mapped[str | None] = mapped_column(Text)
     certificado_password_cifrada: Mapped[str | None] = mapped_column(Text)
     certificado_fecha_vencimiento: Mapped[date | None] = mapped_column(Date)
+
+    # Tope mensual de tokens del agente de IA (RF-6.1, RNF-12). NULL = sin límite.
+    limite_tokens_ia_mensual: Mapped[int | None] = mapped_column(Integer)
 
     fecha_creacion: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

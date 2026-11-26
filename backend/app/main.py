@@ -8,6 +8,7 @@ from supabase import create_client
 from supabase.lib.client_options import SyncClientOptions
 
 from app.api import (
+    auth,
     certificados,
     company,
     configuracion_facturacion,
@@ -95,6 +96,7 @@ if settings.cors_origins:
 register_error_handlers(app)
 
 app.include_router(health.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
 app.include_router(products.router, prefix="/api")
 app.include_router(customers.router, prefix="/api")
 app.include_router(sales.router, prefix="/api")

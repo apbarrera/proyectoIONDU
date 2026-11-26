@@ -1,4 +1,4 @@
-"""Verificación de tokens de Supabase (sin base de datos ni red).
+"""Emisión y verificación de los tokens de acceso (sin base de datos ni red).
 
 Los tokens válidos se prueban directamente con el verificador; los inválidos, contra
 /api/me, que debe rechazarlos antes de consultar la base.
@@ -10,18 +10,20 @@ import hmac
 import json
 import time
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_verificador
 from app.core.config import get_settings
 from app.core.errors import UnauthenticatedError
-from app.core.seguridad import VerificadorTokens
+from app.core.seguridad import EmisorTokens, cargar_llave_privada
 from app.main import app
-from tests.tokens import EMISOR, LLAVE_ATACANTE, LLAVE_SUPABASE, crear_token, verificador_de_prueba
+from tests.tokens import EMISOR, LLAVE_ATACANTE, LLAVE_IONDU, crear_token, verificador_de_prueba
 
 USUARIO = uuid.uuid4()
 client = TestClient(app)
@@ -93,10 +95,10 @@ def test_ataque_alg_none_token_sin_firma():
 
 def test_ataque_confusion_de_algoritmo_hs256_con_la_llave_publica():
     # El atacante conoce la llave pública (es pública) y la usa como "secreto" de HS256.
-    publica = LLAVE_SUPABASE.public_key().public_bytes(
+    publica = LLAVE_IONDU.public_key().public_bytes(
         serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
     )
-    datos = {"sub": str(USUARIO), "aud": "authenticated", "iss": EMISOR}
+    datos = {"sub": str(USUARIO), "aud": "iondu-api", "iss": EMISOR}
     datos["exp"] = int(time.time()) + 3600
 
     def b64(contenido: bytes) -> str:
@@ -112,8 +114,8 @@ def test_ataque_confusion_de_algoritmo_hs256_con_la_llave_publica():
 @pytest.mark.parametrize(
     "cambios",
     [
-        {"iss": "https://otro-proyecto.supabase.co/auth/v1"},  # token de otro Supabase
-        {"aud": "anon"},  # llave pública anónima, no un usuario
+        {"iss": "https://otro-proyecto.supabase.co/auth/v1"},  # token de otro emisor
+        {"aud": "authenticated"},  # token para otra API
         {"sub": "no-es-un-uuid"},
         {"sub": None},
         {"exp": None},
@@ -123,31 +125,65 @@ def test_datos_del_token_que_no_corresponden(cambios):
     assert _rechazado(_token(**cambios))
 
 
-# ---------- Configuración y servicio ----------
-def test_si_supabase_no_responde_al_pedir_las_llaves_es_503():
-    def caido(_token):
-        raise jwt.PyJWKClientConnectionError("sin conexión")
+# ---------- Configuración, llave y emisor ----------
+def _pem(llave) -> str:
+    return llave.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
 
-    app.dependency_overrides[get_verificador] = lambda: VerificadorTokens(EMISOR, caido)
-    response = _me(_token())
-    assert (response.status_code, _codigo(response)) == (503, "AUTH_UNAVAILABLE")
 
-
-def test_sin_supabase_configurado_no_se_puede_iniciar_sesion(monkeypatch):
+def test_sin_llave_configurada_no_se_puede_iniciar_sesion(monkeypatch):
     app.dependency_overrides.clear()
-    monkeypatch.setenv("SUPABASE_URL", "")
+    monkeypatch.setenv("AUTH_JWT_PRIVATE_KEY", "")
     get_settings.cache_clear()
     try:
         response = _me(_token())
     finally:
         get_settings.cache_clear()
     assert response.status_code == 401
-    assert "SUPABASE_URL" in response.json()["error"]["message"]
+    assert "AUTH_JWT_PRIVATE_KEY" in response.json()["error"]["message"]
 
 
-def test_para_supabase_usa_las_direcciones_del_proyecto():
-    verificador = VerificadorTokens.para_supabase("https://abc123.supabase.co/")
-    assert verificador._emisor == "https://abc123.supabase.co/auth/v1"
+def test_la_llave_se_acepta_en_una_sola_linea_como_en_env():
+    pem = _pem(LLAVE_IONDU).replace("\n", "\\n")
+    assert "\n" not in pem
+    assert cargar_llave_privada(pem).private_numbers() == LLAVE_IONDU.private_numbers()
+
+
+@pytest.mark.parametrize(
+    "llave",
+    [
+        ec.generate_private_key(ec.SECP384R1()),  # ES384, no ES256
+        rsa.generate_private_key(public_exponent=65537, key_size=2048),
+    ],
+)
+def test_rechaza_llaves_que_no_son_ec_p256(llave):
+    with pytest.raises(ValueError, match="P-256"):
+        cargar_llave_privada(_pem(llave))
+
+
+def test_rechaza_texto_que_no_es_una_llave():
+    with pytest.raises(ValueError, match="PEM"):
+        cargar_llave_privada("no-es-una-llave")
+
+
+def test_el_emisor_firma_tokens_que_su_verificador_acepta():
+    emisor = EmisorTokens(LLAVE_IONDU, duracion=timedelta(minutes=15))
+    token = emisor.emitir(USUARIO, "ana@empresa.ec")
+    usuario = emisor.verificador().verificar(token)
+    assert (usuario.id, usuario.email) == (USUARIO, "ana@empresa.ec")
+    assert emisor.duracion_segundos == 900
+    assert jwt.get_unverified_header(token)["alg"] == "ES256"
+
+
+def test_el_token_del_emisor_vence_segun_la_duracion():
+    emisor = EmisorTokens(LLAVE_IONDU, duracion=timedelta(minutes=15))
+    viejo = emisor.emitir(USUARIO, "ana@empresa.ec", ahora=datetime.now(UTC) - timedelta(hours=1))
+    with pytest.raises(UnauthenticatedError) as error:
+        emisor.verificador().verificar(viejo)
+    assert error.value.code == "TOKEN_EXPIRED"
 
 
 def test_el_verificador_rechaza_directamente_un_token_falso():

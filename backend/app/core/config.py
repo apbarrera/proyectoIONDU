@@ -44,6 +44,12 @@ class Settings(BaseSettings):
 
     master_encryption_key: SecretStr | None = None
 
+    # Inicio de sesión propio: llave privada EC P-256 (PEM) que firma los tokens de acceso (ES256).
+    # En .env puede escribirse en una línea, con "\n" en lugar de los saltos de línea.
+    auth_jwt_private_key: SecretStr | None = None
+    auth_access_token_minutes: int = Field(default=15, gt=0)
+    auth_refresh_token_days: int = Field(default=7, gt=0)
+
     worker_heartbeat_file: str = "/tmp/worker-heartbeat"
     worker_tick_seconds: int = Field(default=30, gt=0)
 
@@ -72,6 +78,7 @@ class Settings(BaseSettings):
         "migration_database_url",
         "supabase_url",
         "supabase_service_role_key",
+        "auth_jwt_private_key",
         "dev_user_id",
         mode="before",
     )

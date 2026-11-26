@@ -62,6 +62,13 @@ class UnprocessableError(AppError):
     code = "VALIDATION_ERROR"
 
 
+class TooManyRequestsError(AppError):
+    """Demasiados intentos (p. ej., inicio de sesión bloqueado temporalmente)."""
+
+    status_code = 429
+    code = "TOO_MANY_ATTEMPTS"
+
+
 class ServiceUnavailableError(AppError):
     """Un servicio externo (Supabase, SRI) no responde: no es culpa del usuario."""
 

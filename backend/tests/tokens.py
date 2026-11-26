@@ -1,7 +1,6 @@
-"""Un "Supabase falso" para las pruebas: firma tokens con una llave generada aquí.
+"""Tokens de prueba: se firman con una llave generada aquí, como lo hace el backend.
 
-El backend los verifica con la llave pública, igual que haría con las que publica
-Supabase. Nada se conecta a la red.
+El verificador de prueba usa la llave pública de esa llave. Nada se conecta a la red.
 """
 
 import time
@@ -10,23 +9,21 @@ import uuid
 import jwt
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from app.core.seguridad import VerificadorTokens
+from app.core.seguridad import AUDIENCIA, EMISOR, VerificadorTokens
 
-EMISOR = "https://proyecto-prueba.supabase.co/auth/v1"
-LLAVE_SUPABASE = ec.generate_private_key(ec.SECP256R1())
+LLAVE_IONDU = ec.generate_private_key(ec.SECP256R1())
 LLAVE_ATACANTE = ec.generate_private_key(ec.SECP256R1())
 
 
 def crear_token(
-    usuario: uuid.UUID, *, llave=LLAVE_SUPABASE, algoritmo: str = "ES256", **cambios
+    usuario: uuid.UUID, *, llave=LLAVE_IONDU, algoritmo: str = "ES256", **cambios
 ) -> str:
-    """Token como los de Supabase. Un cambio con valor None quita ese campo."""
+    """Token como los que emite el backend. Un cambio con valor None quita ese campo."""
     ahora = int(time.time())
     datos = {
         "sub": str(usuario),
         "email": "ana@empresa.ec",
-        "aud": "authenticated",
-        "role": "authenticated",
+        "aud": AUDIENCIA,
         "iss": EMISOR,
         "iat": ahora,
         "exp": ahora + 3600,
@@ -36,4 +33,4 @@ def crear_token(
 
 
 def verificador_de_prueba() -> VerificadorTokens:
-    return VerificadorTokens(EMISOR, lambda _token: LLAVE_SUPABASE.public_key())
+    return VerificadorTokens(EMISOR, lambda _token: LLAVE_IONDU.public_key())

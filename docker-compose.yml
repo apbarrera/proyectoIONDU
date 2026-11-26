@@ -61,6 +61,10 @@ services:
     environment:
       <<: *backend-env
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+      # Inicio de sesión propio: solo la API firma tokens (el worker no recibe la llave).
+      AUTH_JWT_PRIVATE_KEY: ${AUTH_JWT_PRIVATE_KEY:-}
+      AUTH_ACCESS_TOKEN_MINUTES: ${AUTH_ACCESS_TOKEN_MINUTES:-15}
+      AUTH_REFRESH_TOKEN_DAYS: ${AUTH_REFRESH_TOKEN_DAYS:-7}
     expose:
       - "8000"
     healthcheck:

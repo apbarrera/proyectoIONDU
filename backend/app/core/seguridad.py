@@ -1,24 +1,30 @@
-"""Verificación de los tokens (JWT) que emite Supabase Auth.
+"""Tokens de acceso (JWT) del inicio de sesión propio.
 
-El frontend inicia sesión contra Supabase y envía el token en cada petición
-(`Authorization: Bearer <token>`). Aquí se comprueba que:
-- la firma sea de Supabase (llave pública publicada en /auth/v1/.well-known/jwks.json);
-- el algoritmo sea ES256 o RS256 (bloquea "alg: none" y la confusión con HS256);
-- no esté vencido, sea de nuestro proyecto (iss) y de un usuario autenticado (aud);
+El backend firma los tokens con su llave privada EC P-256 (ES256) al iniciar sesión
+o renovarla, y en cada petición (`Authorization: Bearer <token>`) comprueba que:
+- la firma corresponda a nuestra llave pública;
+- el algoritmo sea ES256 (bloquea "alg: none" y la confusión con HS256);
+- no esté vencido, lo haya emitido IONDU (iss) y sea para esta API (aud);
 - traiga el id del usuario (sub) como UUID.
 """
 
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 import jwt
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
-from app.core.errors import ServiceUnavailableError, UnauthenticatedError
+from app.core.errors import UnauthenticatedError
 
-ALGORITMOS_PERMITIDOS = ["ES256", "RS256"]  # llaves asimétricas de Supabase; nunca HS256 ni none
-AUDIENCIA = "authenticated"
+ALGORITMO = "ES256"
+ALGORITMOS_PERMITIDOS = [ALGORITMO]  # nunca HS256 ni none
+EMISOR = "iondu"
+AUDIENCIA = "iondu-api"
 MARGEN_RELOJ_SEGUNDOS = 30
 
 
@@ -26,6 +32,58 @@ MARGEN_RELOJ_SEGUNDOS = 30
 class UsuarioAutenticado:
     id: UUID
     email: str | None
+
+
+def cargar_llave_privada(pem: str) -> ec.EllipticCurvePrivateKey:
+    """Lee la llave PEM (acepta `\\n` escritos en una sola línea, como en .env)."""
+    contenido = pem.strip().replace("\\n", "\n").encode()
+    try:
+        llave = serialization.load_pem_private_key(contenido, password=None)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("AUTH_JWT_PRIVATE_KEY no es una llave privada PEM válida.") from exc
+    if not isinstance(llave, ec.EllipticCurvePrivateKey) or not isinstance(
+        llave.curve, ec.SECP256R1
+    ):
+        raise ValueError("AUTH_JWT_PRIVATE_KEY debe ser una llave EC P-256 (ES256).")
+    return llave
+
+
+class EmisorTokens:
+    """Firma los tokens de acceso de corta duración."""
+
+    def __init__(
+        self,
+        llave_privada: ec.EllipticCurvePrivateKey,
+        *,
+        duracion: timedelta,
+        emisor: str = EMISOR,
+        audiencia: str = AUDIENCIA,
+    ):
+        self._llave = llave_privada
+        self._duracion = duracion
+        self._emisor = emisor
+        self._audiencia = audiencia
+
+    @property
+    def duracion_segundos(self) -> int:
+        return int(self._duracion.total_seconds())
+
+    def emitir(self, usuario_id: UUID, email: str, *, ahora: datetime | None = None) -> str:
+        ahora = ahora or datetime.now(UTC)
+        datos = {
+            "sub": str(usuario_id),
+            "email": email,
+            "iss": self._emisor,
+            "aud": self._audiencia,
+            "iat": int(ahora.timestamp()),
+            "exp": int((ahora + self._duracion).timestamp()),
+            "jti": str(uuid.uuid4()),
+        }
+        return jwt.encode(datos, self._llave, algorithm=ALGORITMO)
+
+    def verificador(self) -> "VerificadorTokens":
+        publica = self._llave.public_key()
+        return VerificadorTokens(self._emisor, lambda _token: publica, audiencia=self._audiencia)
 
 
 class VerificadorTokens:
@@ -41,13 +99,6 @@ class VerificadorTokens:
         self._obtener_llave = obtener_llave
         self._audiencia = audiencia
 
-    @classmethod
-    def para_supabase(cls, supabase_url: str) -> "VerificadorTokens":
-        base = supabase_url.rstrip("/")
-        # Descarga y guarda en memoria las llaves públicas (se renuevan cada 10 min).
-        jwks = jwt.PyJWKClient(f"{base}/auth/v1/.well-known/jwks.json", lifespan=600, timeout=10)
-        return cls(f"{base}/auth/v1", lambda token: jwks.get_signing_key_from_jwt(token).key)
-
     def verificar(self, token: str) -> UsuarioAutenticado:
         try:
             llave = self._obtener_llave(token)
@@ -60,10 +111,6 @@ class VerificadorTokens:
                 leeway=MARGEN_RELOJ_SEGUNDOS,
                 options={"require": ["exp", "iss", "aud", "sub"]},
             )
-        except jwt.PyJWKClientConnectionError as exc:
-            raise ServiceUnavailableError(
-                "No se pudo verificar la sesión. Intenta en un momento.", code="AUTH_UNAVAILABLE"
-            ) from exc
         except jwt.ExpiredSignatureError as exc:
             raise UnauthenticatedError(
                 "Tu sesión expiró. Inicia sesión de nuevo.", code="TOKEN_EXPIRED"
@@ -73,6 +120,6 @@ class VerificadorTokens:
 
         try:
             usuario_id = UUID(datos["sub"])
-        except ValueError as exc:
+        except (ValueError, TypeError, AttributeError) as exc:
             raise UnauthenticatedError("Sesión inválida. Inicia sesión de nuevo.") from exc
         return UsuarioAutenticado(id=usuario_id, email=datos.get("email"))

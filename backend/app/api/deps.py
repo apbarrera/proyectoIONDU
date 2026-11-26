@@ -8,6 +8,7 @@ Uso en un endpoint:
 
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 from functools import lru_cache
 from typing import Annotated
 
@@ -20,7 +21,12 @@ from app.core.errors import (
     ForbiddenError,
     UnauthenticatedError,
 )
-from app.core.seguridad import UsuarioAutenticado, VerificadorTokens
+from app.core.seguridad import (
+    EmisorTokens,
+    UsuarioAutenticado,
+    VerificadorTokens,
+    cargar_llave_privada,
+)
 from app.db.session import establecer_contexto_rls, get_db
 from app.models.rol import ADMINISTRADOR
 from app.repositories.usuario_empresa import (
@@ -31,17 +37,28 @@ from app.repositories.usuario_empresa import (
 DbSession = Annotated[Session, Depends(get_db)]
 
 
-# ---------- Token de Supabase ----------
+# ---------- Tokens del inicio de sesión propio ----------
 @lru_cache
-def _verificador_supabase(supabase_url: str) -> VerificadorTokens:
-    return VerificadorTokens.para_supabase(supabase_url)
+def _emisor_tokens(pem: str, minutos: int) -> EmisorTokens:
+    return EmisorTokens(cargar_llave_privada(pem), duracion=timedelta(minutes=minutos))
 
 
-def get_verificador() -> VerificadorTokens | None:
-    """Verificador de tokens de Supabase; None si no está configurado SUPABASE_URL.
-    Las pruebas lo reemplazan por uno con llaves propias."""
-    supabase_url = get_settings().supabase_url
-    return _verificador_supabase(supabase_url) if supabase_url else None
+def get_emisor() -> EmisorTokens | None:
+    """Firma los tokens de acceso; None si no está configurado AUTH_JWT_PRIVATE_KEY."""
+    settings = get_settings()
+    if settings.auth_jwt_private_key is None:
+        return None
+    return _emisor_tokens(
+        settings.auth_jwt_private_key.get_secret_value(), settings.auth_access_token_minutes
+    )
+
+
+def get_verificador(
+    emisor: Annotated[EmisorTokens | None, Depends(get_emisor)],
+) -> VerificadorTokens | None:
+    """Verificador de los tokens de acceso. Las pruebas lo reemplazan por uno con
+    llaves propias."""
+    return emisor.verificador() if emisor else None
 
 
 def _token_bearer(authorization: str | None) -> str | None:
@@ -59,7 +76,9 @@ def get_usuario_actual(
     if not token:
         raise UnauthenticatedError("Inicia sesión para continuar.")
     if verificador is None:
-        raise UnauthenticatedError("El inicio de sesión no está configurado (falta SUPABASE_URL).")
+        raise UnauthenticatedError(
+            "El inicio de sesión no está configurado (falta AUTH_JWT_PRIVATE_KEY)."
+        )
     return verificador.verificar(token)
 
 
@@ -168,7 +187,7 @@ def get_contexto(
     if token:
         if verificador is None:
             raise UnauthenticatedError(
-                "El inicio de sesión no está configurado (falta SUPABASE_URL)."
+                "El inicio de sesión no está configurado (falta AUTH_JWT_PRIVATE_KEY)."
             )
 
         usuario = verificador.verificar(token)

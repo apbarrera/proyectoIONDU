@@ -42,6 +42,20 @@ describe('AiAgentService', () => {
     expect(service.interactions()[0].proposal?.expense?.amount).toBe(25);
   });
 
+  it('marca que está pensando mientras espera la respuesta, también si falla', () => {
+    expect(service.thinking()).toBeNull();
+
+    service.send('hola').subscribe();
+    expect(service.thinking()).toBe('texto');
+    http.expectOne('/api/ai/messages').flush({ actionId: null, reply: '¡Hola!', proposal: null });
+    expect(service.thinking()).toBeNull();
+
+    service.sendAudio(new Blob(['x'], { type: 'audio/webm' })).subscribe();
+    expect(service.thinking()).toBe('voz');
+    http.expectOne('/api/ai/audio').flush(null, { status: 503, statusText: 'Service Unavailable' });
+    expect(service.thinking()).toBeNull();
+  });
+
   it('sin propuesta solo muestra la respuesta', () => {
     service.send('Registra una venta').subscribe();
     http.expectOne('/api/ai/messages').flush({ actionId: null, reply: 'Solo puedo registrar gastos.', proposal: null });

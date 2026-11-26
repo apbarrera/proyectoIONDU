@@ -23,6 +23,13 @@
           </div>
         </div>
       }
+      @if (aiAgent.thinking(); as kind) {
+        <div class="floating-ai-panel__row">
+          <div class="floating-ai-panel__bubble">
+            <app-ai-thinking [kind]="kind" />
+          </div>
+        </div>
+      }
     </div>
 
     <div class="floating-ai-panel__composer">
@@ -32,7 +39,7 @@
         (keydown.enter)="send()"
         placeholder="Escribe un mensaje…"
       />
-      <button type="button" [disabled]="!draft().trim()" (click)="send()">➤</button>
+      <button type="button" [disabled]="!draft().trim() || sending()" (click)="send()">➤</button>
     </div>
   </div>
 }

@@ -4,10 +4,11 @@ import { RouterLink } from '@angular/router';
 import { AiAgentService } from '../../services/ai-agent.service';
 import { ProposalCard } from '../proposal-card/proposal-card';
 import { Icon } from '../../../../shared/components/icon/icon';
+import { AiThinking } from '../ai-thinking/ai-thinking';
 
 @Component({
   selector: 'app-floating-ai-panel',
-  imports: [FormsModule, RouterLink, ProposalCard, Icon],
+  imports: [FormsModule, RouterLink, ProposalCard, Icon, AiThinking],
   templateUrl: './floating-ai-panel.html',
   styleUrl: './floating-ai-panel.scss',
 })

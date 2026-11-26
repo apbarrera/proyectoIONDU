@@ -5,13 +5,14 @@ import { PageHeader } from '../../../../shared/components/page-header/page-heade
 import { Button } from '../../../../shared/components/button/button';
 import { ProposalCard } from '../../components/proposal-card/proposal-card';
 import { Icon } from '../../../../shared/components/icon/icon';
+import { AiThinking } from '../../components/ai-thinking/ai-thinking';
 
 /** Un mensaje de voz dura como máximo un minuto: luego se detiene y se envía. */
 export const MAX_RECORDING_MS = 60_000;
 
 @Component({
   selector: 'app-ai-chat',
-  imports: [FormsModule, PageHeader, Button, ProposalCard, Icon],
+  imports: [FormsModule, PageHeader, Button, ProposalCard, Icon, AiThinking],
   templateUrl: './ai-chat.html',
   styleUrl: './ai-chat.scss',
 })

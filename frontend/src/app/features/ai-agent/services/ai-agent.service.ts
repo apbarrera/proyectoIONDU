@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, catchError, map, of, tap } from 'rxjs';
+import { Observable, catchError, defer, finalize, map, of, tap } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { AuthService } from '../../../core/services/auth.service';
 import { apiErrorMessage } from '../../../core/utils/api-error.util';
@@ -72,6 +72,10 @@ export class AiAgentService {
   #interactions = signal<AiInteraction[]>([]);
   readonly interactions = this.#interactions.asReadonly();
 
+  /** Qué está procesando el agente ahora (null si nada): lo muestran el chat y el panel. */
+  #thinking = signal<AiInputType | null>(null);
+  readonly thinking = this.#thinking.asReadonly();
+
   send(text: string, inputType: AiInputType = 'texto', attachments?: AiAttachment[]): Observable<AiMessage> {
     this.#messages.update((list) => [
       ...list,
@@ -142,7 +146,7 @@ export class AiAgentService {
     instructionFor: (dto: AiReplyDto) => string,
     inputType: AiInputType,
   ): Observable<AiMessage> {
-    return request.pipe(
+    const reply = request.pipe(
       map((dto) => {
         let interactionId: string | undefined;
         if (dto.actionId !== null && dto.proposal) {
@@ -165,6 +169,10 @@ export class AiAgentService {
       }),
       catchError((error: unknown) => of(this.#reply(apiErrorMessage(error)))),
     );
+    return defer(() => {
+      this.#thinking.set(inputType);
+      return reply;
+    }).pipe(finalize(() => this.#thinking.set(null)));
   }
 
   /** Confirma la propuesta; con `corrections`, queda como "corregida" (RF-6.10). */

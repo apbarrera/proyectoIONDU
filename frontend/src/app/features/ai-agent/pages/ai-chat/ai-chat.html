@@ -29,10 +29,10 @@
         </div>
       </div>
     }
-    @if (sending()) {
+    @if (aiAgent.thinking(); as kind) {
       <div class="ai-chat__row">
         <div class="ai-chat__bubble">
-          <span class="ai-chat__typing">Analizando…</span>
+          <app-ai-thinking [kind]="kind" />
         </div>
       </div>
     }

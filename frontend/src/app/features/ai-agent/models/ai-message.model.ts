@@ -31,11 +31,16 @@ export interface AiExpenseProposal {
   date: string | null;
 }
 
+/** Movimiento de inventario que propone el agente. En un ajuste, `quantity` es el stock contado. */
 export interface AiInventoryProposal {
-  productId: string;
+  productId: number;
   productName: string;
-  quantityDelta: number;
+  type: 'entrada' | 'salida' | 'ajuste';
+  quantity: number;
   unit: string;
+  currentStock: number;
+  resultingStock: number;
+  reason: string;
 }
 
 export interface AiProposal {
@@ -57,10 +62,13 @@ export interface AiInteraction {
   proposal: AiProposal | null;
   result: AiInteractionResult;
   expenseId?: number | null;
+  movementId?: number | null;
 }
 
 /** Correcciones antes de confirmar (botón "Corregir"). */
 export interface AiProposalCorrections {
   amount?: number;
   categoryId?: number;
+  /** Inventario: cantidad (o stock contado en un ajuste). */
+  quantity?: number;
 }

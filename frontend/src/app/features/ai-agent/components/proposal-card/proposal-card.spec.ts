@@ -74,4 +74,34 @@ describe('ProposalCard', () => {
     component.cancel();
     http.expectOne({ method: 'POST', url: '/api/ai/actions/12/cancel' }).flush(null);
   });
+
+  it('en inventario corrige la cantidad', () => {
+    fixture.componentRef.setInput('interaction', {
+      ...INTERACTION,
+      id: '22',
+      proposal: {
+        id: '22',
+        type: 'inventory',
+        summary: 'Entrada de 20 UNIDAD de Croissant.',
+        inventory: {
+          productId: 3,
+          productName: 'Croissant',
+          type: 'entrada',
+          quantity: 20,
+          unit: 'UNIDAD',
+          currentStock: 160,
+          resultingStock: 180,
+          reason: 'Llegó pedido',
+        },
+      },
+    });
+    component.startEdit();
+    component.editedQuantity.set(18);
+
+    component.confirm();
+
+    const request = http.expectOne('/api/ai/actions/22/confirm');
+    expect(request.request.body).toEqual({ quantity: 18 });
+    request.flush({ actionId: 22, status: 'corregido', expenseId: null, movementId: 1 });
+  });
 });

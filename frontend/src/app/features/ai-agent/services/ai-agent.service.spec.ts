@@ -104,4 +104,34 @@ describe('AiAgentService', () => {
       interpretedData: '¿Cuánto pagaste?',
     });
   });
+
+  it('una propuesta de inventario se confirma con la cantidad corregida', () => {
+    service.send('Llegaron 20 croissants').subscribe();
+    http.expectOne('/api/ai/messages').flush({
+      actionId: 22,
+      reply: 'Te propongo registrar: Entrada de 20…',
+      proposal: {
+        type: 'inventory',
+        summary: 'Entrada de 20 UNIDAD de Croissant (stock: 160 → 180).',
+        inventory: {
+          productId: 3,
+          productName: 'Croissant',
+          type: 'entrada',
+          quantity: 20,
+          unit: 'UNIDAD',
+          currentStock: 160,
+          resultingStock: 180,
+          reason: 'Llegó pedido',
+        },
+      },
+    });
+    expect(service.interactions()[0].proposal?.inventory?.resultingStock).toBe(180);
+
+    service.confirmProposal('22', { quantity: 18 });
+    const request = http.expectOne('/api/ai/actions/22/confirm');
+    expect(request.request.body).toEqual({ quantity: 18 });
+    request.flush({ actionId: 22, status: 'corregido', expenseId: null, movementId: 253 });
+
+    expect(service.interactions()[0]).toMatchObject({ result: 'corregido', movementId: 253 });
+  });
 });

@@ -1,6 +1,6 @@
 import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { AiInteraction } from '../../models/ai-message.model';
+import { AiInteraction, AiProposalCorrections } from '../../models/ai-message.model';
 import { AiAgentService } from '../../services/ai-agent.service';
 import { ExpensesService } from '../../../expenses/services/expenses.service';
 import { Button } from '../../../../shared/components/button/button';
@@ -54,20 +54,22 @@ export class ProposalCard {
       if (!this.expenses.categories().length) this.expenses.loadCategories().subscribe();
     }
     if (proposal.inventory) {
-      this.editedQuantity.set(proposal.inventory.quantityDelta);
+      this.editedQuantity.set(proposal.inventory.quantity);
     }
     this.editing.set(true);
   }
 
   confirm(): void {
-    const expense = this.interaction().proposal?.expense;
-    const corrections =
-      this.editing() && expense
-        ? {
-            ...(this.editedAmount() !== expense.amount ? { amount: this.editedAmount() } : {}),
-            ...(this.editedCategoryId() !== expense.categoryId ? { categoryId: this.editedCategoryId() } : {}),
-          }
-        : undefined;
+    const { expense, inventory } = this.interaction().proposal ?? {};
+    let corrections: AiProposalCorrections | undefined;
+    if (this.editing() && expense) {
+      corrections = {
+        ...(this.editedAmount() !== expense.amount ? { amount: this.editedAmount() } : {}),
+        ...(this.editedCategoryId() !== expense.categoryId ? { categoryId: this.editedCategoryId() } : {}),
+      };
+    } else if (this.editing() && inventory && this.editedQuantity() !== inventory.quantity) {
+      corrections = { quantity: this.editedQuantity() };
+    }
     this.aiAgent.confirmProposal(this.interaction().id, corrections);
     this.editing.set(false);
     this.resolved.emit();

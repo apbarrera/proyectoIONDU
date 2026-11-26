@@ -14,12 +14,14 @@ import {
   AiMessage,
   AiProposal,
   AiProposalCorrections,
+  AiInventoryProposal,
 } from '../models/ai-message.model';
 
 interface AiProposalDto {
-  type: 'expense';
+  type: 'expense' | 'inventory';
   summary: string;
-  expense: {
+  inventory?: AiInventoryProposal;
+  expense?: {
     total: number;
     ivaAmount: number;
     categoryId: number;
@@ -46,6 +48,7 @@ interface AiActionDto {
   proposal: AiProposalDto | null;
   status: AiInteractionResult;
   expenseId: number | null;
+  movementId: number | null;
 }
 
 /**
@@ -108,13 +111,14 @@ export class AiAgentService {
     const body: Record<string, number> = {};
     if (corrections?.amount !== undefined) body['total'] = corrections.amount;
     if (corrections?.categoryId !== undefined) body['categoryId'] = corrections.categoryId;
+    if (corrections?.quantity !== undefined) body['quantity'] = corrections.quantity;
 
     this.http
-      .post<{ status: AiInteractionResult; expenseId: number }>(
+      .post<{ status: AiInteractionResult; expenseId: number | null; movementId: number | null }>(
         `${this.baseUrl}/actions/${interactionId}/confirm`,
         body,
       )
-      .subscribe((result) => this.#setResult(interactionId, result.status, result.expenseId));
+      .subscribe((result) => this.#setResult(interactionId, result.status, result.expenseId, result.movementId));
   }
 
   cancelProposal(interactionId: string): void {
@@ -138,6 +142,7 @@ export class AiAgentService {
           proposal: dto.proposal ? toProposal(String(dto.id), dto.proposal) : null,
           result: dto.status,
           expenseId: dto.expenseId,
+          movementId: dto.movementId,
         })),
       ),
       tap((list) => this.#interactions.set(list)),
@@ -156,27 +161,40 @@ export class AiAgentService {
     return message;
   }
 
-  #setResult(interactionId: string, result: AiInteractionResult, expenseId?: number): void {
+  #setResult(
+    interactionId: string,
+    result: AiInteractionResult,
+    expenseId?: number | null,
+    movementId?: number | null,
+  ): void {
     this.#interactions.update((list) =>
-      list.map((i) => (i.id === interactionId ? { ...i, result, expenseId: expenseId ?? i.expenseId } : i)),
+      list.map((i) =>
+        i.id === interactionId
+          ? { ...i, result, expenseId: expenseId ?? i.expenseId, movementId: movementId ?? i.movementId }
+          : i,
+      ),
     );
   }
 }
 
 function toProposal(id: string, dto: AiProposalDto): AiProposal {
+  if (dto.type === 'inventory' && dto.inventory) {
+    return { id, type: 'inventory', summary: dto.summary, inventory: dto.inventory };
+  }
+  const expense = dto.expense!;
   return {
     id,
     type: 'expense',
     summary: dto.summary,
     expense: {
-      amount: dto.expense.total,
-      ivaAmount: dto.expense.ivaAmount,
-      categoryId: dto.expense.categoryId,
-      category: dto.expense.categoryName,
-      description: dto.expense.description,
-      providerName: dto.expense.supplierName,
-      paymentMethod: dto.expense.paymentMethod,
-      date: dto.expense.date,
+      amount: expense.total,
+      ivaAmount: expense.ivaAmount,
+      categoryId: expense.categoryId,
+      category: expense.categoryName,
+      description: expense.description,
+      providerName: expense.supplierName,
+      paymentMethod: expense.paymentMethod,
+      date: expense.date,
     },
   };
 }

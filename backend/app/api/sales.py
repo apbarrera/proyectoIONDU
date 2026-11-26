@@ -8,7 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
-from app.api.deps import ContextoActual, DbSession, EmpresaId, SoloAdministrador
+from app.api.deps import AuditorActual, ContextoActual, DbSession, EmpresaId, SoloAdministrador
 from app.core.errors import ForbiddenError
 from app.schemas.common import Page, VoidRequest
 from app.schemas.venta import PaymentMethod, Sale, SaleCreate
@@ -20,14 +20,22 @@ SaleId = Annotated[int, Path(gt=0)]
 
 
 @router.post("/sales", response_model=Sale, status_code=201)
-def create_sale(datos: SaleCreate, contexto: ContextoActual, db: DbSession):
+def create_sale(datos: SaleCreate, contexto: ContextoActual, db: DbSession, auditor: AuditorActual):
     # La venta guarda qué usuario la hizo: el encabezado de desarrollo no tiene usuario.
     if contexto.usuario is None:
         raise ForbiddenError(
             "Para registrar ventas debes iniciar sesión con tu usuario.",
             code="USER_SESSION_REQUIRED",
         )
-    return VentaService(db, contexto.empresa_id).crear(datos, contexto.usuario.id)
+    venta = VentaService(db, contexto.empresa_id).crear(datos, contexto.usuario.id)
+    auditor.registrar(
+        "ventas",
+        "Registró venta",
+        f"Venta #{venta.id} por ${venta.total:.2f} a {venta.customer_name or 'consumidor final'}.",
+        entidad="venta",
+        id_entidad=venta.id,
+    )
+    return venta
 
 
 @router.get("/sales", response_model=Page[Sale])
@@ -58,12 +66,26 @@ def get_sale(id: SaleId, empresa_id: EmpresaId, db: DbSession):
 
 # RF-2.7: solo el Administrador anula; la venta queda en el historial como "anulada".
 @router.post("/sales/{id}/void", response_model=Sale)
-def void_sale(id: SaleId, datos: VoidRequest, contexto: SoloAdministrador, db: DbSession):
+def void_sale(
+    id: SaleId,
+    datos: VoidRequest,
+    contexto: SoloAdministrador,
+    db: DbSession,
+    auditor: AuditorActual,
+):
     if contexto.usuario is None:
         raise ForbiddenError(
             "Para anular ventas debes iniciar sesión con tu usuario.",
             code="USER_SESSION_REQUIRED",
         )
-    return VentaService(db, contexto.empresa_id).anular(
+    venta = VentaService(db, contexto.empresa_id).anular(
         id, datos.reason, contexto.usuario.id, contexto.nombre
     )
+    auditor.registrar(
+        "ventas",
+        "Anuló venta",
+        f"Venta #{id} por ${venta.total:.2f}. Motivo: {datos.reason}",
+        entidad="venta",
+        id_entidad=id,
+    )
+    return venta

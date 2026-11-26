@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Form, UploadFile
 
-from app.api.deps import DbSession, SoloAdministrador
+from app.api.deps import AuditorActual, DbSession, SoloAdministrador
 from app.core.errors import UnprocessableError
 from app.services.certificado_empresa import (
     TAMANO_MAXIMO_P12,
@@ -19,6 +19,7 @@ router = APIRouter(tags=["Certificado electrónico"])
 async def guardar_certificado(
     db: DbSession,
     contexto: SoloAdministrador,
+    auditor: AuditorActual,
     archivo: Annotated[UploadFile, File(description="Archivo de firma electrónica .p12")],
     clave: Annotated[str, Form(min_length=1, max_length=1024)],
 ) -> dict[str, str | date]:
@@ -33,6 +34,12 @@ async def guardar_certificado(
         if len(contenido) > TAMANO_MAXIMO_P12:
             raise UnprocessableError("El archivo .p12 no puede superar los 5 MiB.")
 
-        return CertificadoEmpresaService(db, contexto.empresa_id).guardar(contenido, clave)
+        resultado = CertificadoEmpresaService(db, contexto.empresa_id).guardar(contenido, clave)
+        auditor.registrar(
+            "configuracion",
+            "Subió la firma electrónica",
+            f"Certificado .p12 válido hasta {resultado['fecha_vencimiento']}.",
+        )
+        return resultado
     finally:
         await archivo.close()

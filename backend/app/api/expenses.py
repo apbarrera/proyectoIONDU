@@ -9,7 +9,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
-from app.api.deps import ContextoActual, DbSession, EmpresaId, SoloAdministrador
+from app.api.deps import AuditorActual, ContextoActual, DbSession, EmpresaId, SoloAdministrador
 from app.core.errors import ForbiddenError
 from app.schemas.common import Page, VoidRequest
 from app.schemas.gasto import (
@@ -79,13 +79,38 @@ def get_supplier(id: Id, empresa_id: EmpresaId, db: DbSession):
 
 
 @router.post("/suppliers", response_model=Supplier, status_code=201)
-def create_supplier(datos: SupplierCreate, empresa_id: EmpresaId, db: DbSession):
-    return ProveedorService(db, empresa_id).crear(datos)
+def create_supplier(
+    datos: SupplierCreate, empresa_id: EmpresaId, db: DbSession, auditor: AuditorActual
+):
+    proveedor = ProveedorService(db, empresa_id).crear(datos)
+    auditor.registrar(
+        "gastos",
+        "Registró proveedor",
+        f"{proveedor.name} ({proveedor.identification}).",
+        entidad="proveedor",
+        id_entidad=proveedor.id,
+    )
+    return proveedor
 
 
 @router.patch("/suppliers/{id}", response_model=Supplier)
-def update_supplier(id: Id, datos: SupplierUpdate, empresa_id: EmpresaId, db: DbSession):
-    return ProveedorService(db, empresa_id).actualizar(id, datos)
+def update_supplier(
+    id: Id, datos: SupplierUpdate, empresa_id: EmpresaId, db: DbSession, auditor: AuditorActual
+):
+    proveedor = ProveedorService(db, empresa_id).actualizar(id, datos)
+    auditor.registrar(
+        "gastos",
+        "Editó proveedor",
+        f"{proveedor.name}: {_campos(datos)}.",
+        entidad="proveedor",
+        id_entidad=id,
+    )
+    return proveedor
+
+
+def _campos(datos) -> str:
+    """Campos que se cambiaron, con los nombres del contrato (camelCase)."""
+    return ", ".join(datos.model_dump(exclude_unset=True, by_alias=True)) or "sin cambios"
 
 
 # ---------- Gastos ----------
@@ -122,21 +147,59 @@ def get_expense(id: Id, empresa_id: EmpresaId, db: DbSession):
 
 
 @router.post("/expenses", response_model=Expense, status_code=201)
-def create_expense(datos: ExpenseCreate, contexto: ContextoActual, db: DbSession):
+def create_expense(
+    datos: ExpenseCreate, contexto: ContextoActual, db: DbSession, auditor: AuditorActual
+):
     id_usuario = _id_usuario(contexto)
-    return GastoService(db, contexto.empresa_id).crear(datos, id_usuario)
+    gasto = GastoService(db, contexto.empresa_id).crear(datos, id_usuario)
+    auditor.registrar(
+        "gastos",
+        "Registró gasto",
+        f"Gasto #{gasto.id} por ${gasto.total:.2f}: {gasto.description}",
+        entidad="gasto",
+        id_entidad=gasto.id,
+    )
+    return gasto
 
 
 @router.patch("/expenses/{id}", response_model=Expense)
-def update_expense(id: Id, datos: ExpenseUpdate, contexto: ContextoActual, db: DbSession):
+def update_expense(
+    id: Id,
+    datos: ExpenseUpdate,
+    contexto: ContextoActual,
+    db: DbSession,
+    auditor: AuditorActual,
+):
     _id_usuario(contexto)
-    return GastoService(db, contexto.empresa_id).actualizar(id, datos)
+    gasto = GastoService(db, contexto.empresa_id).actualizar(id, datos)
+    auditor.registrar(
+        "gastos",
+        "Editó gasto",
+        f"Gasto #{id}: {_campos(datos)}.",
+        entidad="gasto",
+        id_entidad=id,
+    )
+    return gasto
 
 
 # RF-3.7: solo el Administrador anula; el gasto queda en el historial como "anulado".
 @router.post("/expenses/{id}/void", response_model=Expense)
-def void_expense(id: Id, datos: VoidRequest, contexto: SoloAdministrador, db: DbSession):
+def void_expense(
+    id: Id,
+    datos: VoidRequest,
+    contexto: SoloAdministrador,
+    db: DbSession,
+    auditor: AuditorActual,
+):
     id_usuario = _id_usuario(contexto)
-    return GastoService(db, contexto.empresa_id).anular(
+    gasto = GastoService(db, contexto.empresa_id).anular(
         id, datos.reason, contexto.nombre, id_usuario
     )
+    auditor.registrar(
+        "gastos",
+        "Anuló gasto",
+        f"Gasto #{id} por ${gasto.total:.2f}. Motivo: {datos.reason}",
+        entidad="gasto",
+        id_entidad=id,
+    )
+    return gasto

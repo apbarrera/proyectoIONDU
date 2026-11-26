@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
-from app.api.deps import DbSession, EmpresaId
+from app.api.deps import AuditorActual, DbSession, EmpresaId
 from app.schemas.cliente import Customer, CustomerCreate, CustomerUpdate
 from app.schemas.common import Page
 from app.services.cliente import ClienteService
@@ -44,10 +44,35 @@ def get_customer(id: CustomerId, empresa_id: EmpresaId, db: DbSession):
 
 
 @router.post("/customers", response_model=Customer, status_code=201)
-def create_customer(datos: CustomerCreate, empresa_id: EmpresaId, db: DbSession):
-    return ClienteService(db, empresa_id).crear(datos)
+def create_customer(
+    datos: CustomerCreate, empresa_id: EmpresaId, db: DbSession, auditor: AuditorActual
+):
+    cliente = ClienteService(db, empresa_id).crear(datos)
+    auditor.registrar(
+        "ventas",
+        "Registró cliente",
+        f"{cliente.name} ({cliente.identification}).",
+        entidad="cliente",
+        id_entidad=cliente.id,
+    )
+    return cliente
 
 
 @router.patch("/customers/{id}", response_model=Customer)
-def update_customer(id: CustomerId, datos: CustomerUpdate, empresa_id: EmpresaId, db: DbSession):
-    return ClienteService(db, empresa_id).actualizar(id, datos)
+def update_customer(
+    id: CustomerId,
+    datos: CustomerUpdate,
+    empresa_id: EmpresaId,
+    db: DbSession,
+    auditor: AuditorActual,
+):
+    cliente = ClienteService(db, empresa_id).actualizar(id, datos)
+    cambios = ", ".join(datos.model_dump(exclude_unset=True, by_alias=True))
+    auditor.registrar(
+        "ventas",
+        "Editó cliente",
+        f"{cliente.name}: {cambios or 'sin cambios'}.",
+        entidad="cliente",
+        id_entidad=id,
+    )
+    return cliente

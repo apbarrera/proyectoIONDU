@@ -8,7 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
-from app.api.deps import ContextoActual, DbSession, EmpresaId, SoloAdministrador
+from app.api.deps import AuditorActual, ContextoActual, DbSession, EmpresaId, SoloAdministrador
 from app.core.errors import ForbiddenError
 from app.schemas.common import Page
 from app.schemas.inventario import (
@@ -60,13 +60,38 @@ def get_movement(id: Annotated[int, Path(gt=0)], empresa_id: EmpresaId, db: DbSe
 
 
 @router.post("/movements", response_model=InventoryMovement, status_code=201)
-def create_movement(datos: MovementCreate, contexto: ContextoActual, db: DbSession):
+def create_movement(
+    datos: MovementCreate, contexto: ContextoActual, db: DbSession, auditor: AuditorActual
+):
     id_usuario = _id_usuario(contexto)
-    return InventarioService(db, contexto.empresa_id).registrar_movimiento(datos, id_usuario)
+    movimiento = InventarioService(db, contexto.empresa_id).registrar_movimiento(datos, id_usuario)
+    auditor.registrar(
+        "inventario",
+        f"Registró {movimiento.type} de inventario",
+        f"{movimiento.product_name}: {movimiento.quantity} {movimiento.unit}. "
+        f"Stock resultante: {movimiento.resulting_stock}.",
+        entidad="movimiento_inventario",
+        id_entidad=movimiento.id,
+    )
+    return movimiento
 
 
 # RF-4.8: solo el Administrador corrige el stock contra el conteo físico.
 @router.post("/adjustments", response_model=StockAdjustment, status_code=201)
-def create_adjustment(datos: AdjustmentCreate, contexto: SoloAdministrador, db: DbSession):
+def create_adjustment(
+    datos: AdjustmentCreate,
+    contexto: SoloAdministrador,
+    db: DbSession,
+    auditor: AuditorActual,
+):
     id_usuario = _id_usuario(contexto)
-    return InventarioService(db, contexto.empresa_id).ajustar(datos, id_usuario)
+    ajuste = InventarioService(db, contexto.empresa_id).ajustar(datos, id_usuario)
+    auditor.registrar(
+        "inventario",
+        "Ajustó stock",
+        f"{ajuste.product_name}: de {ajuste.previous_stock} a {ajuste.new_stock}. "
+        f"Motivo: {ajuste.reason}",
+        entidad="producto",
+        id_entidad=ajuste.product_id,
+    )
+    return ajuste

@@ -33,6 +33,7 @@ from app.repositories.usuario_empresa import (
     obtener_empresas_activas,
     obtener_pertenencia_activa,
 )
+from app.services.auditoria import Auditor
 
 DbSession = Annotated[Session, Depends(get_db)]
 
@@ -229,3 +230,11 @@ def requiere_administrador(contexto: ContextoActual) -> Contexto:
 
 
 SoloAdministrador = Annotated[Contexto, Depends(requiere_administrador)]
+
+
+def get_auditor(contexto: ContextoActual, db: DbSession) -> Auditor:
+    """Registra en la auditoría de la empresa las acciones del usuario de la petición."""
+    return Auditor(db, contexto.empresa_id, contexto.usuario.id if contexto.usuario else None)
+
+
+AuditorActual = Annotated[Auditor, Depends(get_auditor)]

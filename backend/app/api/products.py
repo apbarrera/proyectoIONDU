@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
-from app.api.deps import DbSession, EmpresaId
+from app.api.deps import AuditorActual, DbSession, EmpresaId
 from app.schemas.common import Page
 from app.schemas.producto import (
     Category,
@@ -61,10 +61,35 @@ def get_product(id: ProductId, empresa_id: EmpresaId, db: DbSession):
 
 
 @router.post("/products", response_model=Product, status_code=201)
-def create_product(datos: ProductCreate, empresa_id: EmpresaId, db: DbSession):
-    return ProductoService(db, empresa_id).crear(datos)
+def create_product(
+    datos: ProductCreate, empresa_id: EmpresaId, db: DbSession, auditor: AuditorActual
+):
+    producto = ProductoService(db, empresa_id).crear(datos)
+    auditor.registrar(
+        "inventario",
+        "Creó producto",
+        f"{producto.sku} · {producto.name}.",
+        entidad="producto",
+        id_entidad=producto.id,
+    )
+    return producto
 
 
 @router.patch("/products/{id}", response_model=Product)
-def update_product(id: ProductId, datos: ProductUpdate, empresa_id: EmpresaId, db: DbSession):
-    return ProductoService(db, empresa_id).actualizar(id, datos)
+def update_product(
+    id: ProductId,
+    datos: ProductUpdate,
+    empresa_id: EmpresaId,
+    db: DbSession,
+    auditor: AuditorActual,
+):
+    producto = ProductoService(db, empresa_id).actualizar(id, datos)
+    cambios = ", ".join(datos.model_dump(exclude_unset=True, by_alias=True))
+    auditor.registrar(
+        "inventario",
+        "Editó producto",
+        f"{producto.sku} · {producto.name}: {cambios or 'sin cambios'}.",
+        entidad="producto",
+        id_entidad=id,
+    )
+    return producto

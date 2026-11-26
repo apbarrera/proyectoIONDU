@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Request, Response
 
-from app.api.deps import ContextoActual, DbSession, EmpresaId
+from app.api.deps import AuditorActual, ContextoActual, DbSession, EmpresaId
 from app.core.errors import ForbiddenError, NotFoundError
 from app.schemas.factura import Invoice, invoice_desde_factura
 from app.services.almacenamiento import AlmacenamientoRideService
@@ -27,6 +27,7 @@ def issue_invoice(
     request: Request,
     contexto: ContextoActual,
     db: DbSession,
+    auditor: AuditorActual,
 ):
     if contexto.usuario is None:
         raise ForbiddenError(
@@ -37,6 +38,14 @@ def issue_invoice(
     servicio = FacturaService(db, contexto.empresa_id)
     servicio.almacenamiento = _obtener_almacenamiento(request)
     factura = servicio.emitir(id)
+    auditor.registrar(
+        "facturacion",
+        "Emitió factura",
+        f"Factura {factura.numero_comprobante} de la venta #{id}. "
+        f"Estado: {factura.estado_autorizacion}.",
+        entidad="factura",
+        id_entidad=factura.id_factura,
+    )
 
     return invoice_desde_factura(factura)
 

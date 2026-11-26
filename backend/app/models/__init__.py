@@ -11,6 +11,7 @@ from app.models.categoria_gasto import CategoriaGasto  # noqa: F401
 from app.models.categoria_producto import CategoriaProducto  # noqa: F401
 from app.models.cliente import Cliente  # noqa: F401
 from app.models.consumo_tokens import ConsumoTokens  # noqa: F401
+from app.models.correo import BorradorGasto, BuzonCorreo  # noqa: F401
 from app.models.dashboard_financiero import DashboardFinanciero  # noqa: F401
 from app.models.detalle_venta import DetalleVenta  # noqa: F401
 from app.models.empresa import Empresa  # noqa: F401

@@ -39,6 +39,22 @@ POLITICAS = (
 
 
 def upgrade() -> None:
+    # Una base nueva (local, CI o de evaluación) no tiene estos roles y ALTER POLICY
+    # fallaría. Se crean NOLOGIN: nadie puede conectarse con ellos hasta que el
+    # despliegue les asigne LOGIN y contraseña. Si ya existen, no se tocan.
+    for rol in sorted({rol for _tabla, _politica, rol in POLITICAS}):
+        op.execute(
+            f"""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{rol}') THEN
+                    CREATE ROLE "{rol}" NOLOGIN NOSUPERUSER NOBYPASSRLS;
+                END IF;
+            END
+            $$;
+            """
+        )
+
     for tabla, politica, rol in POLITICAS:
         op.execute(f'ALTER POLICY "{politica}" ON public."{tabla}" TO "{rol}"')
 

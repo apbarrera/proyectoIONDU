@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Path, Query, UploadFile
 
-from app.api.deps import AuditorActual, ContextoActual, DbSession
+from app.api.deps import AuditorActual, ContextoActual, DbSession, SoloAdministrador
 from app.core.config import get_settings
 from app.core.errors import ForbiddenError
 from app.ia.cliente import ClienteOpenAICompatible, ModeloLenguaje
@@ -16,9 +16,12 @@ from app.schemas.agente_ia import (
     AiConfirmResult,
     AiMessageInput,
     AiReply,
+    AiUsage,
+    AiUsageLimitUpdate,
 )
 from app.schemas.common import Page
 from app.services.agente_ia import ESTADOS_API, ServicioAgente
+from app.services.consumo_ia import ConsumoIAService
 
 router = APIRouter(prefix="/ai", tags=["Agente IA"])
 
@@ -158,6 +161,27 @@ def confirm_action(
 @router.post("/actions/{id}/cancel", status_code=204)
 def cancel_action(id: ActionId, contexto: ContextoActual, db: DbSession):
     _servicio(db, contexto).cancelar(id)
+
+
+@router.get("/usage", response_model=AiUsage)
+def get_usage(contexto: SoloAdministrador, db: DbSession):
+    """Consumo de tokens del mes y de los últimos meses, con el límite (RF-6.14)."""
+    return ConsumoIAService(db, contexto.empresa_id).resumen()
+
+
+@router.put("/usage/limit", response_model=AiUsage)
+def set_usage_limit(
+    datos: AiUsageLimitUpdate, contexto: SoloAdministrador, db: DbSession, auditor: AuditorActual
+):
+    """Configura el tope mensual de tokens de la empresa; null lo quita (RNF-12)."""
+    resumen = ConsumoIAService(db, contexto.empresa_id).configurar_limite(datos.monthly_limit)
+    limite = (
+        f"{datos.monthly_limit:,} tokens al mes".replace(",", ".")
+        if datos.monthly_limit is not None
+        else "sin límite"
+    )
+    auditor.registrar("ia", "Cambió el límite de tokens del agente", f"Nuevo límite: {limite}.")
+    return resumen
 
 
 @router.get("/actions", response_model=Page[AiAction])

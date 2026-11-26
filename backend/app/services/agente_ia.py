@@ -49,6 +49,7 @@ from app.schemas.agente_ia import (
 from app.schemas.common import Page
 from app.schemas.gasto import ExpenseCreate
 from app.schemas.inventario import AdjustmentCreate, MovementCreate
+from app.services.consumo_ia import ConsumoIAService
 from app.services.gasto import CategoriaGastoService, GastoService
 from app.services.inventario import InventarioService
 
@@ -175,6 +176,8 @@ class ServicioAgente:
             raise ServiceUnavailableError(
                 "El agente de IA no está configurado en este servidor.", code="AI_NOT_CONFIGURED"
             )
+        # RNF-12: con el límite mensual alcanzado no se llama al modelo (ni al de voz).
+        ConsumoIAService(self.db, self.empresa_id).exigir_cupo()
 
     def _proponer(
         self,

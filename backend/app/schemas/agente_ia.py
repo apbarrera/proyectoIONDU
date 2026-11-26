@@ -17,6 +17,26 @@ class AiMessageInput(ApiInput):
     text: str = Field(min_length=1, max_length=2000)
 
 
+# ---------- Consumo de tokens (RF-6.14) ----------
+class AiUsageMonth(ApiModel):
+    month: str  # AAAA-MM
+    used: int
+
+
+class AiUsage(ApiModel):
+    monthly_limit: int | None  # None: sin límite
+    used: int  # tokens del mes actual (Ecuador)
+    remaining: int | None
+    percent_used: float | None
+    near_limit: bool  # 80 % o más del límite
+    limit_reached: bool
+    history: list[AiUsageMonth]  # últimos 6 meses, del más antiguo al actual
+
+
+class AiUsageLimitUpdate(ApiInput):
+    monthly_limit: int | None = Field(ge=0, le=1_000_000_000)
+
+
 class AiExpenseProposal(ApiModel):
     total: Amount
     iva_amount: Amount

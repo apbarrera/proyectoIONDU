@@ -15,6 +15,7 @@ from app.core.errors import ServiceUnavailableError
 
 logger = logging.getLogger("iondu.ia")
 MAX_TOKENS_RESPUESTA = 800
+INTENTOS = 2
 
 
 @dataclass(frozen=True)
@@ -62,23 +63,38 @@ class ClienteOpenAICompatible:
             },
         }
         encabezados = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
-        try:
-            respuesta = httpx.post(
-                f"{self.base_url}/chat/completions",
-                json=cuerpo,
-                headers=encabezados,
-                timeout=self.timeout,
+        # Un modelo pequeño a veces corta el JSON (p. ej., si llega al tope de tokens):
+        # se reintenta una vez antes de rendirse.
+        for intento in range(1, INTENTOS + 1):
+            try:
+                respuesta = httpx.post(
+                    f"{self.base_url}/chat/completions",
+                    json=cuerpo,
+                    headers=encabezados,
+                    timeout=self.timeout,
+                )
+                respuesta.raise_for_status()
+                datos = respuesta.json()
+            except httpx.HTTPError as exc:
+                logger.error("El modelo no respondió: %s", type(exc).__name__)
+                raise _no_disponible() from None
+            except ValueError:
+                logger.error("El servicio del modelo respondió algo que no es JSON.")
+                raise _no_disponible() from None
+            try:
+                eleccion = datos["choices"][0]
+                resultado = json.loads(eleccion["message"]["content"])
+                if isinstance(resultado, dict):
+                    break
+            except (KeyError, IndexError, TypeError, ValueError):
+                pass
+            elecciones = datos.get("choices") if isinstance(datos, dict) else None
+            fin = (elecciones or [{}])[0].get("finish_reason")
+            logger.warning(
+                "Respuesta del modelo con formato inválido (intento %s, fin: %s).", intento, fin
             )
-            respuesta.raise_for_status()
-            datos = respuesta.json()
-            contenido = datos["choices"][0]["message"]["content"]
-            resultado = json.loads(contenido)
-        except httpx.HTTPError as exc:
-            logger.error("El modelo no respondió: %s", type(exc).__name__)
-            raise _no_disponible() from None
-        except (KeyError, IndexError, TypeError, ValueError):
-            logger.error("El modelo respondió con un formato inesperado.")
-            raise _no_disponible() from None
+        else:
+            raise _no_disponible()
 
         if not isinstance(resultado, dict):
             raise _no_disponible()

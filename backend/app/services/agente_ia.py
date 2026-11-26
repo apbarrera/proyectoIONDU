@@ -111,7 +111,7 @@ class ServicioAgente:
             )
         )
 
-        interpretacion = interpretar(respuesta.datos, list(categorias), hoy, productos)
+        interpretacion = interpretar(respuesta.datos, list(categorias), hoy, productos, texto)
         inventario = interpretacion.inventario
         if inventario and inventario.tipo == "ajuste" and not self.es_administrador:
             interpretacion = Interpretacion("aclaracion", SOLO_ADMIN_AJUSTA)

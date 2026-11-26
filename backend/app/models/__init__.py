@@ -6,6 +6,7 @@ Alembic hace `import app.models` y solo ve las tablas importadas en este archivo
 """
 
 from app.models.accion_ia import AccionIA  # noqa: F401
+from app.models.auditoria import Auditoria  # noqa: F401
 from app.models.categoria_gasto import CategoriaGasto  # noqa: F401
 from app.models.categoria_producto import CategoriaProducto  # noqa: F401
 from app.models.cliente import Cliente  # noqa: F401

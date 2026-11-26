@@ -9,6 +9,7 @@
 - Monorepo ordenado: `frontend/`, `backend/` y `docs/`.
 - Docker con tres servicios: `web` (Angular + Nginx), `api` (FastAPI) y `worker`. `docker-compose.yml` es compatible con Coolify: solo `web` es público; `api` y `worker` usan `expose`.
 - **PostgreSQL local para desarrollo** (servicio `db` en `docker-compose.override.yml`, que Coolify no lee): PostgreSQL 17 como Supabase, en `localhost:15432`. Exige `POSTGRES_PASSWORD` en el `.env` de cada uno.
+- **Almacenamiento S3 local** (servicio `storage`, SeaweedFS, solo red interna): guarda los RIDE como lo haría Supabase Storage en producción. El backend usa `boto3` y las variables `STORAGE_*` (25/11/2026, `DECISIONES.md` 1.4).
 - `.env.example` sin secretos. El `.gitignore` excluye `.env`, `*.p12`, `*.pfx`, `*.zip` y los archivos de Python (`.venv/`, `__pycache__/`, cachés).
 - CI en GitHub Actions: pruebas del frontend, revisión con Ruff y pruebas del backend (dentro de Docker) y construcción de las imágenes **solo con `docker-compose.yml`** (lo mismo que usa Coolify).
 - Corregido: `api` y `worker` compartían nombre de imagen y la construcción fallaba a veces con `image ... already exists`.
@@ -288,7 +289,7 @@ Detectados al conectar Ventas y Facturación (24/11/2026). Cada uno bloquea una 
 
 **Probar todo el sistema en local (frontend contra el backend real):**
 1. Node 22.22.3 o superior, 24.15 o superior, o 26 (el Angular CLI no corre con menos). Luego `cd frontend && npm ci && npx ng test --no-watch`.
-2. Con Docker encendido: copiar `.env.example` a `.env` y completar `POSTGRES_PASSWORD`, `APP_ENV=development`, las tres conexiones, `DEV_USER_ID=11111111-1111-1111-1111-111111111111` y `AUTH_JWT_PRIVATE_KEY` (generarla con `docker compose run --rm --no-deps api python -m scripts.generar_llave_jwt`). Luego `docker compose up --build -d`.
+2. Con Docker encendido: copiar `.env.example` a `.env` y completar `POSTGRES_PASSWORD`, `APP_ENV=development`, las tres conexiones, `DEV_USER_ID=11111111-1111-1111-1111-111111111111`, `STORAGE_ACCESS_KEY_ID` y `STORAGE_SECRET_ACCESS_KEY` (cualquier valor) y `AUTH_JWT_PRIVATE_KEY` (generarla con `docker compose run --rm --no-deps api python -m scripts.generar_llave_jwt`). Luego `docker compose up --build -d`.
 3. Preparar la base (desde `backend/`, con las variables de conexión del README): `scripts\bootstrap_local_auth.py` (solo en una base nueva: la primera migración aún espera `auth.users`), `alembic upgrade head` y `python -m scripts.cargar_datos_demo` con `DEMO_PASSWORD` definida (cafetería con un mes de ventas y usuarios demo con contraseña).
 4. Entrar con `admin@demo.iondu.ec` (Administrador) u `operador@demo.iondu.ec` (Operativo) y la contraseña de `DEMO_PASSWORD`. Para crear otro usuario o cambiar una contraseña: `docker compose exec api python -m scripts.crear_usuario --email <correo> --nombre "Nombre" [--empresa 1] [--rol Operativo]` (pide la contraseña sin mostrarla).
 5. Abrir http://localhost:8080 y recorrer: venta con cliente nuevo y con consumidor final (baja el stock), emitir factura (sin `.p12` debe dar un error claro), entrada, salida y ajuste de inventario, gasto con y sin proveedor, dashboard con distintos períodos, y configuración de la empresa. Con el Operativo, Dashboard, Recomendaciones, Ajustes y Empresa deben responder 403.

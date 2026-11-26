@@ -78,7 +78,9 @@ Cifra los certificados `.p12` de las empresas y sus contraseñas dentro de la ba
 2. Crear `environment.prod.ts` con `apiUrl: '/api'` y conectar los servicios de Angular (hoy son *mock*).
 3. Esquema de base de datos con migraciones, y Supabase Auth.
 4. Conectar a Supabase por el **Session Pooler** (`*.pooler.supabase.com:5432`): la conexión directa es solo IPv6 y Docker en un VPS sale normalmente por IPv4.
-5. Guardar los `.p12` cifrados (AES-GCM) en la base o en Supabase Storage: así ningún contenedor necesita volúmenes.
+5. Guardar los `.p12` cifrados (AES-GCM) en la base, y los PDF en un almacenamiento S3 (Supabase Storage por su
+   endpoint S3: `STORAGE_ENDPOINT_URL`, `STORAGE_REGION`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY` y el
+   bucket privado `STORAGE_BUCKET`): así ningún contenedor necesita volúmenes.
    El cifrado ya está implementado (`backend/app/core/cifrado.py`); falta la columna en la base.
 
 ## Comandos útiles

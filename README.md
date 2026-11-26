@@ -19,7 +19,8 @@ PWA para PyMEs ecuatorianas: facturación electrónica, ventas, gastos, inventar
 cp .env.example .env
 # Completar en .env: POSTGRES_PASSWORD, APP_ENV=development, las tres conexiones
 # (DATABASE_URL, WORKER_DATABASE_URL, MIGRATION_DATABASE_URL; ver la nota en .env.example)
-# DEV_USER_ID=11111111-1111-1111-1111-111111111111 y AUTH_JWT_PRIVATE_KEY, que se genera con:
+# DEV_USER_ID=11111111-1111-1111-1111-111111111111, STORAGE_ACCESS_KEY_ID y STORAGE_SECRET_ACCESS_KEY
+# (cualquier valor: son del almacenamiento S3 local) y AUTH_JWT_PRIVATE_KEY, que se genera con:
 #   docker compose run --rm --no-deps api python -m scripts.generar_llave_jwt
 docker compose up --build
 # abrir http://localhost:8080 (API interactiva en http://localhost:8080/api/docs)

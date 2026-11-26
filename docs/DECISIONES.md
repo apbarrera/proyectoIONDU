@@ -37,7 +37,14 @@
 - No se declaran redes propias: Coolify crea una red aislada por stack y conecta Traefik solo a los servicios con dominio.
 
 ### 1.4 Contenedores sin estado (sin volúmenes)
-- **Decisión:** nada se guarda en el disco de los contenedores. Archivos, PDF, XML e imágenes van a Supabase Storage.
+- **Decisión:** nada se guarda en el disco de los contenedores. Archivos, PDF, XML e imágenes van a un
+  almacenamiento de objetos con **API S3** (variables `STORAGE_*`): Supabase Storage por su endpoint S3 en producción
+  y **SeaweedFS** (servicio `storage` de `docker-compose.override.yml`) en local.
+- **Cambio (25/11/2026):** se reemplazó el cliente de Supabase (`supabase-py`) por `boto3`. El mismo código sirve
+  para cualquier proveedor S3 y el sistema corre completo en local. Se eligió SeaweedFS porque MinIO dejó de
+  publicar imágenes de Docker. En desarrollo la API crea el bucket si falta; en producción se crea privado al preparar
+  el ambiente. Rutas: `empresas/{id}/facturas/{id}/ride.pdf`; si el archivo no se puede leer, el RIDE se reconstruye
+  desde el XML autorizado.
 - **Por qué:** un contenedor se puede recrear en cada despliegue sin perder datos, y los respaldos se simplifican.
 - **Consecuencia:** se descartó el volumen de certificados que traía la propuesta inicial.
 
@@ -316,7 +323,7 @@
   nombre como `Pérez & Hijos <S.A.>` rompería el PDF o permitiría inyectar formato.
 - Sin autorización del SRI, el RIDE dice "PENDIENTE DE AUTORIZACIÓN"; con ella, muestra el número (en el esquema
   *offline* es la misma clave de acceso) y la fecha y hora de autorización.
-- Devuelve los bytes del PDF; se guardará en Supabase Storage (los contenedores no guardan archivos, decisión 1.4).
+- Devuelve los bytes del PDF; se guarda en el almacenamiento S3 (los contenedores no guardan archivos, decisión 1.4).
 
 ### 2.21 Cliente de los servicios web del SRI
 - **Decisión (25/10/2026):** `app/sri/servicios_web.py` habla con los servicios SOAP del esquema offline:

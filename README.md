@@ -41,6 +41,10 @@ La API se conecta como `iondu_app` y el worker como `iondu_worker`, igual que en
 de administrador y con RLS. Si algo falla con "permission denied", falta un permiso en las migraciones
 (ver `DECISIONES.md` 1.9).
 
+Agente de IA en local (opcional): instalar [Ollama](https://ollama.com), descargar el modelo con
+`ollama pull qwen2.5:7b` y poner en `.env` `LLM_BASE_URL=http://host.docker.internal:11434/v1`. Sin esa variable, el
+agente responde que no está configurado y el resto del sistema funciona igual.
+
 Inicio de sesión: `admin@demo.iondu.ec` (Administrador) u `operador@demo.iondu.ec` (Operativo), con la
 contraseña de `DEMO_PASSWORD`. Para crear usuarios o cambiar contraseñas:
 

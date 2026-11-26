@@ -692,3 +692,44 @@ Objeto `AuditEntry`:
 datos de la empresa, configuración de facturación y firma electrónica; usuarios (crear, editar, restablecer
 contraseña). Nunca se guardan contraseñas ni el contenido del `.p12`.
 
+## 15. Agente de IA
+
+Cualquier usuario de la empresa lo usa. **El modelo solo propone**: el backend valida su respuesta, guarda la
+propuesta y la ejecuta únicamente cuando alguien la confirma (`DECISIONES.md` 2.32). Por ahora entiende **texto** y
+propone **gastos**; inventario, imagen, voz y límites de tokens llegan en las siguientes etapas.
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `POST /api/ai/messages` | Cuerpo `{ "text" }` (máx. 2000 caracteres). Interpreta el mensaje | `200` con `AiReply` |
+| ✅ | `POST /api/ai/actions/{id}/confirm` | Ejecuta la propuesta. Cuerpo opcional con correcciones: `total`, `ivaAmount`, `categoryId`, `description`, `paymentMethod`, `date` | `200` con `{ "actionId", "status": "confirmado" \| "corregido", "expenseId" }` |
+| ✅ | `POST /api/ai/actions/{id}/cancel` | Descarta la propuesta | `204` |
+| ✅ | `GET /api/ai/actions` | Historial de la empresa (RF-6.13), del más reciente al más antiguo; `page`, `pageSize` | `200` con `Page<AiAction>` |
+
+Objeto `AiReply` (con propuesta; sin propuesta, `actionId` y `proposal` son `null` y `reply` explica o pregunta):
+
+```json
+{
+  "actionId": 12,
+  "reply": "Te propongo registrar: Gasto de $45.50 en «Servicios»; descripción: Pago de luz; pago: transferencia.",
+  "proposal": {
+    "type": "expense",
+    "summary": "Gasto de $45.50 en «Servicios»; …",
+    "expense": {
+      "total": 45.5, "ivaAmount": 0, "categoryId": 2, "categoryName": "Servicios",
+      "description": "Pago de luz", "supplierName": "Empresa Eléctrica",
+      "paymentMethod": "transferencia", "date": "2026-11-25"
+    }
+  }
+}
+```
+
+`AiAction` (historial): `id`, `timestamp`, `userName`, `instruction`, `reply`, `proposal`, `status`
+(`pendiente`, `confirmado`, `corregido`, `cancelado`, `sin_propuesta`) y `expenseId`.
+
+| HTTP | `code` | Cuándo |
+|---|---|---|
+| 503 | `AI_NOT_CONFIGURED` | Falta `LLM_BASE_URL` en el servidor |
+| 503 | `AI_UNAVAILABLE` | El modelo no respondió o respondió con un formato inválido |
+| 404 | `AI_ACTION_NOT_FOUND` | La propuesta no existe o es de otra empresa |
+| 409 | `AI_ACTION_RESOLVED` | La propuesta ya fue confirmada o cancelada |
+

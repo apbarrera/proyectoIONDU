@@ -482,6 +482,25 @@
 - **Pendiente:** registrar inicios de sesión y las propuestas confirmadas del agente de IA cuando exista (módulos
   `auth` e `ia`).
 
+### 2.32 Agente de IA: el modelo propone, el backend decide
+- **Decisión (26/11/2026):** cliente único compatible con la API de OpenAI (`/v1/chat/completions`). En local se usa
+  **Ollama** con `qwen2.5:7b` en la GPU (gratis, sin clave, los datos no salen de la computadora); en producción, la URL,
+  el modelo y la clave del proveedor externo que pide RF-6.1 (variables `LLM_*`). El VPS previsto (2 vCPU, 4 GB, sin GPU)
+  no puede correr un modelo útil.
+- **El modelo solo propone.** Responde con salida estructurada (JSON Schema) y el backend la valida con reglas en código:
+  acciones permitidas (`registrar_gasto`, `pedir_aclaracion`, `fuera_de_alcance`), montos entre $0,01 y $1.000.000, IVA
+  no mayor que el total, categoría existente, método de pago válido y fecha de hasta un año atrás. Lo que no cumple se
+  trata como "no entendí".
+- **Nunca toca ingresos (RF-6.7):** no existe ningún camino de código del agente a ventas o facturas; no depende del
+  prompt. Las instrucciones escondidas en el mensaje ("ignora tus reglas…") se rechazan igual.
+- **La propuesta vive en el servidor** (`accion_ia`, estado PENDIENTE) y al confirmar se ejecuta esa misma propuesta, con
+  las correcciones permitidas, por `GastoService`. El cambio de estado y el gasto van en la misma transacción con la
+  fila bloqueada: no se puede confirmar dos veces. Queda en la auditoría con el módulo `ia`.
+- **Tokens:** cada llamada guarda su consumo en `consumo_tokens` (RF-6.14); los límites por empresa (RNF-12) llegan después.
+- **Probado con el modelo real:** 7 de 7 categorías correctas en casos típicos, respuestas en 2 a 9 s, ventas e intentos
+  de manipulación rechazados. Un modelo de 7B se equivoca más que uno grande: la confirmación humana es obligatoria.
+- **Etapas:** 1) texto y gastos ✅; 2) inventario; 3) imagen; 4) voz; 5) límites de tokens.
+
 ## 3. Producto
 
 ### 3.1 Ventas y Facturación son un solo módulo

@@ -4,6 +4,7 @@ Se usa un modelo falso con respuestas fijas: las pruebas no necesitan Ollama ni 
 """
 
 import json
+import re
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
@@ -15,7 +16,7 @@ from sqlalchemy import select
 from app.api.agente_ia import get_modelo
 from app.core.errors import ServiceUnavailableError
 from app.ia import cliente as modulo_cliente
-from app.ia.agente import interpretar
+from app.ia.agente import RESPUESTA_MAXIMA, esquema, interpretar
 from app.ia.cliente import ClienteOpenAICompatible, RespuestaModelo
 from app.main import app
 from app.models import AccionIA, Auditoria, ConsumoTokens, Gasto
@@ -117,6 +118,39 @@ def test_el_prompt_lleva_las_categorias_y_el_mensaje_va_aparte(client, modelo, u
     assert mensaje_usuario == {"role": "user", "content": "Gasté $10 en taxi"}
     categorias = modelo.esquema["properties"]["gasto"]["properties"]["categoria"]["enum"]
     assert set(categorias) == set(CATEGORIAS)
+
+
+def _textos_libres(nodo):
+    """Todos los campos de texto del esquema que no son una lista cerrada (enum)."""
+    for campo in nodo.get("properties", {}).values():
+        if campo.get("type") == "string" and "enum" not in campo:
+            yield campo
+        yield from _textos_libres(campo)
+
+
+def test_los_textos_libres_tienen_tope_de_largo():
+    """Sin tope, un modelo pequeño repetía la misma frase ante un saludo hasta agotar los
+    tokens y el agente respondía "no disponible"."""
+    textos = list(_textos_libres(esquema(CATEGORIAS, [], con_lectura=True)))
+    assert len(textos) == 6  # respuesta, descripción, proveedor, fecha, motivo y lectura
+    assert all("pattern" in campo for campo in textos)
+
+
+@pytest.mark.parametrize(
+    ("texto", "valido"),
+    [
+        ("¡Hola! ¿En qué te ayudo?", True),
+        ("", True),
+        ("x" * RESPUESTA_MAXIMA, True),
+        ("x" * (RESPUESTA_MAXIMA + 1), False),
+        ('cierra" la cadena', False),  # una comilla le permitía salirse del JSON
+        ("dos\nlíneas", False),
+        ("barra \\ invertida", False),
+    ],
+)
+def test_el_tope_de_la_respuesta(texto, valido):
+    patron = esquema(CATEGORIAS, [])["properties"]["respuesta"]["pattern"]
+    assert bool(re.fullmatch(patron, texto)) is valido
 
 
 @pytest.mark.parametrize(

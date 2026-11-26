@@ -1,0 +1,23 @@
+# Saltos de línea LF en el repositorio y en la copia de trabajo, en cualquier sistema.
+# Evita el aviso "LF will be replaced by CRLF" y que Ruff, Prettier y Docker vean archivos distintos.
+* text=auto eol=lf
+
+# Scripts de Windows: CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binarios: nunca se convierten.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.gif binary
+*.pdf binary
+*.xlsx binary
+*.zip binary
+*.p12 binary
+*.pfx binary
+*.woff binary
+*.woff2 binary

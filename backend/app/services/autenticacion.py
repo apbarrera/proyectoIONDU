@@ -18,7 +18,11 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.core import contrasenas
-from app.core.errors import TooManyRequestsError, UnauthenticatedError
+from app.core.errors import (
+    TooManyRequestsError,
+    UnauthenticatedError,
+    UnprocessableError,
+)
 from app.core.seguridad import EmisorTokens
 from app.models import SesionRefresh, Usuario
 
@@ -142,6 +146,31 @@ class ServicioAutenticacion:
 
         if fila.rotada_en is None:
             fila.rotada_en = ahora
+        sesion = self._crear_sesion(usuario, ahora)
+        self.db.commit()
+        return sesion
+
+    # ---------- Cambio de contraseña (el propio usuario) ----------
+    def cambiar_contrasena(
+        self, usuario_id: UUID, contrasena_actual: str, contrasena_nueva: str
+    ) -> SesionEmitida:
+        """Cierra todas las sesiones (también las de otros dispositivos) y entrega una
+        nueva para este navegador."""
+        ahora = self._reloj()
+        usuario = self.db.get(Usuario, usuario_id, with_for_update=True)
+        if usuario is None or not usuario.activo:
+            raise _sesion_invalida()
+        if not contrasenas.verificar(usuario.password_hash, contrasena_actual):
+            raise UnprocessableError(
+                "La contraseña actual no es correcta.", code="INVALID_CURRENT_PASSWORD"
+            )
+        if contrasena_nueva == contrasena_actual:
+            raise UnprocessableError(
+                "La contraseña nueva debe ser distinta de la actual.", code="SAME_PASSWORD"
+            )
+
+        usuario.password_hash = contrasenas.hashear(contrasena_nueva)
+        self._revocar_todas(usuario.id, ahora)
         sesion = self._crear_sesion(usuario, ahora)
         self.db.commit()
         return sesion

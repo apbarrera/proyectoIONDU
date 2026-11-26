@@ -15,14 +15,17 @@ from uuid import UUID
 from fastapi import APIRouter, Cookie, Depends, Response, status
 from pydantic import Field
 
-from app.api.deps import DbSession, get_emisor
+from app.api.deps import DbSession, UsuarioActual, get_emisor
 from app.core.config import get_settings
 from app.core.errors import ServiceUnavailableError
 from app.core.seguridad import EmisorTokens
 from app.schemas.common import ApiInput, ApiModel
+from app.schemas.usuario import PasswordChange
 from app.services.autenticacion import ServicioAutenticacion, SesionEmitida
 
 router = APIRouter(prefix="/auth", tags=["Sesión"])
+# Rutas de la cuenta que exigen el token de acceso (fuera de /api/auth, que usa la cookie).
+cuenta_router = APIRouter(tags=["Sesión"])
 
 COOKIE_REFRESH = "iondu_refresh"
 RUTA_COOKIE = "/api/auth"
@@ -98,3 +101,13 @@ def logout(servicio: Servicio, refresh_token: CookieRefresh = None) -> Response:
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     response.delete_cookie(COOKIE_REFRESH, path=RUTA_COOKIE, httponly=True, samesite="strict")
     return response
+
+
+@cuenta_router.post("/me/password", response_model=TokenAcceso)
+def change_password(
+    datos: PasswordChange, usuario: UsuarioActual, response: Response, servicio: Servicio
+):
+    """Cambia la contraseña del usuario de la sesión. Cierra sus demás sesiones y
+    entrega una nueva para este navegador (token y cookie)."""
+    sesion = servicio.cambiar_contrasena(usuario.id, datos.current_password, datos.new_password)
+    return _responder(response, sesion)

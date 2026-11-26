@@ -31,6 +31,15 @@ from app.models.rol import ADMINISTRADOR, OPERATIVO  # noqa: E402
 from tests.tokens import crear_token, verificador_de_prueba  # noqa: E402
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
+FUNCION_OTRAS_EMPRESAS = """
+CREATE OR REPLACE FUNCTION public.app_usuario_en_otras_empresas(p_usuario uuid, p_empresa integer)
+RETURNS boolean LANGUAGE sql STABLE AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM public.usuario_empresa AS ue
+        WHERE ue.id_usuario = p_usuario AND ue.id_empresa <> p_empresa AND ue.estado = 'ACTIVO'
+    );
+$$
+"""
 SERVIDORES_DE_PRUEBA = {"127.0.0.1", "localhost", "db"}
 
 
@@ -94,6 +103,9 @@ def engine():
 
         Base.metadata.drop_all(eng)
         Base.metadata.create_all(eng)
+        # Función que crea la migración f7a2d4c8e915 (create_all no ejecuta migraciones).
+        with eng.begin() as conn:
+            conn.exec_driver_sql(FUNCION_OTRAS_EMPRESAS)
         inicializado = True
         yield eng
     finally:

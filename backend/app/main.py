@@ -21,6 +21,7 @@ from app.api import (
     me,
     products,
     sales,
+    usuarios,
 )
 from app.core.config import get_settings
 from app.core.errors import register_error_handlers
@@ -97,6 +98,8 @@ register_error_handlers(app)
 
 app.include_router(health.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
+app.include_router(auth.cuenta_router, prefix="/api")
+app.include_router(usuarios.router, prefix="/api")
 app.include_router(products.router, prefix="/api")
 app.include_router(customers.router, prefix="/api")
 app.include_router(sales.router, prefix="/api")

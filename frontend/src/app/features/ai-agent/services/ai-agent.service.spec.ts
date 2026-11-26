@@ -1,0 +1,107 @@
+import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { AiAgentService } from './ai-agent.service';
+
+const PROPOSAL = {
+  type: 'expense',
+  summary: 'Gasto de $25.00 en «Empaque».',
+  expense: {
+    total: 25,
+    ivaAmount: 0,
+    categoryId: 4,
+    categoryName: 'Empaque',
+    description: 'Empaques',
+    supplierName: null,
+    paymentMethod: 'efectivo',
+    date: null,
+  },
+};
+
+describe('AiAgentService', () => {
+  let service: AiAgentService;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    service = TestBed.inject(AiAgentService);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('envía el texto y enlaza la respuesta con su propuesta', () => {
+    service.send('Gasté $25 en empaques').subscribe();
+    const request = http.expectOne({ method: 'POST', url: '/api/ai/messages' });
+    expect(request.request.body).toEqual({ text: 'Gasté $25 en empaques' });
+    request.flush({ actionId: 12, reply: 'Te propongo registrar…', proposal: PROPOSAL });
+
+    const [user, assistant] = service.messages();
+    expect(user.content).toBe('Gasté $25 en empaques');
+    expect(assistant.interactionId).toBe('12');
+    expect(service.interactions()[0].proposal?.expense?.amount).toBe(25);
+  });
+
+  it('sin propuesta solo muestra la respuesta', () => {
+    service.send('Registra una venta').subscribe();
+    http.expectOne('/api/ai/messages').flush({ actionId: null, reply: 'Solo puedo registrar gastos.', proposal: null });
+
+    expect(service.messages()[1].content).toBe('Solo puedo registrar gastos.');
+    expect(service.messages()[1].interactionId).toBeUndefined();
+    expect(service.interactions()).toEqual([]);
+  });
+
+  it('si el agente no está disponible muestra el mensaje del servidor', () => {
+    service.send('Gasté $25').subscribe();
+    http.expectOne('/api/ai/messages').flush(
+      { error: { code: 'AI_NOT_CONFIGURED', message: 'El agente de IA no está configurado.', details: [] } },
+      { status: 503, statusText: 'Service Unavailable' },
+    );
+    expect(service.messages()[1].content).toBe('El agente de IA no está configurado.');
+  });
+
+  it('imagen y voz todavía no se envían al modelo', () => {
+    service.send('Mensaje de voz', 'voz').subscribe();
+    http.expectNone('/api/ai/messages');
+    expect(service.messages()[1].content).toContain('solo texto');
+  });
+
+  it('confirmar actualiza el resultado con el gasto creado', () => {
+    service.send('Gasté $25 en empaques').subscribe();
+    http.expectOne('/api/ai/messages').flush({ actionId: 12, reply: '…', proposal: PROPOSAL });
+
+    service.confirmProposal('12', { amount: 30 });
+    const request = http.expectOne('/api/ai/actions/12/confirm');
+    expect(request.request.body).toEqual({ total: 30 });
+    request.flush({ actionId: 12, status: 'corregido', expenseId: 9 });
+
+    expect(service.interactions()[0]).toMatchObject({ result: 'corregido', expenseId: 9 });
+  });
+
+  it('carga el historial desde el backend', () => {
+    service.loadHistory().subscribe();
+    http.expectOne((r) => r.url === '/api/ai/actions').flush({
+      items: [
+        {
+          id: 3,
+          timestamp: '2026-11-26T10:00:00-05:00',
+          userName: 'Ana',
+          instruction: 'Compré café',
+          reply: '¿Cuánto pagaste?',
+          proposal: null,
+          status: 'sin_propuesta',
+          expenseId: null,
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 100,
+    });
+
+    expect(service.interactions()[0]).toMatchObject({
+      id: '3',
+      result: 'sin_propuesta',
+      interpretedData: '¿Cuánto pagaste?',
+    });
+  });
+});

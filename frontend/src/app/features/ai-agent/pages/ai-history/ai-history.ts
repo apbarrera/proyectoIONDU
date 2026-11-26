@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { AiAgentService } from '../../services/ai-agent.service';
 import { AiInteraction } from '../../models/ai-message.model';
 import { PageHeader } from '../../../../shared/components/page-header/page-header';
@@ -9,6 +9,7 @@ const RESULT_LABELS: Record<AiInteraction['result'], string> = {
   confirmado: 'Confirmado',
   corregido: 'Corregido',
   cancelado: 'Cancelado',
+  sin_propuesta: 'Sin propuesta',
 };
 
 @Component({
@@ -17,7 +18,7 @@ const RESULT_LABELS: Record<AiInteraction['result'], string> = {
   templateUrl: './ai-history.html',
   styleUrl: './ai-history.scss',
 })
-export class AiHistory {
+export class AiHistory implements OnInit {
   aiAgent = inject(AiAgentService);
 
   columns: DataTableColumn<AiInteraction>[] = [
@@ -28,4 +29,8 @@ export class AiHistory {
     { key: 'interpretedData', header: 'Datos interpretados', cell: (i) => i.interpretedData },
     { key: 'result', header: 'Resultado', cell: (i) => RESULT_LABELS[i.result] },
   ];
+
+  ngOnInit(): void {
+    this.aiAgent.loadHistory().subscribe();
+  }
 }

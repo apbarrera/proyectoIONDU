@@ -2,6 +2,7 @@ import { Component, computed, inject, input, output, signal } from '@angular/cor
 import { FormsModule } from '@angular/forms';
 import { AiInteraction } from '../../models/ai-message.model';
 import { AiAgentService } from '../../services/ai-agent.service';
+import { ExpensesService } from '../../../expenses/services/expenses.service';
 import { Button } from '../../../../shared/components/button/button';
 import { StatusBadge, BadgeTone } from '../../../../shared/components/status-badge/status-badge';
 
@@ -10,6 +11,7 @@ const RESULT_LABELS: Record<AiInteraction['result'], string> = {
   confirmado: 'Confirmado',
   corregido: 'Corregido',
   cancelado: 'Cancelado',
+  sin_propuesta: 'Sin propuesta',
 };
 
 const RESULT_TONES: Record<AiInteraction['result'], BadgeTone> = {
@@ -17,6 +19,7 @@ const RESULT_TONES: Record<AiInteraction['result'], BadgeTone> = {
   confirmado: 'success',
   corregido: 'info',
   cancelado: 'neutral',
+  sin_propuesta: 'neutral',
 };
 
 @Component({
@@ -27,6 +30,7 @@ const RESULT_TONES: Record<AiInteraction['result'], BadgeTone> = {
 })
 export class ProposalCard {
   private aiAgent = inject(AiAgentService);
+  readonly expenses = inject(ExpensesService);
 
   interaction = input.required<AiInteraction>();
   resolved = output<void>();
@@ -36,7 +40,7 @@ export class ProposalCard {
 
   editing = signal(false);
   editedAmount = signal(0);
-  editedCategory = signal('');
+  editedCategoryId = signal(0);
   editedQuantity = signal(0);
 
   isPending = computed(() => this.interaction().result === 'pendiente');
@@ -46,7 +50,8 @@ export class ProposalCard {
     if (!proposal) return;
     if (proposal.expense) {
       this.editedAmount.set(proposal.expense.amount);
-      this.editedCategory.set(proposal.expense.category);
+      this.editedCategoryId.set(proposal.expense.categoryId);
+      if (!this.expenses.categories().length) this.expenses.loadCategories().subscribe();
     }
     if (proposal.inventory) {
       this.editedQuantity.set(proposal.inventory.quantityDelta);
@@ -55,14 +60,15 @@ export class ProposalCard {
   }
 
   confirm(): void {
-    const overrides = this.editing()
-      ? {
-          amount: this.editedAmount(),
-          category: this.editedCategory(),
-          quantityDelta: this.editedQuantity(),
-        }
-      : undefined;
-    this.aiAgent.confirmProposal(this.interaction().id, overrides);
+    const expense = this.interaction().proposal?.expense;
+    const corrections =
+      this.editing() && expense
+        ? {
+            ...(this.editedAmount() !== expense.amount ? { amount: this.editedAmount() } : {}),
+            ...(this.editedCategoryId() !== expense.categoryId ? { categoryId: this.editedCategoryId() } : {}),
+          }
+        : undefined;
+    this.aiAgent.confirmProposal(this.interaction().id, corrections);
     this.editing.set(false);
     this.resolved.emit();
   }

@@ -17,7 +17,7 @@
         <div class="floating-ai-panel__row" [class.floating-ai-panel__row--user]="message.role === 'user'">
           <div class="floating-ai-panel__bubble" [class.floating-ai-panel__bubble--user]="message.role === 'user'">
             <p>{{ message.content }}</p>
-            @if (message.role === 'assistant' && interactionFor(message.id); as interaction) {
+            @if (message.role === 'assistant' && interactionFor(message.interactionId); as interaction) {
               <app-proposal-card [interaction]="interaction" />
             }
           </div>

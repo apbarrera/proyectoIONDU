@@ -17,14 +17,13 @@ export class FloatingAiPanel {
   open = signal(false);
   draft = signal('');
   sending = signal(false);
-  messageInteractions = signal<Record<string, string>>({});
 
   toggle(): void {
     this.open.update((v) => !v);
   }
 
-  interactionFor(messageId: string) {
-    const interactionId = this.messageInteractions()[messageId];
+  interactionFor(interactionId: string | undefined) {
+    if (!interactionId) return null;
     return this.aiAgent.interactions().find((i) => i.id === interactionId) ?? null;
   }
 
@@ -34,10 +33,6 @@ export class FloatingAiPanel {
 
     this.sending.set(true);
     this.draft.set('');
-    this.aiAgent.send(text).subscribe((msg) => {
-      const latestInteraction = this.aiAgent.interactions()[0];
-      this.messageInteractions.update((m) => ({ ...m, [msg.id]: latestInteraction.id }));
-      this.sending.set(false);
-    });
+    this.aiAgent.send(text).subscribe(() => this.sending.set(false));
   }
 }

@@ -1,7 +1,7 @@
 export type AiAttachmentType = 'image' | 'audio';
 export type AiInputType = 'texto' | 'imagen' | 'voz';
 export type AiProposalType = 'expense' | 'inventory';
-export type AiInteractionResult = 'pendiente' | 'confirmado' | 'corregido' | 'cancelado';
+export type AiInteractionResult = 'pendiente' | 'confirmado' | 'corregido' | 'cancelado' | 'sin_propuesta';
 
 export interface AiAttachment {
   type: AiAttachmentType;
@@ -15,12 +15,20 @@ export interface AiMessage {
   content: string;
   attachments?: AiAttachment[];
   timestamp: string;
+  /** Propuesta asociada a la respuesta del asistente, si la hay. */
+  interactionId?: string;
 }
 
+/** Gasto que propone el agente (lo valida y lo guarda el backend al confirmar). */
 export interface AiExpenseProposal {
-  category: string;
-  providerName: string;
   amount: number;
+  ivaAmount: number;
+  categoryId: number;
+  category: string;
+  description: string;
+  providerName: string | null;
+  paymentMethod: string;
+  date: string | null;
 }
 
 export interface AiInventoryProposal {
@@ -48,4 +56,11 @@ export interface AiInteraction {
   interpretedData: string;
   proposal: AiProposal | null;
   result: AiInteractionResult;
+  expenseId?: number | null;
+}
+
+/** Correcciones antes de confirmar (botón "Corregir"). */
+export interface AiProposalCorrections {
+  amount?: number;
+  categoryId?: number;
 }

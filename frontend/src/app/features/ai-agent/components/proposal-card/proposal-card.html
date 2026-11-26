@@ -10,7 +10,13 @@
     } @else if (proposal.expense) {
       <div class="proposal-card__edit-row">
         <label>Categoría</label>
-        <input [ngModel]="editedCategory()" (ngModelChange)="editedCategory.set($event)" />
+        <select [ngModel]="editedCategoryId()" (ngModelChange)="editedCategoryId.set(+$event)">
+          @for (category of expenses.categories(); track category.id) {
+            <option [ngValue]="category.id">{{ category.name }}</option>
+          } @empty {
+            <option [ngValue]="proposal.expense.categoryId">{{ proposal.expense.category }}</option>
+          }
+        </select>
       </div>
       <div class="proposal-card__edit-row">
         <label>Monto</label>

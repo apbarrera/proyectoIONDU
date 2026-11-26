@@ -3,13 +3,18 @@
 # En Coolify NO se usa (Coolify solo lee docker-compose.yml).
 #
 # También agrega un PostgreSQL local ("db") para desarrollar sin depender de
-# Supabase. Las tres conexiones de .env son obligatorias; en local pueden apuntar
+# Supabase, y un almacenamiento S3 local ("storage") para los PDF de las facturas.
+# Las tres conexiones de .env son obligatorias; en local pueden apuntar
 # a este PostgreSQL (ver la nota de DATABASE_URL en .env.example).
 
 x-local-db-url: &local-db-url
   DATABASE_URL: ${DATABASE_URL:?Define DATABASE_URL con el usuario de API}
   WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:?Define WORKER_DATABASE_URL con el usuario del worker}
   MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:?Define MIGRATION_DATABASE_URL con el usuario de migraciones}
+  # Almacenamiento local (servicio "storage", SeaweedFS con API S3).
+  STORAGE_ENDPOINT_URL: http://storage:8333
+  STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:?Define STORAGE_ACCESS_KEY_ID en .env (ver .env.example)}
+  STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:?Define STORAGE_SECRET_ACCESS_KEY en .env (ver .env.example)}
 
 services:
   web:
@@ -24,6 +29,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      storage:
+        condition: service_started
 
   worker:
     environment:
@@ -31,6 +38,23 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      storage:
+        condition: service_started
+
+  # Almacenamiento de archivos con API S3, como Supabase Storage. Solo red interna:
+  # la API y el worker lo usan; no se publica ningún puerto.
+  storage:
+    image: chrislusf/seaweedfs:latest
+    restart: unless-stopped
+    command: server -dir=/data -s3 -s3.port=8333 -ip.bind=0.0.0.0
+    environment:
+      # Credenciales de administrador del S3 local (las mismas que usa la API).
+      AWS_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:?Define STORAGE_ACCESS_KEY_ID en .env}
+      AWS_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:?Define STORAGE_SECRET_ACCESS_KEY en .env}
+    expose:
+      - "8333"
+    volumes:
+      - storage-data:/data
 
   # Misma versión mayor de PostgreSQL que Supabase.
   db:
@@ -55,3 +79,4 @@ services:
 
 volumes:
   db-data:
+  storage-data:

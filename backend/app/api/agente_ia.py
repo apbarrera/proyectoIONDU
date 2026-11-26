@@ -46,7 +46,13 @@ def _servicio(db, contexto, modelo=None) -> ServicioAgente:
             "Para usar el agente de IA debes iniciar sesión con tu usuario.",
             code="USER_SESSION_REQUIRED",
         )
-    return ServicioAgente(db, contexto.empresa_id, contexto.usuario.id, modelo)
+    return ServicioAgente(
+        db,
+        contexto.empresa_id,
+        contexto.usuario.id,
+        modelo,
+        es_administrador=contexto.es_administrador,
+    )
 
 
 @router.post("/messages", response_model=AiReply)
@@ -62,18 +68,25 @@ def confirm_action(
     db: DbSession,
     auditor: AuditorActual,
 ):
-    accion, id_gasto = _servicio(db, contexto).confirmar(id, datos)
+    accion, id_gasto, id_movimiento = _servicio(db, contexto).confirmar(id, datos)
     estado = ESTADOS_API[accion.estado]
     corregido = estado == "corregido"
     instruccion = accion.instruccion_recibida[:200]
+    if id_gasto is not None:
+        hecho, entidad, id_entidad = f"Gasto #{id_gasto}", "gasto", id_gasto
+    else:
+        hecho, entidad = f"Movimiento de inventario #{id_movimiento}", "movimiento_inventario"
+        id_entidad = id_movimiento
     auditor.registrar(
         "ia",
         "Corrigió y confirmó propuesta de IA" if corregido else "Confirmó propuesta de IA",
-        f"Gasto #{id_gasto} registrado desde el agente. Instrucción: «{instruccion}»",
-        entidad="gasto",
-        id_entidad=id_gasto,
+        f"{hecho} registrado desde el agente. Instrucción: «{instruccion}»",
+        entidad=entidad,
+        id_entidad=id_entidad,
     )
-    return AiConfirmResult(action_id=id, status=estado, expense_id=id_gasto)
+    return AiConfirmResult(
+        action_id=id, status=estado, expense_id=id_gasto, movement_id=id_movimiento
+    )
 
 
 @router.post("/actions/{id}/cancel", status_code=204)

@@ -1,10 +1,11 @@
 """Agente de IA: interpreta mensajes, guarda la propuesta y la ejecuta al confirmarla.
 
 - La propuesta queda guardada en `accion_ia` (estado PENDIENTE). Al confirmar se ejecuta
-  esa misma propuesta, con las correcciones permitidas, por el servicio de gastos: el
-  navegador no puede pedirle al agente que haga otra cosa (RF-6.9).
+  esa misma propuesta, con las correcciones permitidas, por el servicio de gastos o de
+  inventario: el navegador no puede pedirle al agente que haga otra cosa (RF-6.9).
 - Cada llamada al modelo suma sus tokens en `consumo_tokens` (RF-6.14).
-- Cualquier usuario de la empresa puede confirmar o cancelar (RF-6.11).
+- Cualquier usuario de la empresa puede confirmar o cancelar (RF-6.11), salvo los
+  ajustes por conteo, que son solo del Administrador (RF-4.8).
 """
 
 import uuid
@@ -18,23 +19,35 @@ from sqlalchemy.orm import Session
 from app.core.config import TIMEZONE
 from app.core.errors import (
     ConflictError,
+    ForbiddenError,
     NotFoundError,
     ServiceUnavailableError,
     UnprocessableError,
 )
-from app.ia.agente import PropuestaGasto, esquema, interpretar, prompt_sistema
+from app.ia.agente import (
+    Interpretacion,
+    ProductoDisponible,
+    PropuestaGasto,
+    PropuestaInventario,
+    esquema,
+    interpretar,
+    prompt_sistema,
+)
 from app.ia.cliente import ModeloLenguaje
-from app.models import AccionIA, ConsumoTokens, Usuario, UsuarioEmpresa
+from app.models import AccionIA, ConsumoTokens, Producto, Usuario, UsuarioEmpresa
 from app.schemas.agente_ia import (
     AiAction,
     AiConfirm,
     AiExpenseProposal,
+    AiInventoryProposal,
     AiProposal,
     AiReply,
 )
 from app.schemas.common import Page
 from app.schemas.gasto import ExpenseCreate
+from app.schemas.inventario import AdjustmentCreate, MovementCreate
 from app.services.gasto import CategoriaGastoService, GastoService
+from app.services.inventario import InventarioService
 
 ZONA = ZoneInfo(TIMEZONE)
 PENDIENTE = "PENDIENTE"
@@ -49,6 +62,12 @@ ESTADOS_API = {
     CANCELADO: "cancelado",
     SIN_PROPUESTA: "sin_propuesta",
 }
+# Productos que se le muestran al modelo (los activos de la empresa, por nombre).
+MAX_PRODUCTOS = 300
+SOLO_ADMIN_AJUSTA = (
+    "Los ajustes por conteo físico los confirma un Administrador. Si llegó o salió "
+    "mercadería, dímelo como entrada o salida."
+)
 
 
 class ServicioAgente:
@@ -58,11 +77,14 @@ class ServicioAgente:
         empresa_id: int,
         usuario_id: uuid.UUID | None,
         modelo: ModeloLenguaje | None = None,
+        *,
+        es_administrador: bool = False,
     ):
         self.db = db
         self.empresa_id = empresa_id
         self.usuario_id = usuario_id
         self.modelo = modelo
+        self.es_administrador = es_administrador
 
     # ---------- Interpretar ----------
     def interpretar(self, texto: str) -> AiReply:
@@ -71,13 +93,14 @@ class ServicioAgente:
                 "El agente de IA no está configurado en este servidor.", code="AI_NOT_CONFIGURED"
             )
         categorias = self._categorias()
+        productos = self._productos()
         hoy = datetime.now(ZONA).date()
         respuesta = self.modelo.completar_json(
             [
-                {"role": "system", "content": prompt_sistema(list(categorias), hoy)},
+                {"role": "system", "content": prompt_sistema(list(categorias), productos, hoy)},
                 {"role": "user", "content": texto},
             ],
-            esquema(list(categorias)),
+            esquema(list(categorias), productos),
         )
         self.db.add(
             ConsumoTokens(
@@ -88,35 +111,56 @@ class ServicioAgente:
             )
         )
 
-        interpretacion = interpretar(respuesta.datos, list(categorias), hoy)
-        gasto = interpretacion.gasto
+        interpretacion = interpretar(respuesta.datos, list(categorias), hoy, productos)
+        inventario = interpretacion.inventario
+        if inventario and inventario.tipo == "ajuste" and not self.es_administrador:
+            interpretacion = Interpretacion("aclaracion", SOLO_ADMIN_AJUSTA)
+
+        gasto, inventario = interpretacion.gasto, interpretacion.inventario
+        hay_propuesta = gasto is not None or inventario is not None
         accion = AccionIA(
             id_empresa=self.empresa_id,
             id_usuario=self.usuario_id,
-            tipo_accion="registrar_gasto" if gasto else interpretacion.tipo,
+            tipo_accion=(
+                "registrar_gasto"
+                if gasto
+                else "movimiento_inventario"
+                if inventario
+                else interpretacion.tipo
+            ),
             instruccion_recibida=texto,
             payload_json={
                 "respuesta": interpretacion.respuesta,
                 "propuesta": gasto.como_json() if gasto else None,
+                "propuesta_inventario": inventario.como_json() if inventario else None,
                 "modelo": respuesta.modelo,
             },
-            estado=PENDIENTE if gasto else SIN_PROPUESTA,
+            estado=PENDIENTE if hay_propuesta else SIN_PROPUESTA,
         )
         self.db.add(accion)
         self.db.commit()
 
         return AiReply(
-            action_id=accion.id_accion_ia if gasto else None,
+            action_id=accion.id_accion_ia if hay_propuesta else None,
             reply=interpretacion.respuesta,
-            proposal=self._propuesta_api(gasto, categorias) if gasto else None,
+            proposal=self._propuesta_api(gasto, inventario, categorias) if hay_propuesta else None,
         )
 
     # ---------- Confirmar y cancelar ----------
-    def confirmar(self, id_accion: int, correcciones: AiConfirm) -> tuple[AccionIA, int]:
+    def confirmar(
+        self, id_accion: int, correcciones: AiConfirm
+    ) -> tuple[AccionIA, int | None, int | None]:
+        """Ejecuta la propuesta. Devuelve la acción, el id del gasto y el del movimiento."""
         accion = self._pendiente(id_accion)
-        propuesta = PropuestaGasto.desde_json(accion.payload_json["propuesta"])
-        categorias = self._categorias()
         cambios = correcciones.model_dump(exclude_unset=True, exclude_none=True)
+        datos = accion.payload_json
+        if datos.get("propuesta_inventario"):
+            return accion, None, self._confirmar_inventario(accion, datos, cambios)
+        return accion, self._confirmar_gasto(accion, datos, cambios), None
+
+    def _confirmar_gasto(self, accion: AccionIA, datos: dict, cambios: dict) -> int:
+        propuesta = PropuestaGasto.desde_json(datos["propuesta"])
+        categorias = self._categorias()
 
         id_categoria = cambios.get("category_id") or categorias.get(propuesta.categoria)
         if id_categoria not in categorias.values():
@@ -128,7 +172,7 @@ class ServicioAgente:
             descripcion = f"{descripcion} ({propuesta.proveedor})"
         fecha: date | None = cambios.get("date", propuesta.fecha)
 
-        datos = ExpenseCreate(
+        gasto_nuevo = ExpenseCreate(
             category_id=id_categoria,
             total=total,
             iva_amount=iva,
@@ -140,10 +184,45 @@ class ServicioAgente:
         # El estado cambia en la misma transacción que crea el gasto: no se puede
         # confirmar dos veces aunque lleguen dos peticiones a la vez (fila bloqueada).
         accion.estado = CORREGIDO if cambios else CONFIRMADO
-        gasto = GastoService(self.db, self.empresa_id).crear(datos, self.usuario_id)
-        accion.payload_json = {**accion.payload_json, "id_gasto": gasto.id}
+        gasto = GastoService(self.db, self.empresa_id).crear(gasto_nuevo, self.usuario_id)
+        accion.payload_json = {**datos, "id_gasto": gasto.id}
         self.db.commit()
-        return accion, gasto.id
+        return gasto.id
+
+    def _confirmar_inventario(self, accion: AccionIA, datos: dict, cambios: dict) -> int:
+        propuesta = PropuestaInventario.desde_json(datos["propuesta_inventario"])
+        if propuesta.tipo == "ajuste" and not self.es_administrador:
+            raise ForbiddenError(
+                "Los ajustes por conteo físico los confirma un Administrador.",
+                code="ADMIN_REQUIRED",
+            )
+        cantidad = Decimal(cambios.get("quantity", propuesta.cantidad))
+        if propuesta.tipo != "ajuste" and cantidad <= 0:
+            raise UnprocessableError("La cantidad debe ser mayor que 0.", code="INVALID_QUANTITY")
+
+        # Mismo patrón que el gasto: el estado y el movimiento se guardan juntos.
+        accion.estado = CORREGIDO if cambios else CONFIRMADO
+        servicio = InventarioService(self.db, self.empresa_id)
+        if propuesta.tipo == "ajuste":
+            resultado = servicio.ajustar(
+                AdjustmentCreate(
+                    product_id=propuesta.id_producto, new_stock=cantidad, reason=propuesta.motivo
+                ),
+                self.usuario_id,
+            )
+        else:
+            resultado = servicio.registrar_movimiento(
+                MovementCreate(
+                    product_id=propuesta.id_producto,
+                    type=propuesta.tipo,
+                    quantity=cantidad,
+                    reason=propuesta.motivo,
+                ),
+                self.usuario_id,
+            )
+        accion.payload_json = {**datos, "id_movimiento": resultado.id}
+        self.db.commit()
+        return resultado.id
 
     def cancelar(self, id_accion: int) -> AccionIA:
         accion = self._pendiente(id_accion)
@@ -172,8 +251,13 @@ class ServicioAgente:
         items = []
         for accion, nombre, email in filas:
             datos = accion.payload_json or {}
-            propuesta = (
+            gasto = (
                 PropuestaGasto.desde_json(datos["propuesta"]) if datos.get("propuesta") else None
+            )
+            inventario = (
+                PropuestaInventario.desde_json(datos["propuesta_inventario"])
+                if datos.get("propuesta_inventario")
+                else None
             )
             items.append(
                 AiAction(
@@ -182,9 +266,14 @@ class ServicioAgente:
                     user_name=nombre or email or "Usuario",
                     instruction=accion.instruccion_recibida,
                     reply=datos.get("respuesta", ""),
-                    proposal=self._propuesta_api(propuesta, categorias) if propuesta else None,
+                    proposal=(
+                        self._propuesta_api(gasto, inventario, categorias)
+                        if gasto or inventario
+                        else None
+                    ),
                     status=ESTADOS_API.get(accion.estado, "sin_propuesta"),
                     expense_id=datos.get("id_gasto"),
+                    movement_id=datos.get("id_movimiento"),
                 )
             )
         return Page(items=items, total=total, page=page, page_size=page_size)
@@ -192,6 +281,21 @@ class ServicioAgente:
     # ---------- Internos ----------
     def _categorias(self) -> dict[str, int]:
         return {c.name: c.id for c in CategoriaGastoService(self.db, self.empresa_id).listar()}
+
+    def _productos(self) -> list[ProductoDisponible]:
+        filas = self.db.execute(
+            select(
+                Producto.id_producto,
+                Producto.nombre,
+                Producto.codigo_principal,
+                Producto.unidad_medida,
+                Producto.stock_actual,
+            )
+            .where(Producto.id_empresa == self.empresa_id, Producto.activo.is_(True))
+            .order_by(Producto.nombre)
+            .limit(MAX_PRODUCTOS)
+        ).all()
+        return [ProductoDisponible(*fila) for fila in filas]
 
     def _pendiente(self, id_accion: int) -> AccionIA:
         accion = self.db.scalar(
@@ -208,8 +312,28 @@ class ServicioAgente:
         return accion
 
     @staticmethod
-    def _propuesta_api(gasto: PropuestaGasto, categorias: dict[str, int]) -> AiProposal:
+    def _propuesta_api(
+        gasto: PropuestaGasto | None,
+        inventario: PropuestaInventario | None,
+        categorias: dict[str, int],
+    ) -> AiProposal:
+        if inventario is not None:
+            return AiProposal(
+                type="inventory",
+                summary=inventario.resumen(),
+                inventory=AiInventoryProposal(
+                    product_id=inventario.id_producto,
+                    product_name=inventario.producto,
+                    type=inventario.tipo,
+                    quantity=inventario.cantidad,
+                    unit=inventario.unidad,
+                    current_stock=inventario.stock_actual,
+                    resulting_stock=inventario.stock_resultante,
+                    reason=inventario.motivo,
+                ),
+            )
         return AiProposal(
+            type="expense",
             summary=gasto.resumen(),
             expense=AiExpenseProposal(
                 total=gasto.total,

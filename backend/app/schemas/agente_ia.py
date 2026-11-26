@@ -1,12 +1,14 @@
 """Schemas del agente de IA (docs/API.md, sección 15)."""
 
 import datetime as dt
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import Field
 
 from app.schemas.common import Amount, ApiInput, ApiModel
 from app.schemas.gasto import ExpensePaymentMethod
+from app.schemas.inventario import SignedQuantity
 
 AiActionStatus = Literal["pendiente", "confirmado", "corregido", "cancelado", "sin_propuesta"]
 
@@ -26,10 +28,23 @@ class AiExpenseProposal(ApiModel):
     date: dt.date | None
 
 
+class AiInventoryProposal(ApiModel):
+    product_id: int
+    product_name: str
+    type: Literal["entrada", "salida", "ajuste"]
+    # Entrada y salida: cuánto entra o sale. Ajuste: el stock contado.
+    quantity: SignedQuantity
+    unit: str
+    current_stock: SignedQuantity
+    resulting_stock: SignedQuantity
+    reason: str
+
+
 class AiProposal(ApiModel):
-    type: Literal["expense"] = "expense"
+    type: Literal["expense", "inventory"]
     summary: str
-    expense: AiExpenseProposal
+    expense: AiExpenseProposal | None = None
+    inventory: AiInventoryProposal | None = None
 
 
 class AiReply(ApiModel):
@@ -49,12 +64,15 @@ class AiConfirm(ApiInput):
     description: str | None = Field(default=None, min_length=1, max_length=300)
     payment_method: ExpensePaymentMethod | None = None
     date: dt.date | None = None
+    # Movimientos de inventario: cantidad (o stock contado en un ajuste).
+    quantity: Decimal | None = Field(default=None, ge=0, le=1000000, decimal_places=4)
 
 
 class AiConfirmResult(ApiModel):
     action_id: int
     status: AiActionStatus
-    expense_id: int
+    expense_id: int | None = None
+    movement_id: int | None = None
 
 
 class AiAction(ApiModel):
@@ -68,3 +86,4 @@ class AiAction(ApiModel):
     proposal: AiProposal | None
     status: AiActionStatus
     expense_id: int | None
+    movement_id: int | None

@@ -658,3 +658,37 @@ Para RF-5.3 el frontend calcula el rango: hoy (`from = to = hoy`), semana, mes o
   valor del inventario (stock × costo) y los 10 más críticos.
 - Mismos nombres que `DashboardSummary` del frontend, más `expenses`, `expensesCount`, `expensesByCategory`,
   `inventory` y `dailySeries[].expenses`. Los ids pasan de `string` a `number`.
+
+## 14. Auditoría
+
+Solo el Administrador la consulta. **La escribe el backend** al terminar bien cada acción: el frontend no puede
+crear, editar ni borrar registros (la tabla `auditoria` es de solo inserción, `DECISIONES.md` 2.31).
+
+| Estado | Método y ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| ✅ | `GET /api/audit` | Registros de la empresa, del más reciente al más antiguo. Filtros: `module`, `userId`, `from`, `to` (días en hora de Ecuador), `page`, `pageSize` (máx. 100) | `200` con `Page<AuditEntry>` |
+
+Objeto `AuditEntry`:
+
+```json
+{
+  "id": 164,
+  "timestamp": "2026-11-26T00:41:10-05:00",
+  "userId": "22222222-2222-2222-2222-222222222222",
+  "userName": "Operador Demo",
+  "module": "inventario",
+  "action": "Registró entrada de inventario",
+  "description": "Azúcar 1 kg: 3 UNIDAD. Stock resultante: 7.0000.",
+  "entity": "movimiento_inventario",
+  "entityId": "418"
+}
+```
+
+`module` es uno de `auth`, `ventas`, `facturacion`, `gastos`, `inventario`, `ia`, `configuracion`, `usuarios`.
+`userName` es el nombre del usuario en la empresa (o su correo); `userId` es `null` si la cuenta ya no existe.
+
+**Qué se registra:** ventas (registrar, anular) y clientes (registrar, editar); emisión de facturas; gastos
+(registrar, editar, anular) y proveedores; productos (crear, editar), entradas, salidas y ajustes de inventario;
+datos de la empresa, configuración de facturación y firma electrónica; usuarios (crear, editar, restablecer
+contraseña). Nunca se guardan contraseñas ni el contenido del `.p12`.
+

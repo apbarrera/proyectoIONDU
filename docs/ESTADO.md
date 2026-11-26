@@ -121,7 +121,7 @@ Estado por módulo (24/11/2026). Un servicio "real" usa `HttpClient` contra `/ap
 | Bandeja de gastos por correo | Simulado (falta IMAP en el worker). Al confirmar un borrador **sí** crea un gasto real | `ExpenseInboxService` |
 | Recetas y producción | Simulado (sin backend ni requisito); solo mueve el stock en memoria | `RecipesService`, `ProductionService` |
 | Usuarios (gestión) y cambio de contraseña | Real | `UserDirectoryService`, `AuthService.changePassword` |
-| Auditoría | Simulado (falta el backend) | `AuditService` |
+| Auditoría | Real: la escribe el backend, solo el Administrador la ve | `AuditService` (`GET /api/audit`) |
 | Agente de IA | Simulado (falta el sprint 4). Al confirmar una propuesta **sí** crea un gasto o un ajuste reales | `AiAgentService`, `AiNluMockService`, `AiConfigService` |
 
 **Ventas, clientes y facturas (commits `6d5219a` y `1f143a0`):**
@@ -194,7 +194,7 @@ El código de facturación está listo para probarse contra el SRI apenas llegue
 1. Revisión visual, pantalla por pantalla y en móvil, de Gastos, Inventario, Agente IA y Configuración. Se comprobó que no se desbordan y que cumplen accesibilidad, pero falta revisar su aspecto con ojo de diseño.
 2. Pulido con `impeccable` (`/impeccable init` y luego `audit` y `polish`).
 3. Probar la instalación de la PWA y el service worker en Chrome.
-4. Ya están conectados todos los módulos que tienen backend. Lo que sigue simulado no tiene dónde guardarse todavía: auditoría, bandeja de gastos por correo (IMAP), agente de IA, y recetas y producción (ver la tabla "Frontend: conexión con la API").
+4. Ya están conectados todos los módulos que tienen backend. Lo que sigue simulado no tiene dónde guardarse todavía: bandeja de gastos por correo (IMAP), agente de IA, y recetas y producción (ver la tabla "Frontend: conexión con la API").
 5. Pasar `Product.id`, `User.tenantId` y los demás IDs de `string` a `number`, como pide `API.md` sección 9 (hoy los servicios convierten con `String(...)` y `Number(...)`).
 6. ✅ Ocultar en el menú lo que el backend restringe al Administrador (dashboard, recomendaciones y ajustes de inventario).
 7. Nueva venta: la vista previa del IVA usa una tasa fija del 15 %; mostrar el IVA real por producto (`vatPercentageCode`) y soportar líneas de concepto libre.

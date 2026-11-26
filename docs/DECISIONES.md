@@ -467,6 +467,21 @@
 - **Verificado con el rol real:** se probó la API conectada como `iondu_app` (sin privilegios) contra una base con
   todas las migraciones; las pruebas automáticas corren como dueño de las tablas y no ejercitan el RLS.
 
+### 2.31 Auditoría escrita por el backend
+- **Decisión (26/11/2026):** la auditoría la escribe la API al terminar bien cada acción (dependencia `AuditorActual`
+  en los endpoints) y solo el Administrador la consulta (`GET /api/audit`). Antes el frontend la simulaba con
+  `audit.log()`, que cualquier cliente podía omitir o falsificar; esas llamadas se eliminaron.
+- **Solo inserción:** `iondu_app` tiene INSERT y SELECT sobre `auditoria`, sin UPDATE ni DELETE. RLS: cada usuario
+  registra en su empresa y a su nombre; solo el Administrador lee.
+- **Transacción aparte:** se registra después de que la acción se guardó. Si el registro fallara, la acción del
+  usuario no se deshace y el fallo queda en el log del servidor (`iondu.auditoria`), no se oculta.
+- **INSERT explícito sin RETURNING:** un Operativo puede insertar pero no leer la auditoría, y con `RETURNING`
+  PostgreSQL exige también la política de lectura. El INSERT del ORM agrega `RETURNING` (o `nextval()` si se le
+  quita), así que se usa SQL explícito (ver "Trampas técnicas"). Se detectó probando con el rol real: las pruebas
+  automáticas no ejercitan el RLS.
+- **Pendiente:** registrar inicios de sesión y las propuestas confirmadas del agente de IA cuando exista (módulos
+  `auth` e `ia`).
+
 ## 3. Producto
 
 ### 3.1 Ventas y Facturación son un solo módulo
@@ -598,6 +613,7 @@
 
 | Situación | Qué pasa | Qué hacer |
 |---|---|---|
+| `INSERT ... RETURNING` bajo RLS | Si el rol puede insertar pero la política de lectura no le deja ver la fila, el INSERT falla con "new row violates row-level security policy". El ORM de SQLAlchemy agrega `RETURNING` (o `nextval()` sobre la secuencia) sin pedirlo | Insertar con SQL explícito sin `RETURNING`, como `app/services/auditoria.py` |
 | Saltos de línea | Varios archivos del frontend usan CRLF (Windows); los reemplazos de texto automáticos fallan sin avisar | Normalizar a `\n` antes de reemplazar y restaurar CRLF; o agregar un `.gitattributes` |
 | Pruebas del backend | Hace falta Python 3.12 para correrlas sin Docker | `docker build --target test backend`, o el entorno virtual `backend/.venv` (ver 5.5) |
 | `docker compose up` falla pidiendo `POSTGRES_PASSWORD` | El override exige la contraseña de la base local | Agregar `POSTGRES_PASSWORD=<cualquier valor>` al `.env` |

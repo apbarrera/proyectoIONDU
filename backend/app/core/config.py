@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     llm_model: str = "qwen2.5:7b"
     llm_api_key: SecretStr | None = None
     llm_timeout_seconds: int = Field(default=120, gt=0)
+    # Modelo con visión para leer fotos de facturas y tickets (en local, qwen2.5vl:7b).
+    # Usa el mismo servicio que LLM_BASE_URL. Vacío: el agente no acepta imágenes.
+    llm_vision_model: str | None = None
 
     # Inicio de sesión propio: llave privada EC P-256 (PEM) que firma los tokens de acceso (ES256).
     # En .env puede escribirse en una línea, con "\n" en lugar de los saltos de línea.

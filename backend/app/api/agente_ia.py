@@ -2,12 +2,13 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, File, Form, Path, Query, UploadFile
 
 from app.api.deps import AuditorActual, ContextoActual, DbSession
 from app.core.config import get_settings
 from app.core.errors import ForbiddenError
 from app.ia.cliente import ClienteOpenAICompatible, ModeloLenguaje
+from app.ia.imagen import TAMANO_MAXIMO_BYTES, preparar_imagen
 from app.schemas.agente_ia import (
     AiAction,
     AiConfirm,
@@ -36,7 +37,21 @@ def get_modelo() -> ModeloLenguaje | None:
     )
 
 
+def get_modelo_vision() -> ModeloLenguaje | None:
+    """Cliente del modelo con visión (LLM_VISION_MODEL); None si no está configurado."""
+    settings = get_settings()
+    if not (settings.llm_base_url and settings.llm_vision_model):
+        return None
+    return ClienteOpenAICompatible(
+        settings.llm_base_url,
+        settings.llm_vision_model,
+        settings.llm_api_key.get_secret_value() if settings.llm_api_key else None,
+        settings.llm_timeout_seconds,
+    )
+
+
 Modelo = Annotated[ModeloLenguaje | None, Depends(get_modelo)]
+ModeloVision = Annotated[ModeloLenguaje | None, Depends(get_modelo_vision)]
 
 
 def _servicio(db, contexto, modelo=None) -> ServicioAgente:
@@ -58,6 +73,24 @@ def _servicio(db, contexto, modelo=None) -> ServicioAgente:
 @router.post("/messages", response_model=AiReply)
 def send_message(datos: AiMessageInput, contexto: ContextoActual, db: DbSession, modelo: Modelo):
     return _servicio(db, contexto, modelo).interpretar(datos.text)
+
+
+@router.post("/images", response_model=AiReply)
+def send_image(
+    contexto: ContextoActual,
+    db: DbSession,
+    modelo: ModeloVision,
+    image: Annotated[UploadFile, File(description="Foto de una factura, ticket o guía")],
+    text: Annotated[str | None, Form(max_length=500)] = None,
+):
+    """Lee una foto (RF-6.3). La imagen se procesa en memoria y no se guarda."""
+    try:
+        # Se lee un byte de más para detectar un archivo demasiado grande sin cargarlo entero.
+        contenido = image.file.read(TAMANO_MAXIMO_BYTES + 1)
+    finally:
+        image.file.close()
+    servicio = _servicio(db, contexto, modelo)
+    return servicio.interpretar_imagen(preparar_imagen(contenido), (text or "").strip() or None)
 
 
 @router.post("/actions/{id}/confirm", response_model=AiConfirmResult)

@@ -87,3 +87,4 @@ class AiAction(ApiModel):
     status: AiActionStatus
     expense_id: int | None
     movement_id: int | None
+    input_type: Literal["texto", "imagen"] = "texto"

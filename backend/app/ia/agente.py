@@ -28,11 +28,28 @@ CANTIDAD_MAXIMA = Decimal("1000000")
 CENTAVO = Decimal("0.01")
 DIEZMILESIMA = Decimal("0.0001")
 OTRO_PRODUCTO = "(otro producto)"
+# Lo que el modelo transcribe de una foto (se guarda en el historial).
+LECTURA_MAXIMA = 400
+# Qué muestra la foto, según el modelo. Opciones descriptivas: con un sí/no el modelo
+# pequeño se equivoca bastante más.
+TIPOS_IMAGEN = ("factura_o_ticket", "guia_o_lista_de_mercaderia", "otra_cosa")
 
 MENSAJE_NO_ENTENDI = (
     'No pude interpretar tu mensaje. Puedo registrar gastos ("Gasté $25 en empaques") o '
     'movimientos de inventario ("Llegaron 10 cajas de café").'
 )
+NO_ES_COMPROBANTE = (
+    "No encontré una factura, ticket ni guía en la imagen. Envía una foto clara del "
+    "comprobante o escríbeme los datos."
+)
+# Forma de pago impresa en el comprobante → método de pago (sin tildes, en minúsculas).
+PAGOS_IMPRESOS = {
+    "credito": "tarjeta_credito",
+    "debito": "tarjeta_debito",
+    "transferencia": "transferencia",
+    "cheque": "cheque",
+    "efectivo": "efectivo",
+}
 MOTIVOS = {
     "entrada": "Entrada registrada con el agente de IA",
     "salida": "Salida registrada con el agente de IA",
@@ -166,12 +183,18 @@ class Interpretacion:
     inventario: PropuestaInventario | None = None
 
 
-def esquema(categorias: list[str], productos: list[ProductoDisponible]) -> dict[str, Any]:
-    """Formato JSON que el modelo debe devolver (salida estructurada)."""
+def esquema(
+    categorias: list[str], productos: list[ProductoDisponible], *, con_lectura: bool = False
+) -> dict[str, Any]:
+    """Formato JSON que el modelo debe devolver (salida estructurada).
+
+    Con `con_lectura` (imágenes) el modelo también transcribe lo que leyó: sirve para
+    verificar que el producto propuesto aparece de verdad en la foto.
+    """
     # Siempre hay una salida: sin ella, el modelo tendría que elegir un producto de la
     # lista aunque el usuario hable de otro.
     etiquetas = [p.etiqueta for p in productos] + [OTRO_PRODUCTO]
-    return {
+    resultado: dict[str, Any] = {
         "type": "object",
         "additionalProperties": False,
         "required": ["accion", "respuesta", "gasto", "inventario"],
@@ -213,9 +236,49 @@ def esquema(categorias: list[str], productos: list[ProductoDisponible]) -> dict[
             },
         },
     }
+    if con_lectura:
+        resultado["required"] = ["lectura", "tipo_imagen", *resultado["required"]]
+        resultado["properties"] = {
+            "lectura": {"type": "string"},
+            "tipo_imagen": {"type": "string", "enum": list(TIPOS_IMAGEN)},
+            **resultado["properties"],
+        }
+    return resultado
 
 
-def prompt_sistema(categorias: list[str], productos: list[ProductoDisponible], hoy: date) -> str:
+def prompt_imagen(razon_social: str, ruc: str) -> str:
+    """Reglas extra cuando el usuario envía una foto (RF-6.3)."""
+    return f"""
+
+El usuario envía una FOTO (y a veces un texto que la acompaña).
+- En "lectura" transcribe en pocas líneas lo importante que ves: emisor, número de
+  comprobante, productos con sus cantidades, subtotal, IVA, total y forma de pago.
+  Máximo 400 caracteres.
+- "tipo_imagen": "factura_o_ticket" (factura, nota de venta, ticket, recibo),
+  "guia_o_lista_de_mercaderia" (guía de remisión, lista de productos recibidos o
+  contados) u "otra_cosa" (paisaje, persona, objeto, pantalla sin datos).
+- Factura, nota de venta o ticket de una COMPRA: es un gasto (acción 1). total = el
+  TOTAL a pagar; iva = el IVA que aparece; proveedor = el nombre del emisor;
+  fecha = la fecha de emisión; descripcion = qué se compró, en pocas palabras;
+  metodo_pago = la forma de pago impresa ("crédito" → tarjeta_credito,
+  "débito" → tarjeta_debito, "transferencia", "cheque"); si no aparece, efectivo.
+- Guía de remisión, lista de mercadería recibida o conteo, sin precios: es inventario
+  (acción 2), un solo producto. Si hay varios, propón el primero y en "respuesta" avisa
+  que los demás se registran por separado.
+- La empresa del usuario es «{razon_social}» (RUC {ruc}). Si la factura la EMITIÓ esta
+  empresa, es una venta: "fuera_de_alcance".
+- Si la foto está borrosa, cortada o no es un comprobante, "pedir_aclaracion": di qué
+  ves y pide una foto clara de la factura, ticket o guía, o los datos por texto.
+  Tú SÍ puedes leer imágenes. Nunca inventes montos que no se leen."""
+
+
+def prompt_sistema(
+    categorias: list[str],
+    productos: list[ProductoDisponible],
+    hoy: date,
+    *,
+    con_imagen: bool = False,
+) -> str:
     lista_categorias = "\n".join(f"- {c}" for c in categorias)
     lista_productos = (
         "\n".join(
@@ -223,8 +286,9 @@ def prompt_sistema(categorias: list[str], productos: list[ProductoDisponible], h
         )
         or "- (la empresa todavía no tiene productos)"
     )
+    origen = "la FOTO que envía el usuario" if con_imagen else "lo que escribe el usuario"
     return f"""Eres el asistente de IONDU, un sistema contable para pequeños negocios de Ecuador.
-Conviertes lo que escribe el usuario en una PROPUESTA que él confirmará después.
+Conviertes {origen} en una PROPUESTA que él confirmará después.
 Nunca guardas nada: solo propones.
 
 Hoy es {hoy.isoformat()} (hora de Ecuador). La moneda es el dólar estadounidense.
@@ -320,6 +384,17 @@ def _palabras(texto: str) -> list[str]:
     return [p for p in palabras if len(p) >= 3 and p not in PALABRAS_COMUNES]
 
 
+def metodo_pago_leido(lectura: str) -> str | None:
+    """Método de pago impreso en el comprobante, si se lee uno solo.
+
+    El modelo transcribe bien "Tarjeta de crédito" pero a veces elige otro método al
+    llenar el campo: lo leído manda sobre lo elegido.
+    """
+    palabras = set(_palabras(lectura))
+    encontrados = {metodo for clave, metodo in PAGOS_IMPRESOS.items() if clave in palabras}
+    return encontrados.pop() if len(encontrados) == 1 else None
+
+
 def menciona_producto(texto: str, nombre: str) -> bool:
     """¿El mensaje nombra al producto? Basta una palabra clave (con sus primeras 4 letras:
     "croissants" coincide con "Croissant"). Evita que el modelo, obligado a elegir de la
@@ -352,6 +427,7 @@ def interpretar(
     hoy: date,
     productos: list[ProductoDisponible] | None = None,
     texto: str | None = None,
+    metodo_leido: str | None = None,
 ) -> Interpretacion:
     """Convierte la respuesta del modelo en algo seguro de mostrar o ejecutar."""
     accion = datos.get("accion")
@@ -366,20 +442,47 @@ def interpretar(
             or "Solo puedo ayudarte con gastos e inventario. Las ventas se registran desde Ventas.",
         )
     if accion == REGISTRAR_GASTO:
-        return _interpretar_gasto(datos.get("gasto"), categorias, hoy)
+        return _interpretar_gasto(datos.get("gasto"), categorias, hoy, metodo_leido)
     if accion == MOVER_INVENTARIO:
         return _interpretar_inventario(datos.get("inventario"), productos or [], texto)
     return Interpretacion("no_entendido", MENSAJE_NO_ENTENDI)
 
 
-def _interpretar_gasto(gasto: Any, categorias: list[str], hoy: date) -> Interpretacion:
+def interpretar_imagen(
+    datos: dict[str, Any],
+    categorias: list[str],
+    hoy: date,
+    productos: list[ProductoDisponible],
+    texto: str | None = None,
+) -> tuple[Interpretacion, str]:
+    """Como `interpretar`, para una foto. Devuelve también lo que el modelo leyó."""
+    lectura = _texto(datos.get("lectura"), LECTURA_MAXIMA)
+    # Si no es un comprobante, el mensaje lo pone el código: el modelo a veces responde
+    # que "no puede ver imágenes", lo que confunde al usuario.
+    if datos.get("tipo_imagen") == "otra_cosa" and datos.get("accion") != FUERA_DE_ALCANCE:
+        return Interpretacion("aclaracion", NO_ES_COMPROBANTE), lectura
+    # El producto propuesto debe aparecer en lo que se leyó o en el texto que acompaña.
+    interpretacion = interpretar(
+        datos,
+        categorias,
+        hoy,
+        productos,
+        f"{texto or ''} {lectura}",
+        metodo_leido=metodo_pago_leido(lectura),
+    )
+    return interpretacion, lectura
+
+
+def _interpretar_gasto(
+    gasto: Any, categorias: list[str], hoy: date, metodo_leido: str | None = None
+) -> Interpretacion:
     if not isinstance(gasto, dict):
         return Interpretacion("no_entendido", MENSAJE_NO_ENTENDI)
 
     total = _monto(gasto.get("total"))
     iva = _monto(gasto.get("iva") or 0)
     categoria = gasto.get("categoria")
-    metodo = gasto.get("metodo_pago") or "efectivo"
+    metodo = metodo_leido or gasto.get("metodo_pago") or "efectivo"
     descripcion = _texto(gasto.get("descripcion"), 300)
 
     if total is None or not (Decimal("0") < total <= MONTO_MAXIMO):

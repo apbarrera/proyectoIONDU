@@ -31,10 +31,12 @@ from app.ia.agente import (
     PropuestaInventario,
     esquema,
     interpretar,
+    interpretar_imagen,
+    prompt_imagen,
     prompt_sistema,
 )
-from app.ia.cliente import ModeloLenguaje
-from app.models import AccionIA, ConsumoTokens, Producto, Usuario, UsuarioEmpresa
+from app.ia.cliente import ModeloLenguaje, RespuestaModelo
+from app.models import AccionIA, ConsumoTokens, Empresa, Producto, Usuario, UsuarioEmpresa
 from app.schemas.agente_ia import (
     AiAction,
     AiConfirm,
@@ -88,10 +90,7 @@ class ServicioAgente:
 
     # ---------- Interpretar ----------
     def interpretar(self, texto: str) -> AiReply:
-        if self.modelo is None:
-            raise ServiceUnavailableError(
-                "El agente de IA no está configurado en este servidor.", code="AI_NOT_CONFIGURED"
-            )
+        self._exigir_modelo()
         categorias = self._categorias()
         productos = self._productos()
         hoy = datetime.now(ZONA).date()
@@ -102,6 +101,63 @@ class ServicioAgente:
             ],
             esquema(list(categorias), productos),
         )
+        interpretacion = interpretar(respuesta.datos, list(categorias), hoy, productos, texto)
+        return self._proponer(respuesta, interpretacion, categorias, texto)
+
+    def interpretar_imagen(self, imagen: str, texto: str | None = None) -> AiReply:
+        """`imagen` es la foto ya validada y reducida, como data URL (app.ia.imagen)."""
+        self._exigir_modelo(vision=True)
+        categorias = self._categorias()
+        productos = self._productos()
+        hoy = datetime.now(ZONA).date()
+        empresa = self.db.get(Empresa, self.empresa_id)
+        sistema = prompt_sistema(list(categorias), productos, hoy, con_imagen=True) + prompt_imagen(
+            empresa.razon_social, empresa.ruc
+        )
+        indicacion = texto or "Interpreta esta imagen."
+        respuesta = self.modelo.completar_json(
+            [
+                {"role": "system", "content": sistema},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": indicacion},
+                        {"type": "image_url", "image_url": {"url": imagen}},
+                    ],
+                },
+            ],
+            esquema(list(categorias), productos, con_lectura=True),
+        )
+        interpretacion, lectura = interpretar_imagen(
+            respuesta.datos, list(categorias), hoy, productos, texto
+        )
+        return self._proponer(
+            respuesta,
+            interpretacion,
+            categorias,
+            f"[Imagen] {texto}" if texto else "[Imagen]",
+            extra={"entrada": "imagen", "lectura": lectura},
+        )
+
+    def _exigir_modelo(self, *, vision: bool = False) -> None:
+        if self.modelo is None:
+            if vision:
+                raise ServiceUnavailableError(
+                    "La lectura de imágenes no está configurada en este servidor.",
+                    code="AI_VISION_NOT_CONFIGURED",
+                )
+            raise ServiceUnavailableError(
+                "El agente de IA no está configurado en este servidor.", code="AI_NOT_CONFIGURED"
+            )
+
+    def _proponer(
+        self,
+        respuesta: RespuestaModelo,
+        interpretacion: Interpretacion,
+        categorias: dict[str, int],
+        instruccion: str,
+        extra: dict | None = None,
+    ) -> AiReply:
         self.db.add(
             ConsumoTokens(
                 id_empresa=self.empresa_id,
@@ -111,7 +167,6 @@ class ServicioAgente:
             )
         )
 
-        interpretacion = interpretar(respuesta.datos, list(categorias), hoy, productos, texto)
         inventario = interpretacion.inventario
         if inventario and inventario.tipo == "ajuste" and not self.es_administrador:
             interpretacion = Interpretacion("aclaracion", SOLO_ADMIN_AJUSTA)
@@ -128,12 +183,13 @@ class ServicioAgente:
                 if inventario
                 else interpretacion.tipo
             ),
-            instruccion_recibida=texto,
+            instruccion_recibida=instruccion,
             payload_json={
                 "respuesta": interpretacion.respuesta,
                 "propuesta": gasto.como_json() if gasto else None,
                 "propuesta_inventario": inventario.como_json() if inventario else None,
                 "modelo": respuesta.modelo,
+                **(extra or {}),
             },
             estado=PENDIENTE if hay_propuesta else SIN_PROPUESTA,
         )
@@ -274,6 +330,7 @@ class ServicioAgente:
                     status=ESTADOS_API.get(accion.estado, "sin_propuesta"),
                     expense_id=datos.get("id_gasto"),
                     movement_id=datos.get("id_movimiento"),
+                    input_type="imagen" if datos.get("entrada") == "imagen" else "texto",
                 )
             )
         return Page(items=items, total=total, page=page, page_size=page_size)

@@ -86,6 +86,17 @@
 - La contraseña no está en el repositorio: se lee de `POSTGRES_PASSWORD` en el `.env`, que es obligatoria.
 - Usa un volumen (`db-data`) para no perder los datos al apagar el contenedor. Es la única excepción a la decisión
   1.4, y solo en local: Coolify no lee el override.
+- **Cambio (26/11/2026): mismos roles que producción.** En local la API se conecta como `iondu_app` y el worker como
+  `iondu_worker` (`scripts/configurar_roles_locales.py` les da LOGIN con la contraseña del `.env`); solo las
+  migraciones usan `iondu`. Antes la API local entraba como administrador y no ejercitaba ni el RLS ni los permisos:
+  un error de permisos de la gestión de usuarios solo apareció al probar con el rol real.
+- **Los permisos viven en las migraciones** (`a3c5e7f9b104` y las de usuarios): antes los `GRANT` se aplicaban a mano
+  en Supabase y un ambiente nuevo quedaba sin permisos. Lectura e inserción por tabla y `UPDATE` solo de las columnas
+  que el código modifica; las tablas sin funcionalidad no reciben nada. Una funcionalidad nueva que escriba otra
+  columna necesita su migración de permisos. Verificado sobre una base vacía recorriendo todos los endpoints de
+  escritura como `iondu_app` y un ciclo del worker como `iondu_worker`.
+- **Instalación desde cero:** la primera migración crea el marcador `auth.users` si falta, así que una base vacía
+  queda lista solo con `alembic upgrade head` (se eliminó `scripts/bootstrap_local_auth.py`).
 
 ## 2. Backend y datos
 

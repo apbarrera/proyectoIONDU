@@ -26,18 +26,20 @@ docker compose up --build
 # abrir http://localhost:8080 (API interactiva en http://localhost:8080/api/docs)
 ```
 
-Base local por primera vez (desde `backend/`, con Docker encendido). En la computadora la base
-está en `127.0.0.1:15432`, así que las conexiones se pasan con ese host en vez de `db`:
+Base local por primera vez (con Docker encendido y el `.env` completo). Todo corre dentro de los
+contenedores; no hace falta Python instalado:
 
 ```powershell
-$env:DATABASE_URL = "postgresql+psycopg://iondu:<POSTGRES_PASSWORD>@127.0.0.1:15432/iondu"
-$env:MIGRATION_DATABASE_URL = $env:DATABASE_URL; $env:WORKER_DATABASE_URL = $env:DATABASE_URL
-$env:APP_ENV = "development"
-.venv\Scripts\python.exe scripts\bootstrap_local_auth.py   # solo en una base nueva (marcador para la 1.ª migración)
-.venv\Scripts\alembic.exe upgrade head                     # crea el esquema completo
-$env:DEMO_PASSWORD = "<mínimo 10 caracteres>"
-.venv\Scripts\python.exe -m scripts.cargar_datos_demo      # cafetería demo con un mes de datos
+docker compose up -d db storage
+docker compose run --rm --no-deps api alembic upgrade head                      # esquema completo
+docker compose run --rm --no-deps api python -m scripts.configurar_roles_locales # login de iondu_app e iondu_worker
+docker compose up -d --build
+docker compose run --rm --no-deps -e DEMO_PASSWORD="<mínimo 10 caracteres>" api python -m scripts.cargar_datos_demo
 ```
+
+La API se conecta como `iondu_app` y el worker como `iondu_worker`, igual que en producción: sin privilegios
+de administrador y con RLS. Si algo falla con "permission denied", falta un permiso en las migraciones
+(ver `DECISIONES.md` 1.9).
 
 Inicio de sesión: `admin@demo.iondu.ec` (Administrador) u `operador@demo.iondu.ec` (Operativo), con la
 contraseña de `DEMO_PASSWORD`. Para crear usuarios o cambiar contraseñas:

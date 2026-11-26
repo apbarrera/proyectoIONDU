@@ -333,6 +333,10 @@ El DDL definitivo no debe mezclar responsabilidades. Se organizará en estos blo
 
 **Estado:** auditoría de privilegios y RLS comprobada en la base aislada `iondu_fresh_install_test_v2`. La implementación y validación de producción siguen pendientes.
 
+> **Actualización (26/11/2026):** la matriz de 8.2 quedó desactualizada (gastos, proveedores, anulaciones y gestión de
+> usuarios ya tienen operaciones). La fuente de verdad de los permisos son ahora las migraciones `a3c5e7f9b104`
+> (tablas de negocio), `e5b1c7a9d203` y `f7a2d4c8e915` (usuarios y sesiones); ver `DECISIONES.md` 1.9.
+
 ### 8.1. Principios
 
 1. `iondu_app` es el rol de ejecución de la API: `LOGIN`, `NOSUPERUSER` y `NOBYPASSRLS`.

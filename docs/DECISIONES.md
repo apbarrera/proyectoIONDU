@@ -499,7 +499,14 @@
 - **Tokens:** cada llamada guarda su consumo en `consumo_tokens` (RF-6.14); los límites por empresa (RNF-12) llegan después.
 - **Probado con el modelo real:** 7 de 7 categorías correctas en casos típicos, respuestas en 2 a 9 s, ventas e intentos
   de manipulación rechazados. Un modelo de 7B se equivoca más que uno grande: la confirmación humana es obligatoria.
-- **Etapas:** 1) texto y gastos ✅; 2) inventario; 3) imagen; 4) voz; 5) límites de tokens.
+- **Inventario (etapa 2):** el modelo elige el producto de una lista cerrada (los activos de la empresa, con su código
+  para distinguir homónimos) más la opción "otro producto". Como un modelo pequeño tiende a elegir uno parecido aunque
+  el usuario hable de otro, el código exige que el mensaje **mencione** el producto (una palabra clave con sus primeras
+  4 letras: "croissants" ↔ "Croissant"); si no, pregunta. Una salida no puede superar el stock y los ajustes por conteo
+  solo los propone y confirma un Administrador (RF-4.8). Si el modelo corta el JSON, se reintenta una vez.
+- **Pendiente:** una compra con precio ("compré 10 croissants por $8") hoy propone solo el gasto; proponer gasto y
+  entrada de inventario juntos (RF-6.8) queda para después.
+- **Etapas:** 1) texto y gastos ✅; 2) inventario ✅; 3) imagen; 4) voz; 5) límites de tokens.
 
 ## 3. Producto
 

@@ -81,6 +81,15 @@
       }
     }
   </p>
+  @if (tenant()?.electronicSignature?.simulated) {
+    <p class="company__simulated" role="note">
+      <app-icon name="info" [size]="16" />
+      <span>
+        <strong>Modo demostración (SRI simulado).</strong> Las facturas se autorizan sin firma electrónica ni conexión
+        al SRI y el PDF dice «SIMULADO - SIN VALIDEZ TRIBUTARIA». Al subir la firma real, pide que se desactive este modo.
+      </span>
+    </p>
+  }
 
   <div class="company__form">
     <app-form-field label="Archivo de firma (.p12)" hint="Máximo 5 MiB. Se guarda cifrado; nunca en disco.">

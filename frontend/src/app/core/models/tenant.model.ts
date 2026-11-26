@@ -19,6 +19,8 @@ export interface ElectronicSignature {
   /** Faltan 30 días o menos (alerta RNF-25). */
   expiresSoon: boolean;
   expired: boolean;
+  /** Modo demostración: las facturas se autorizan sin .p12 ni SRI y no tienen validez tributaria. */
+  simulated?: boolean;
 }
 
 /** Empresa activa, tal como la devuelve `GET /api/company` (API.md, sección 10). */

@@ -50,6 +50,14 @@ class Settings(BaseSettings):
 
     master_encryption_key: SecretStr | None = None
 
+    # Agente de IA: cualquier servicio con la API de OpenAI (/v1/chat/completions).
+    # En local, Ollama: LLM_BASE_URL=http://host.docker.internal:11434/v1 y sin clave.
+    # Sin LLM_BASE_URL el agente responde que no está configurado.
+    llm_base_url: str | None = None
+    llm_model: str = "qwen2.5:7b"
+    llm_api_key: SecretStr | None = None
+    llm_timeout_seconds: int = Field(default=120, gt=0)
+
     # Inicio de sesión propio: llave privada EC P-256 (PEM) que firma los tokens de acceso (ES256).
     # En .env puede escribirse en una línea, con "\n" en lugar de los saltos de línea.
     auth_jwt_private_key: SecretStr | None = None
@@ -85,6 +93,8 @@ class Settings(BaseSettings):
         "storage_endpoint_url",
         "storage_access_key_id",
         "storage_secret_access_key",
+        "llm_base_url",
+        "llm_api_key",
         "auth_jwt_private_key",
         "dev_user_id",
         mode="before",

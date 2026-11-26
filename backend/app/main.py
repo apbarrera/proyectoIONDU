@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
+    agente_ia,
     auditoria,
     auth,
     certificados,
@@ -78,6 +79,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(auth.cuenta_router, prefix="/api")
 app.include_router(usuarios.router, prefix="/api")
 app.include_router(auditoria.router, prefix="/api")
+app.include_router(agente_ia.router, prefix="/api")
 app.include_router(products.router, prefix="/api")
 app.include_router(customers.router, prefix="/api")
 app.include_router(sales.router, prefix="/api")

@@ -1,11 +1,13 @@
 """Datos de la empresa y configuración de facturación (necesitan TEST_DATABASE_URL)."""
 
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 from app.models import Empresa
 from app.models.rol import OPERATIVO
 from app.schemas.configuracion_facturacion import ConfiguracionFacturacion
+from app.services import empresa as empresa_service
 from tests.conftest import con_token
 
 CONFIG = {
@@ -39,9 +41,28 @@ def test_consultar_la_empresa_sin_configurar(client, empresas):
             "expiresAt": None,
             "expiresSoon": False,
             "expired": False,
+            "simulated": False,
         },
         "billing": None,
     }
+
+
+def test_la_firma_indica_el_modo_simulado_solo_en_pruebas(client, empresas, monkeypatch):
+    a, _ = empresas
+    monkeypatch.setattr(
+        empresa_service, "get_settings", lambda: SimpleNamespace(sri_simulado_empresas={a})
+    )
+    client.put("/api/company/billing-settings", json=CONFIG, headers=_h(a))
+    firma = client.get("/api/company", headers=_h(a)).json()["electronicSignature"]
+    assert firma["simulated"] is True
+
+    client.put(
+        "/api/company/billing-settings",
+        json={**CONFIG, "environment": "produccion"},
+        headers=_h(a),
+    )
+    firma = client.get("/api/company", headers=_h(a)).json()["electronicSignature"]
+    assert firma["simulated"] is False  # en producción nunca se simula
 
 
 def test_editar_solo_cambia_lo_enviado_y_no_acepta_ruc(client, empresas):

@@ -23,6 +23,9 @@ class ElectronicSignature(ApiModel):
     expires_at: date | None
     expires_soon: bool  # 30 días o menos para vencer (RNF-25)
     expired: bool
+    # Factura en modo demostración (SRI_SIMULADO_EMPRESAS y ambiente de pruebas): no usa
+    # este .p12 ni llama al SRI (DECISIONES.md 2.33).
+    simulated: bool = False
 
 
 class BillingSettings(ApiModel):

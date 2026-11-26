@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from app.core.config import TIMEZONE
+from app.core.config import TIMEZONE, get_settings
 from app.core.errors import NotFoundError, UnprocessableError
 from app.models import Empresa
 from app.schemas.configuracion_facturacion import ConfiguracionFacturacion
@@ -23,6 +23,7 @@ from app.schemas.empresa import (
     ElectronicSignature,
 )
 from app.sri.certificado import DIAS_AVISO_VENCIMIENTO
+from app.sri.simulado import usa_sri_simulado
 
 _AMBIENTES = {"pruebas": "1", "produccion": "2"}
 _COLUMNAS = {
@@ -38,11 +39,15 @@ def _firma(empresa: Empresa) -> ElectronicSignature:
     vence = empresa.certificado_fecha_vencimiento
     configurada = bool(empresa.certificado_p12_cifrado) and vence is not None
     dias = (vence - datetime.now(ZoneInfo(TIMEZONE)).date()).days if vence else None
+    ambiente = (empresa.datos_facturacion_electronica or {}).get("ambiente")
     return ElectronicSignature(
         configured=configurada,
         expires_at=vence,
         expires_soon=configurada and 0 <= dias <= DIAS_AVISO_VENCIMIENTO,
         expired=configurada and dias < 0,
+        simulated=usa_sri_simulado(
+            empresa.id_empresa, ambiente or "", get_settings().sri_simulado_empresas
+        ),
     )
 
 

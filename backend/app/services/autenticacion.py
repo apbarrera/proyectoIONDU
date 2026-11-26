@@ -1,4 +1,3 @@
-
 """Inicio de sesión propio: contraseñas, bloqueo por intentos y sesiones renovables.
 
 - El token de acceso (JWT, 15 min por defecto) viaja en `Authorization: Bearer`.
@@ -131,27 +130,19 @@ class ServicioAutenticacion:
 
         # Primera lectura sin bloqueo: solo obtenemos el propietario de la sesión.
         id_usuario = self.db.scalar(
-            select(SesionRefresh.id_usuario).where(
-                SesionRefresh.token_hash == token_hash
-            )
+            select(SesionRefresh.id_usuario).where(SesionRefresh.token_hash == token_hash)
         )
         if id_usuario is None:
             raise _sesion_invalida()
 
         # Orden uniforme de bloqueos: primero usuario, después sesión.
-        usuario = self.db.scalar(
-            select(Usuario)
-            .where(Usuario.id == id_usuario)
-            .with_for_update()
-        )
+        usuario = self.db.scalar(select(Usuario).where(Usuario.id == id_usuario).with_for_update())
         if usuario is None:
             raise _sesion_invalida()
 
         # Volvemos a consultar la sesión y la bloqueamos para validar su estado actual.
         fila = self.db.scalar(
-            select(SesionRefresh)
-            .where(SesionRefresh.token_hash == token_hash)
-            .with_for_update()
+            select(SesionRefresh).where(SesionRefresh.token_hash == token_hash).with_for_update()
         )
 
         if fila is None or fila.revocada_en is not None or fila.expira_en <= ahora:
@@ -209,20 +200,14 @@ class ServicioAutenticacion:
 
         # Primero identificamos al usuario sin bloquear la sesión.
         id_usuario = self.db.scalar(
-            select(SesionRefresh.id_usuario).where(
-                SesionRefresh.token_hash == token_hash
-            )
+            select(SesionRefresh.id_usuario).where(SesionRefresh.token_hash == token_hash)
         )
         if id_usuario is None:
             self.db.commit()
             return
 
         # Conservamos el mismo orden de bloqueos que las demás operaciones.
-        self.db.scalar(
-            select(Usuario.id)
-            .where(Usuario.id == id_usuario)
-            .with_for_update()
-        )
+        self.db.scalar(select(Usuario.id).where(Usuario.id == id_usuario).with_for_update())
 
         self.db.execute(
             update(SesionRefresh)

@@ -1,4 +1,4 @@
-﻿"""Facturas de proveedores por correo (RF-3.2, RF-3.3): lectura, worker y API."""
+"""Facturas de proveedores por correo (RF-3.2, RF-3.3): lectura, worker y API."""
 
 # Fixtures `admin_a` vienen de test_usuarios: pytest los inyecta por nombre.
 # ruff: noqa: F811

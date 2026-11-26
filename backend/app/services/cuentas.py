@@ -1,4 +1,3 @@
-
 """Operaciones sobre cuentas que el Administrador dispara, ejecutadas con el rol iondu_auth.
 
 iondu_app no puede leer hashes ni sesiones, ni buscar correos de otras empresas. Por eso
@@ -61,9 +60,7 @@ class CuentasAuth:
 
         # Primero bloquea la cuenta para serializar las operaciones concurrentes.
         usuario = self.db.scalar(
-            select(Usuario.id)
-            .where(Usuario.id == id_usuario)
-            .with_for_update()
+            select(Usuario.id).where(Usuario.id == id_usuario).with_for_update()
         )
 
         if usuario is None:

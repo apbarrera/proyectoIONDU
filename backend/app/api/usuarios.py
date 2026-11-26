@@ -57,11 +57,10 @@ def create_user(
         enlace = ServicioRecuperacion(auth_db).crear_enlace(usuario, INVITACION)
 
         # Consultar únicamente la columna permitida/necesaria.
-        nombre_empresa = db.scalar(
-            select(Empresa.razon_social).where(
-                Empresa.id_empresa == contexto.empresa_id
-            )
-        ) or "tu empresa"
+        nombre_empresa = (
+            db.scalar(select(Empresa.razon_social).where(Empresa.id_empresa == contexto.empresa_id))
+            or "tu empresa"
+        )
 
         correo = correo_invitacion(
             get_settings().app_public_url,

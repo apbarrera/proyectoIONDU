@@ -1,4 +1,4 @@
-﻿"""Unir las ramas de migraciones de seguridad e IA.
+"""Unir las ramas de migraciones de seguridad e IA.
 
 Revision ID: f8c2e6a9b315
 Revises: d1f3a5c7e924, d6a8c0e2f417

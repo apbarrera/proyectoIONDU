@@ -52,6 +52,9 @@ export class Sidebar {
 
   hostWidth = computed(() => (this.collapsed() ? SIDEBAR_COLLAPSED : this.width()));
 
+  /** El logo lleva al inicio de cada rol: Dashboard para el Administrador, Ventas para el Operativo. */
+  homeLink = computed(() => this.auth.defaultRouteForCurrentUser());
+
   // En tablet y móvil el menú es un cajón fuera de pantalla: mientras está cerrado se marca
   // como inerte para que no reciba foco con el teclado ni aparezca para lectores de pantalla.
   #mobileMedia = window.matchMedia('(max-width: 1024px)');

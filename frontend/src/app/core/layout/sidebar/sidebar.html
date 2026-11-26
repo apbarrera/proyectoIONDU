@@ -5,8 +5,10 @@
   aria-label="Navegación principal"
 >
   <div class="sidebar__brand">
-    <app-logo class="sidebar__logo" [size]="34" />
-    <span class="sidebar__brand-name">IONDU</span>
+    <a class="sidebar__home" [routerLink]="homeLink()" aria-label="IONDU, ir al inicio" (click)="onLinkClick()">
+      <app-logo class="sidebar__logo" [size]="34" />
+      <span class="sidebar__brand-name">IONDU</span>
+    </a>
     <button
       type="button"
       class="sidebar__collapse"

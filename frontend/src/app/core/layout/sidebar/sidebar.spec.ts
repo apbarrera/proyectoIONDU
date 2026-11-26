@@ -1,5 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { vi } from 'vitest';
 
+import { AuthService } from '../../services/auth.service';
 import { NAV_ITEMS, NavItem } from './nav-items.const';
 import { SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN, Sidebar } from './sidebar';
 
@@ -22,6 +24,16 @@ describe('Sidebar', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('el logo lleva al inicio del rol (Dashboard para el Administrador)', async () => {
+    vi.spyOn(TestBed.inject(AuthService), 'defaultRouteForCurrentUser').mockReturnValue('/dashboard');
+    const fresh = TestBed.createComponent(Sidebar);
+    await fresh.whenStable();
+
+    const home = (fresh.nativeElement as HTMLElement).querySelector<HTMLAnchorElement>('a.sidebar__home');
+    expect(home?.getAttribute('href')).toBe('/dashboard');
+    expect(home?.getAttribute('aria-label')).toBe('IONDU, ir al inicio');
   });
 
   it('arranca expandido con el ancho por defecto', () => {

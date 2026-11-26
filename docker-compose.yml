@@ -69,6 +69,11 @@ services:
       AUTH_JWT_PRIVATE_KEY: ${AUTH_JWT_PRIVATE_KEY:-}
       AUTH_ACCESS_TOKEN_MINUTES: ${AUTH_ACCESS_TOKEN_MINUTES:-15}
       AUTH_REFRESH_TOKEN_DAYS: ${AUTH_REFRESH_TOKEN_DAYS:-7}
+      # Agente de IA (API compatible con OpenAI). Sin LLM_BASE_URL el agente no está disponible.
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-120}
     expose:
       - "8000"
     healthcheck:

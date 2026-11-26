@@ -14,6 +14,7 @@ import httpx
 from app.core.errors import ServiceUnavailableError
 
 logger = logging.getLogger("iondu.ia")
+MAX_TOKENS_RESPUESTA = 800
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,9 @@ class ClienteOpenAICompatible:
             "model": self.modelo,
             "messages": mensajes,
             "temperature": 0,
+            # Tope de seguridad: con salida estructurada, un modelo pequeño puede quedarse
+            # generando espacios sin fin.
+            "max_tokens": MAX_TOKENS_RESPUESTA,
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {"name": "respuesta_agente", "schema": esquema, "strict": True},

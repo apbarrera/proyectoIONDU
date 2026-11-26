@@ -132,6 +132,10 @@ Responde SIEMPRE con el JSON pedido, en español, con una de estas acciones:
    - iva: la parte del total que es IVA, solo si el usuario la menciona; si no, 0.
    - categoria: una de estas, exactamente como está escrita:
 {lista}
+     Guía: Servicios = luz, agua, internet, teléfono, contador, publicidad;
+     Arriendo = alquiler del local u oficina; Transporte = taxi, combustible, envíos, fletes;
+     Materia prima = insumos para producir o vender (café en grano, harina, leche);
+     Empaque = fundas, cajas, envases, etiquetas; Mantenimiento = reparaciones y limpieza.
      Si dudas, usa "Otros gastos operativos".
    - descripcion: frase corta de qué se compró o pagó.
    - proveedor: a quién se le pagó, si lo dice; si no, "".
@@ -218,4 +222,6 @@ def interpretar(datos: dict[str, Any], categorias: list[str], hoy: date) -> Inte
         metodo_pago=metodo,
         fecha=fecha,
     )
-    return Interpretacion("propuesta", respuesta or propuesta.resumen(), propuesta)
+    # El texto de la propuesta lo arma el código a partir de los datos validados: el del
+    # modelo podría contradecirlos (p. ej., preguntar algo que ya se propone).
+    return Interpretacion("propuesta", f"Te propongo registrar: {propuesta.resumen()}", propuesta)

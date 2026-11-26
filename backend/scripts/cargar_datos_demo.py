@@ -68,6 +68,21 @@ def _validar_destino() -> None:
         sys.exit("Define APP_ENV=development: los datos demo son solo para desarrollo.")
 
 
+def _sesion_admin():
+    """Sesión con la credencial administrativa (MIGRATION_DATABASE_URL): crea la empresa y
+    los usuarios demo y mueve fechas. Todo lo demás pasa por la API, como iondu_app."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from app.core.config import get_settings
+
+    url = get_settings().migration_database_url or os.environ.get("DATABASE_URL", "")
+    destino = make_url(url)
+    if destino.host not in SERVIDORES_LOCALES or destino.database != "iondu":
+        sys.exit("MIGRATION_DATABASE_URL debe apuntar a la base local iondu.")
+    return Session(create_engine(destino))
+
+
 def _preparar_usuarios(db) -> int:
     """Roles, empresa demo y los dos usuarios demo con su pertenencia."""
     from app.core import contrasenas
@@ -136,11 +151,10 @@ def main() -> None:
     _validar_destino()
     from fastapi.testclient import TestClient
 
-    from app.db.session import _session_factory
     from app.main import app
     from app.models import Producto
 
-    with _session_factory()() as db:
+    with _sesion_admin() as db:
         id_empresa = _preparar_usuarios(db)
         if db.scalar(select(Producto.id_producto).where(Producto.id_empresa == id_empresa)):
             print("La empresa demo ya tiene productos: no se cargó nada.")
@@ -275,7 +289,7 @@ def main() -> None:
             hora = timedelta(hours=azar.randint(-2, 9), minutes=azar.randint(0, 59))
             ventas.append((venta["id"], min(hoy - timedelta(days=dias) + hora, ahora)))
 
-    with _session_factory()() as db:
+    with _sesion_admin() as db:
         for id_venta, fecha in ventas:
             db.execute(
                 text("UPDATE venta SET fecha = :f WHERE id_venta = :v AND id_empresa = :e"),

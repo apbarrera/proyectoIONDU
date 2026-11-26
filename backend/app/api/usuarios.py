@@ -3,10 +3,15 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Path, Response
+from fastapi import APIRouter, BackgroundTasks, Path, Response
 
+from app.api.auth import EnviadorActual
 from app.api.deps import AuditorActual, DbSession, SoloAdministrador
+from app.core.config import get_settings
+from app.core.correo import enviar_sin_fallar
+from app.models import Empresa, Usuario
 from app.schemas.usuario import CompanyUser, PasswordReset, UserCreate, UserCreated, UserUpdate
+from app.services.recuperacion import INVITACION, ServicioRecuperacion, correo_invitacion
 from app.services.usuarios import UsuarioService
 
 router = APIRouter(prefix="/users", tags=["Usuarios"])
@@ -32,11 +37,34 @@ def create_user(
     contexto: SoloAdministrador,
     db: DbSession,
     auditor: AuditorActual,
+    enviador: EnviadorActual,
+    tareas: BackgroundTasks,
 ):
     # La respuesta puede traer la contraseña temporal: que nadie la guarde en caché.
     response.headers["Cache-Control"] = "no-store"
     creado = _servicio(db, contexto).crear(datos)
     cuenta = "cuenta nueva" if creado.temporary_password else "cuenta existente"
+    # Cuenta nueva y correo configurado: además de la contraseña temporal, se envía un
+    # enlace para que la persona elija la suya.
+    usuario = db.get(Usuario, creado.user.id)
+    if enviador is not None and creado.temporary_password and usuario is not None:
+        enlace = ServicioRecuperacion(db).crear_enlace(usuario, INVITACION)
+        empresa = db.get(Empresa, contexto.empresa_id)
+        correo = correo_invitacion(
+            get_settings().app_public_url,
+            enlace.token,
+            empresa.razon_social if empresa else "tu empresa",
+            creado.user.full_name,
+        )
+        tareas.add_task(
+            enviar_sin_fallar,
+            enviador,
+            enlace.destinatario,
+            correo.asunto,
+            correo.texto,
+            correo.html,
+        )
+        creado = creado.model_copy(update={"invitation_sent": True})
     auditor.registrar(
         "usuarios",
         "Creó usuario",

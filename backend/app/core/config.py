@@ -84,6 +84,18 @@ class Settings(BaseSettings):
     auth_access_token_minutes: int = Field(default=15, gt=0)
     auth_refresh_token_days: int = Field(default=7, gt=0)
 
+    # Correo saliente (recuperación de contraseña e invitaciones). Cualquier SMTP: en local,
+    # Mailpit (docker-compose.override.yml); en producción, el proveedor que se contrate.
+    # Sin SMTP_HOST no se envían correos y los usuarios se crean con contraseña temporal.
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=587, gt=0)
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_starttls: bool = True
+    smtp_from: str = "IONDU <no-responder@iondu.ec>"
+    # Dirección pública de la app, para los enlaces de los correos (sin "/" final).
+    app_public_url: str = "http://localhost:8080"
+
     worker_heartbeat_file: str = "/tmp/worker-heartbeat"
     worker_tick_seconds: int = Field(default=30, gt=0)
 
@@ -118,6 +130,9 @@ class Settings(BaseSettings):
         "llm_vision_model",
         "stt_base_url",
         "stt_api_key",
+        "smtp_host",
+        "smtp_username",
+        "smtp_password",
         "auth_jwt_private_key",
         "dev_user_id",
         mode="before",

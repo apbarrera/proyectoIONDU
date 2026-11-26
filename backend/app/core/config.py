@@ -50,6 +50,18 @@ class Settings(BaseSettings):
 
     master_encryption_key: SecretStr | None = None
 
+    # Facturación de demostración sin .p12 (app/sri/simulado.py): ids de empresa separados
+    # por comas, p. ej. SRI_SIMULADO_EMPRESAS=1. Solo actúa si la empresa está en ambiente
+    # de PRUEBAS; en producción se ignora. Se quita cuando la empresa sube su .p12.
+    sri_simulado_empresas: Annotated[frozenset[int], NoDecode] = Field(default_factory=frozenset)
+
+    @field_validator("sri_simulado_empresas", mode="before")
+    @classmethod
+    def _split_sri_simulado(cls, value: object) -> object:
+        if isinstance(value, str):
+            return frozenset(int(item) for item in value.split(",") if item.strip())
+        return value
+
     # Agente de IA: cualquier servicio con la API de OpenAI (/v1/chat/completions).
     # En local, Ollama: LLM_BASE_URL=http://host.docker.internal:11434/v1 y sin clave.
     # Sin LLM_BASE_URL el agente responde que no está configurado.

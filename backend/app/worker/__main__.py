@@ -14,6 +14,7 @@ from app.sri.clave_acceso import Ambiente
 from app.sri.emision import EstadoEmision, ServicioEmision
 from app.sri.ride import generar_ride
 from app.sri.servicios_web import ClienteSri
+from app.sri.simulado import ClienteSriSimulado, es_autorizacion_simulada, usa_sri_simulado
 from app.worker.database import (
     bloqueo_factura,
     dispose_worker_engine,
@@ -176,7 +177,12 @@ def _procesar_factura(
             # La transacción de negocio ya terminó. El advisory lock de sesión
             # permanece adquirido durante toda la comunicación con el SRI.
             try:
-                with ClienteSri(ambiente) as cliente_sri:
+                cliente = (
+                    ClienteSriSimulado
+                    if usa_sri_simulado(empresa_id, ambiente, get_settings().sri_simulado_empresas)
+                    else ClienteSri
+                )
+                with cliente(ambiente) as cliente_sri:
                     servicio = ServicioEmision(
                         cliente_sri,
                         firmador=None,
@@ -265,6 +271,9 @@ def _procesar_factura(
                         xml_ride,
                         numero_autorizacion=numero_autorizacion,
                         fecha_autorizacion=fecha_autorizacion,
+                        simulado=es_autorizacion_simulada(
+                            _serializar_mensajes(resultado.mensajes or [])
+                        ),
                     )
                     ruta = almacenamiento.guardar(
                         empresa_id,

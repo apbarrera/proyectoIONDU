@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.sri.emision import EstadoEmision, ResultadoEmision
+from app.sri.simulado import ClienteSriSimulado
 from app.worker import __main__ as worker
 
 XML = "<factura>firmada</factura>"
@@ -137,6 +138,41 @@ def instalar_sri_falso(monkeypatch, servicio):
         "ServicioEmision",
         lambda *args, **kwargs: servicio,
     )
+
+
+def _cliente_usado(monkeypatch, ambiente, empresas):
+    """Procesa una factura de la empresa 7 y devuelve el cliente SRI que usó el worker."""
+    usados = []
+    resultado = ResultadoEmision(EstadoEmision.POR_AUTORIZAR, CLAVE, XML.encode("utf-8"))
+    monkeypatch.setattr(worker, "ClienteSri", ClienteSriFalso)
+    monkeypatch.setattr(
+        worker,
+        "ServicioEmision",
+        lambda cliente, **kwargs: usados.append(cliente) or ServicioSriFalso(resultado),
+    )
+    monkeypatch.setattr(
+        worker,
+        "get_settings",
+        lambda: SimpleNamespace(sri_simulado_empresas=frozenset(empresas)),
+    )
+    empresa = SimpleNamespace(id_empresa=7, datos_facturacion_electronica={"ambiente": ambiente})
+    factura = factura_falsa()
+    worker._procesar_factura(
+        FabricaSesionesFalsa(SesionFalsa([factura], empresa=empresa), SesionFalsa([factura])),
+        7,
+        15,
+        None,
+    )
+    return usados[0] if usados else None
+
+
+def test_empresa_en_sri_simulado_no_llama_al_sri_real(monkeypatch):
+    assert isinstance(_cliente_usado(monkeypatch, "1", {7}), ClienteSriSimulado)
+
+
+@pytest.mark.parametrize(("ambiente", "empresas"), [("1", set()), ("1", {3}), ("2", {7})])
+def test_sin_la_variable_otra_empresa_o_produccion_usa_el_sri_real(monkeypatch, ambiente, empresas):
+    assert isinstance(_cliente_usado(monkeypatch, ambiente, empresas), ClienteSriFalso)
 
 
 def test_serializar_mensajes_sri():
@@ -334,7 +370,8 @@ def test_autorizacion_se_confirma_antes_de_guardar_ride(monkeypatch):
         sesion_ruta,
     )
 
-    def generar_ride_falso(xml, *, numero_autorizacion, fecha_autorizacion):
+    def generar_ride_falso(xml, *, numero_autorizacion, fecha_autorizacion, simulado):
+        assert simulado is False  # autorización real: el RIDE no lleva el aviso
         assert sesion_proceso.transaccion_confirmada
         assert xml == b"<autorizado/>"
         assert numero_autorizacion == CLAVE

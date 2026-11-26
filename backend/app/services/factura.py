@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.cifrado import get_cifrador
+from app.core.config import get_settings
 from app.core.errors import (
     ConflictError,
     NotFoundError,
@@ -39,6 +40,7 @@ from app.sri.factura_xml import (
 )
 from app.sri.identificacion import TipoIdentificacion
 from app.sri.ride import generar_ride
+from app.sri.simulado import es_autorizacion_simulada, firmador_de_prueba, usa_sri_simulado
 from app.sri.totales import (
     Linea,
     TarifaIva,
@@ -150,7 +152,17 @@ class FacturaService:
                 raise NotFoundError("No se encontró la empresa.")
 
             configuracion = self._obtener_configuracion(empresa)
-            firmador = self._obtener_firmador(empresa)
+            # Demostración sin .p12 (solo ambiente de pruebas): firma real con un
+            # certificado de prueba; el worker la "autoriza" sin llamar al SRI.
+            firmador = (
+                firmador_de_prueba()
+                if usa_sri_simulado(
+                    self.empresa_id,
+                    configuracion.ambiente,
+                    get_settings().sri_simulado_empresas,
+                )
+                else self._obtener_firmador(empresa)
+            )
 
             fila = self.ventas.obtener(id_venta)
             if fila is None:
@@ -384,6 +396,7 @@ class FacturaService:
                 factura.xml_autorizado.encode("utf-8"),
                 numero_autorizacion=factura.numero_autorizacion,
                 fecha_autorizacion=factura.fecha_autorizacion,
+                simulado=es_autorizacion_simulada(factura.mensajes_sri),
             )
         except Exception as exc:
             logger.exception(

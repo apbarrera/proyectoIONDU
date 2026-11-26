@@ -36,10 +36,16 @@ _SUBTOTALES = {"4": "SUBTOTAL 15%", "5": "SUBTOTAL 5%", "0": "SUBTOTAL 0%",
 
 _GRIS = colors.HexColor("#555555")
 _BORDE = colors.HexColor("#999999")
+_ROJO = colors.HexColor("#B42318")
 _NORMAL = ParagraphStyle("normal", fontName="Helvetica", fontSize=8, leading=10)
 _NEGRITA = ParagraphStyle("negrita", parent=_NORMAL, fontName="Helvetica-Bold")
 _TITULO = ParagraphStyle("titulo", parent=_NEGRITA, fontSize=12, leading=15)
 _PEQUENA = ParagraphStyle("pequena", parent=_NORMAL, fontSize=7, leading=9, textColor=_GRIS)
+_AVISO = ParagraphStyle(
+    "aviso", parent=_NEGRITA, fontSize=11, leading=14, alignment=1, textColor=_ROJO
+)
+
+AVISO_SIMULADO = "SIMULADO - SIN VALIDEZ TRIBUTARIA. Comprobante de demostración no enviado al SRI."
 
 
 def _p(texto: str | None, estilo: ParagraphStyle = _NORMAL) -> Paragraph:
@@ -72,8 +78,13 @@ def generar_ride(
     *,
     numero_autorizacion: str | None = None,
     fecha_autorizacion: datetime | None = None,
+    simulado: bool = False,
 ) -> bytes:
-    """PDF del RIDE a partir del XML de la factura. Sin autorización, lo indica en el documento."""
+    """PDF del RIDE a partir del XML de la factura. Sin autorización, lo indica en el documento.
+
+    Con `simulado` (app/sri/simulado.py) encabeza el documento con un aviso visible de que
+    la autorización es de demostración y no tiene validez tributaria.
+    """
     raiz = etree.fromstring(xml, etree.XMLParser(no_network=True, resolve_entities=False))
 
     def t(ruta: str) -> str | None:
@@ -92,6 +103,24 @@ def generar_ride(
 
     ancho = A4[0] - 2.4 * cm
     historia = []
+
+    if simulado:
+        aviso = Table(
+            [[_p(AVISO_SIMULADO, _AVISO)]],
+            colWidths=[ancho],
+        )
+        aviso.setStyle(
+            TableStyle(
+                [
+                    ("BOX", (0, 0), (-1, -1), 1.2, _ROJO),
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FDECEC")),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
+        )
+        historia += [aviso, Spacer(1, 6)]
 
     # ---------- cabecera: emisor | comprobante ----------
     emisor = [

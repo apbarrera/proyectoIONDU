@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError, NotFoundError, UnprocessableError
 from app.models.empresa import Empresa
+from app.services import factura as modulo_factura
 from app.services.factura import FacturaService
 from app.sri.firma import FirmadorSinFirma
 
@@ -264,6 +265,41 @@ def test_emision_conserva_porcentaje_historico_de_iva(monkeypatch):
     assert session.commits == 1
     assert session.rollbacks == 0
     assert len(reservas) == 1
+
+
+def test_con_sri_simulado_firma_con_el_certificado_de_prueba_sin_pedir_el_p12(monkeypatch):
+    detalle = SimpleNamespace(
+        cantidad=Decimal("1"),
+        precio_unitario=Decimal("10.00"),
+        descuento=Decimal("0"),
+        codigo_porcentaje_iva="4",
+        porcentaje_iva=Decimal("12.00"),
+        valor_iva=Decimal("1.20"),
+        descripcion_libre=None,
+    )
+    servicio, session, _ = _preparar_emision_con_detalle(
+        monkeypatch,
+        detalle,
+        subtotal=Decimal("10.00"),
+        iva=Decimal("1.20"),
+        total=Decimal("11.20"),
+    )
+
+    def sin_p12(empresa):
+        raise AssertionError("En modo simulado no se usa el .p12 de la empresa.")
+
+    monkeypatch.setattr(servicio, "_obtener_firmador", sin_p12)
+    monkeypatch.setattr(
+        modulo_factura,
+        "get_settings",
+        lambda: SimpleNamespace(sri_simulado_empresas=frozenset({1})),
+    )
+
+    factura = servicio.emitir(103)
+
+    assert factura.estado_autorizacion == "por_enviar"  # el worker la "autoriza"
+    assert "<ds:Signature" in factura.xml_firmado  # firma XAdES real, no un XML sin firmar
+    assert session.commits == 1
 
 
 def test_emision_conserva_servicio_sin_producto_y_su_iva_historico(monkeypatch):
@@ -625,6 +661,7 @@ def test_recupera_ride_desde_xml_autorizado_si_storage_falla(monkeypatch):
         numero_autorizacion="1234567890",
         fecha_autorizacion=datetime(2026, 11, 11, 20, 0, 0),
         pdf_ride_path="empresas/1/facturas/50/ride.pdf",
+        mensajes_sri=[],
     )
 
     session = FakeSessionCompleta([factura], empresa=None)
@@ -663,6 +700,7 @@ def test_recupera_ride_desde_xml_autorizado_si_storage_falla(monkeypatch):
     assert len(llamadas_generador) == 1
     assert llamadas_generador[0][0] == b"<factura>XML autorizado</factura>"
     assert llamadas_generador[0][1]["numero_autorizacion"] == "1234567890"
+    assert llamadas_generador[0][1]["simulado"] is False
     assert session.commits == 0
 
 

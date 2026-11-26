@@ -46,3 +46,32 @@
   font-size: 0.8125rem;
   margin: calc(-1 * var(--space-2)) 0 var(--space-3);
 }
+
+.login__link {
+  display: block;
+  margin-top: var(--space-4);
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm, 4px);
+  }
+}
+
+.login__notice {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}

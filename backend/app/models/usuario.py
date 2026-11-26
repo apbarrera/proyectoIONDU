@@ -71,3 +71,38 @@ class SesionRefresh(Base):
     # Se llena al rotar el token; permite una breve ventana de gracia para peticiones simultáneas.
     rotada_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revocada_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class RestablecimientoContrasena(Base):
+    """Enlace de un solo uso para elegir contraseña: recuperación o invitación.
+
+    Solo se guarda el hash SHA-256 del token; el token viaja únicamente en el correo.
+    """
+
+    __tablename__ = "restablecimiento_contrasena"
+
+    __table_args__ = (
+        Index("idx_restablecimiento_usuario", "id_usuario"),
+        CheckConstraint(
+            "motivo IN ('recuperacion', 'invitacion')", name="restablecimiento_motivo_check"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    id_usuario: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("usuario.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    motivo: Mapped[str] = mapped_column(String(20), nullable=False)
+    creado_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    expira_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    usado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

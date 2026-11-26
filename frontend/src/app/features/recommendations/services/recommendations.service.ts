@@ -1,9 +1,11 @@
+import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { forkJoin } from 'rxjs';
+import { environment } from '../../../../environments/environment';
 import { DashboardService } from '../../dashboard/services/dashboard.service';
 import { DashboardSummary } from '../../dashboard/models/dashboard-summary.model';
 import { resolveDateRange } from '../../../shared/utils/date-range.util';
-import { Recommendation } from '../models/recommendation.model';
+import { AiAnalysis, Recommendation } from '../models/recommendation.model';
 
 /**
  * Recomendaciones basadas en reglas sobre los indicadores reales del dashboard (este mes contra el
@@ -19,6 +21,28 @@ export class RecommendationsService {
 
   #loading = signal(false);
   readonly loading = this.#loading.asReadonly();
+
+  private http = inject(HttpClient);
+
+  /** Último análisis con IA de esta sesión (se pide a demanda: gasta tokens). */
+  #aiAnalysis = signal<AiAnalysis | null>(null);
+  readonly aiAnalysis = this.#aiAnalysis.asReadonly();
+
+  #aiLoading = signal(false);
+  readonly aiLoading = this.#aiLoading.asReadonly();
+
+  generateWithAi(): void {
+    if (this.#aiLoading()) return;
+    this.#aiLoading.set(true);
+    this.http.post<AiAnalysis>(`${environment.apiUrl}/recommendations/ai`, null).subscribe({
+      next: (analysis) => {
+        this.#aiAnalysis.set(analysis);
+        this.#aiLoading.set(false);
+      },
+      // El interceptor ya mostró el motivo (p. ej., límite de tokens alcanzado).
+      error: () => this.#aiLoading.set(false),
+    });
+  }
 
   refresh(): void {
     this.#loading.set(true);

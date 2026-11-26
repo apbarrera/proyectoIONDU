@@ -96,6 +96,9 @@ class Settings(BaseSettings):
     # Dirección pública de la app, para los enlaces de los correos (sin "/" final).
     app_public_url: str = "http://localhost:8080"
 
+    # Cada cuánto el worker lee los buzones de correo de facturas (RF-3.2).
+    imap_intervalo_segundos: int = Field(default=300, ge=30)
+
     worker_heartbeat_file: str = "/tmp/worker-heartbeat"
     worker_tick_seconds: int = Field(default=30, gt=0)
 

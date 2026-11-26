@@ -2,11 +2,14 @@
 
 import logging
 import threading
+import time
 from pathlib import Path
 
 from sqlalchemy import and_, or_, select
 
+from app.core.cifrado import get_cifrador
 from app.core.config import get_settings
+from app.correo_entrante.procesar import procesar_buzones
 from app.models.empresa import Empresa
 from app.models.factura import Factura
 from app.services.almacenamiento import crear_almacenamiento
@@ -304,6 +307,27 @@ def _procesar_factura(
         )
 
 
+_proxima_lectura_correo = 0.0
+
+
+def leer_correo_si_toca(ahora: float | None = None) -> None:
+    """RF-3.2: cada IMAP_INTERVALO_SEGUNDOS lee los buzones activos y guarda borradores."""
+    global _proxima_lectura_correo
+    ahora = time.monotonic() if ahora is None else ahora
+    if ahora < _proxima_lectura_correo:
+        return
+    settings = get_settings()
+    _proxima_lectura_correo = ahora + settings.imap_intervalo_segundos
+    try:
+        cifrador = get_cifrador()
+    except Exception as exc:
+        logger.warning("Sin llave de cifrado: no se leen buzones. tipo=%s", type(exc).__name__)
+        return
+    encontradas = procesar_buzones(get_worker_session_factory(), cifrador.descifrar)
+    if encontradas:
+        logger.info("correo: %s facturas leídas (las repetidas no se duplican)", encontradas)
+
+
 def run_cycle() -> None:
     """Procesa un lote de facturas pendientes de envío o autorización."""
     settings = get_settings()
@@ -352,6 +376,10 @@ def main() -> None:
         while not stop.is_set():
             try:
                 run_cycle()
+            except Exception:
+                logger.exception("error en el ciclo del worker")
+            try:
+                leer_correo_si_toca()
             except Exception:
                 logger.exception("error en el ciclo del worker")
 

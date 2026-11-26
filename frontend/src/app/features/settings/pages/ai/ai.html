@@ -43,20 +43,85 @@
 
   @if (auth.isAdmin()) {
     <app-card title="Consumo de tokens">
-      <p class="ai-settings__token-usage">
-        {{ tokenUsage.used().toLocaleString('es-EC') }} / {{ tokenUsage.limit.toLocaleString('es-EC') }} tokens
-      </p>
-      <div class="ai-settings__meter">
-        <div class="ai-settings__meter-fill" [style.width.%]="tokenUsage.percentUsed()"></div>
-      </div>
-      <p class="ai-settings__percent">{{ tokenUsage.percentUsed() }}% utilizado este mes</p>
-
-      <h3 class="ai-settings__history-title">Historial de consumo</h3>
-      <ul class="ai-settings__history">
-        @for (item of tokenUsage.history; track item.month) {
-          <li><span>{{ item.month }}</span><span>{{ item.used.toLocaleString('es-EC') }}</span></li>
+      @if (usage(); as u) {
+        <p class="ai-settings__token-usage">
+          {{ u.used.toLocaleString('es-EC') }}
+          @if (u.monthlyLimit != null) {
+            / {{ u.monthlyLimit.toLocaleString('es-EC') }}
+          }
+          tokens
+        </p>
+        @if (u.percentUsed != null) {
+          <div
+            class="ai-settings__meter"
+            role="meter"
+            aria-label="Consumo del límite mensual"
+            [attr.aria-valuenow]="u.percentUsed"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            <div
+              class="ai-settings__meter-fill"
+              [class.ai-settings__meter-fill--warning]="u.nearLimit && !u.limitReached"
+              [class.ai-settings__meter-fill--danger]="u.limitReached"
+              [style.width.%]="u.percentUsed"
+            ></div>
+          </div>
+          <p class="ai-settings__percent">{{ u.percentUsed }}% del límite utilizado este mes</p>
+        } @else {
+          <p class="ai-settings__percent">Este mes, sin límite configurado.</p>
         }
-      </ul>
+        @if (u.limitReached) {
+          <p class="ai-settings__alert" role="alert">
+            Se alcanzó el límite: el agente no responderá hasta el próximo mes o hasta que lo amplíes.
+          </p>
+        } @else if (u.nearLimit) {
+          <p class="ai-settings__alert ai-settings__alert--warning" role="status">
+            Quedan {{ u.remaining?.toLocaleString('es-EC') }} tokens este mes.
+          </p>
+        }
+
+        <div class="ai-settings__limit">
+          <label class="ai-settings__label" for="ai-limit">Límite mensual de tokens</label>
+          <div class="ai-settings__limit-row">
+            <input
+              id="ai-limit"
+              type="number"
+              min="0"
+              step="1000"
+              inputmode="numeric"
+              placeholder="Sin límite"
+              [value]="limitDraft()"
+              (input)="onLimitInput($event)"
+              [attr.aria-invalid]="limitInvalid()"
+              aria-describedby="ai-limit-hint"
+            />
+            <app-button [loading]="savingLimit()" [disabled]="limitInvalid()" (clicked)="saveLimit()">
+              Guardar límite
+            </app-button>
+          </div>
+          <p id="ai-limit-hint" class="ai-settings__hint">
+            Déjalo vacío para no limitar. Al llegar al límite, el agente deja de responder hasta el mes siguiente.
+          </p>
+        </div>
+
+        <h3 class="ai-settings__history-title">Últimos meses</h3>
+        <ul class="ai-settings__history">
+          @for (item of u.history; track item.month) {
+            <li>
+              <span>{{ monthLabel(item.month) }}</span>
+              <span class="ai-settings__history-bar" aria-hidden="true">
+                <span [style.width.%]="(item.used / maxMonthly()) * 100"></span>
+              </span>
+              <span>{{ item.used.toLocaleString('es-EC') }}</span>
+            </li>
+          }
+        </ul>
+      } @else if (usageError()) {
+        <p class="ai-settings__percent">No se pudo cargar el consumo. Intenta de nuevo más tarde.</p>
+      } @else {
+        <p class="ai-settings__percent">Cargando consumo…</p>
+      }
     </app-card>
   }
 </div>

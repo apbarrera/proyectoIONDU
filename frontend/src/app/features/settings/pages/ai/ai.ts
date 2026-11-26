@@ -1,7 +1,7 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AiConfigService } from '../../../ai-agent/services/ai-config.service';
-import { TokenUsageService } from '../../../ai-agent/services/token-usage.service';
+import { TokenUsageService, monthLabel } from '../../../ai-agent/services/token-usage.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { PageHeader } from '../../../../shared/components/page-header/page-header';
@@ -23,6 +23,47 @@ export class Ai {
 
   instructions = signal(this.aiConfig.config().instructions);
   askForMoreInfo = signal(this.aiConfig.config().askForMoreInfoWhenUncertain);
+
+  readonly monthLabel = monthLabel;
+  usage = this.tokenUsage.usage;
+  usageError = signal(false);
+  /** Límite que escribe el Administrador; vacío = sin límite. */
+  limitDraft = signal<number | null>(null);
+  savingLimit = signal(false);
+  limitInvalid = computed(() => {
+    const value = this.limitDraft();
+    return value != null && (!Number.isInteger(value) || value < 0);
+  });
+  /** Barra del historial: cada mes relativo al mayor consumo. */
+  maxMonthly = computed(() => Math.max(1, ...(this.usage()?.history ?? []).map((m) => m.used)));
+
+  constructor() {
+    if (!this.auth.isAdmin()) return;
+    this.tokenUsage.load().subscribe({
+      next: (usage) => this.limitDraft.set(usage.monthlyLimit),
+      error: () => this.usageError.set(true),
+    });
+  }
+
+  saveLimit(): void {
+    if (this.limitInvalid() || this.savingLimit()) return;
+    this.savingLimit.set(true);
+    this.tokenUsage.setLimit(this.limitDraft()).subscribe({
+      next: (usage) => {
+        this.savingLimit.set(false);
+        this.limitDraft.set(usage.monthlyLimit);
+        this.toast.success(
+          usage.monthlyLimit == null ? 'El agente de IA ya no tiene límite mensual.' : 'Límite mensual actualizado.',
+        );
+      },
+      error: () => this.savingLimit.set(false),
+    });
+  }
+
+  onLimitInput(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.limitDraft.set(value === '' ? null : Number(value));
+  }
 
   save(): void {
     this.aiConfig

@@ -315,6 +315,32 @@ def test_una_respuesta_rara_del_modelo_es_503(monkeypatch, contenido):
     assert error.value.code == "AI_UNAVAILABLE"
 
 
+def test_el_reintento_cambia_la_temperatura_y_suma_los_tokens(monkeypatch):
+    enviados = []
+    respuestas = [
+        {
+            "choices": [{"message": {"content": '{"respuesta": "#IONDU #IONDU'}}],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 800},
+        },
+        {
+            "choices": [{"message": {"content": '{"accion": "fuera_de_alcance"}'}}],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 20},
+        },
+    ]
+
+    def post(url, **kwargs):
+        enviados.append(kwargs["json"])
+        return _respuesta_http(url, respuestas[len(enviados) - 1])
+
+    monkeypatch.setattr(modulo_cliente.httpx, "post", post)
+    respuesta = ClienteOpenAICompatible("http://x/v1", "m", None, 5).completar_json([], {})
+
+    assert respuesta.datos == {"accion": "fuera_de_alcance"}
+    assert (respuesta.tokens_prompt, respuesta.tokens_completado) == (200, 820)
+    assert enviados[0]["temperature"] == 0 and "frequency_penalty" not in enviados[0]
+    assert enviados[1]["temperature"] > 0 and enviados[1]["frequency_penalty"] > 0
+
+
 def test_si_el_modelo_no_responde_es_503(monkeypatch):
     def post(url, **_):
         raise httpx.ConnectError("sin conexión", request=httpx.Request("POST", url))

@@ -1,8 +1,39 @@
-<app-page-header title="Auditoría" subtitle="Historial de actividad de todos los usuarios en IONDU." />
+<app-page-header
+  title="Auditoría"
+  subtitle="Quién hizo qué y cuándo en tu empresa. Los registros los guarda el sistema y no se pueden editar ni borrar."
+/>
+
+<form class="audit__filters" [formGroup]="filters" (ngSubmit)="search()">
+  <app-form-field label="Módulo">
+    <select formControlName="module">
+      <option value="">Todos</option>
+      @for (module of modules; track module[0]) {
+        <option [value]="module[0]">{{ module[1] }}</option>
+      }
+    </select>
+  </app-form-field>
+  <app-form-field label="Desde">
+    <input type="date" formControlName="from" />
+  </app-form-field>
+  <app-form-field label="Hasta">
+    <input type="date" formControlName="to" />
+  </app-form-field>
+  <div class="audit__filter-actions">
+    <app-button type="submit" [loading]="loading()">Filtrar</app-button>
+    <app-button variant="ghost" (clicked)="clearFilters()">Limpiar</app-button>
+  </div>
+</form>
 
 <app-data-table
   [columns]="columns"
   [rows]="auditService.entries()"
-  emptyTitle="Todavía no hay actividad registrada."
+  emptyTitle="No hay actividad registrada con estos filtros."
   searchPlaceholder="Buscar por usuario, acción…"
 />
+
+<div class="audit__footer">
+  <span>Mostrando {{ auditService.entries().length }} de {{ auditService.total() }} registros.</span>
+  @if (auditService.hasMore()) {
+    <app-button variant="secondary" [loading]="loading()" (clicked)="loadMore()">Cargar más</app-button>
+  }
+</div>

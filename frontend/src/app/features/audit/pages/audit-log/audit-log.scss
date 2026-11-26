@@ -1,0 +1,23 @@
+.audit__filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: var(--space-3);
+  align-items: end;
+  margin-bottom: var(--space-4);
+}
+
+.audit__filter-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.audit__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}

@@ -9,7 +9,6 @@ import { TokenUsageService } from './token-usage.service';
 import { ExpensesService } from '../../expenses/services/expenses.service';
 import { AdjustmentsService } from '../../inventory/services/adjustments.service';
 import { ProductsService } from '../../inventory/services/products.service';
-import { AuditService } from '../../../core/services/audit.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { TenantService } from '../../../core/services/tenant.service';
 
@@ -20,7 +19,6 @@ export class AiAgentService {
   private expenses = inject(ExpensesService);
   private adjustments = inject(AdjustmentsService);
   private products = inject(ProductsService);
-  private audit = inject(AuditService);
   private auth = inject(AuthService);
   private tenant = inject(TenantService);
 
@@ -82,8 +80,7 @@ export class AiAgentService {
     const wasCorrected = !!overrides;
     const interaction = this.#interactions().find((i) => i.id === interactionId);
     if (!interaction?.proposal) return;
-    const user = this.auth.currentUser();
-    const userName = user?.fullName ?? 'Usuario';
+    // La auditoría la registra el backend al crear el gasto o el ajuste.
 
     if (interaction.proposal.type === 'expense' && interaction.proposal.expense) {
       const expense = interaction.proposal.expense;
@@ -116,14 +113,6 @@ export class AiAgentService {
     this.#interactions.update((list) =>
       list.map((i) => (i.id === interactionId ? { ...i, result: finalResult } : i)),
     );
-
-    this.audit.log({
-      userId: user?.id ?? '',
-      userName,
-      module: 'ia',
-      action: 'Confirmó propuesta de IA',
-      description: `${userName} confirmó una acción propuesta por el Agente IA.`,
-    });
   }
 
   cancelProposal(interactionId: string): void {

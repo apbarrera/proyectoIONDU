@@ -2,7 +2,6 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs';
 import { UserDirectoryService } from '../../../../core/services/user-directory.service';
-import { AuditService } from '../../../../core/services/audit.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ConfirmDialogService } from '../../../../core/services/confirm-dialog.service';
@@ -28,7 +27,6 @@ interface TemporaryCredentials {
 })
 export class Users implements OnInit {
   userDirectory = inject(UserDirectoryService);
-  private audit = inject(AuditService);
   private auth = inject(AuthService);
   private toast = inject(ToastService);
   private confirmDialog = inject(ConfirmDialogService);
@@ -93,7 +91,6 @@ export class Users implements OnInit {
         .pipe(finalize(() => this.saving.set(false)))
         .subscribe(() => {
           this.toast.success('Usuario actualizado.');
-          this.#log('Actualizó usuario', `actualizó el usuario ${raw.fullName}`);
           this.formOpen.set(false);
         });
       return;
@@ -103,7 +100,6 @@ export class Users implements OnInit {
       .createUser({ fullName: raw.fullName, email: raw.email, role: raw.role })
       .pipe(finalize(() => this.saving.set(false)))
       .subscribe(({ user, temporaryPassword }) => {
-        this.#log('Creó usuario', `creó el usuario ${user.fullName}`);
         this.formOpen.set(false);
         if (temporaryPassword) {
           this.credentials.set({
@@ -147,7 +143,6 @@ export class Users implements OnInit {
       .subscribe((confirmed) => {
         if (!confirmed) return;
         this.userDirectory.resetPassword(user.id).subscribe((password) => {
-          this.#log('Restableció contraseña', `restableció la contraseña de ${user.fullName}`);
           this.formOpen.set(false);
           this.credentials.set({ fullName: user.fullName, email: user.email, password });
         });
@@ -173,14 +168,4 @@ export class Users implements OnInit {
     this.formOpen.set(false);
   }
 
-  #log(action: string, detail: string): void {
-    const actingUser = this.auth.currentUser();
-    this.audit.log({
-      userId: actingUser?.id ?? '',
-      userName: actingUser?.fullName ?? 'Usuario',
-      module: 'usuarios',
-      action,
-      description: `${actingUser?.fullName ?? 'Un usuario'} ${detail}.`,
-    });
-  }
 }

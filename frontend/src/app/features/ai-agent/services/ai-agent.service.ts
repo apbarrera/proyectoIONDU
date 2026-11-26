@@ -37,7 +37,11 @@ interface AiReplyDto {
   actionId: number | null;
   reply: string;
   proposal: AiProposalDto | null;
+  /** Solo en mensajes de voz: lo que se entendió del audio. */
+  transcript?: string | null;
 }
+
+const AUDIO_EXTENSIONS: Record<string, string> = { webm: 'webm', ogg: 'ogg', mp4: 'm4a', mpeg: 'mp3', wav: 'wav' };
 
 interface AiActionDto {
   id: number;
@@ -74,15 +78,39 @@ export class AiAgentService {
       { id: generateId(), role: 'user', content: text, attachments, timestamp: new Date().toISOString() },
     ]);
 
-    if (inputType === 'voz') {
-      return of(
-        this.#reply(
-          'Por ahora el agente entiende texto e imágenes. Escribe el gasto, por ejemplo: "Gasté $25 en empaques".',
-        ),
-      );
-    }
+    return this.#handleReply(this.http.post<AiReplyDto>(`${this.baseUrl}/messages`, { text }), () => text, inputType);
+  }
 
-    return this.#handleReply(this.http.post<AiReplyDto>(`${this.baseUrl}/messages`, { text }), text, inputType);
+  /**
+   * Envía un mensaje de voz (RF-6.4). El servidor lo transcribe y lo interpreta como texto;
+   * la burbuja del usuario muestra luego lo que se entendió. El audio no se guarda.
+   */
+  sendAudio(audio: Blob): Observable<AiMessage> {
+    const messageId = generateId();
+    this.#messages.update((list) => [
+      ...list,
+      { id: messageId, role: 'user', content: '🎙️ Mensaje de voz', timestamp: new Date().toISOString() },
+    ]);
+
+    const subtype = audio.type.split(';')[0].split('/')[1] ?? 'webm';
+    const form = new FormData();
+    form.append('audio', audio, `mensaje.${AUDIO_EXTENSIONS[subtype] ?? 'webm'}`);
+    const request = this.http.post<AiReplyDto>(`${this.baseUrl}/audio`, form).pipe(
+      tap((dto) => {
+        if (dto.transcript) {
+          const transcript = dto.transcript;
+          this.#messages.update((list) =>
+            list.map((m) => (m.id === messageId ? { ...m, content: `🎙️ «${transcript}»` } : m)),
+          );
+        }
+      }),
+    );
+    return this.#handleReply(request, (dto) => `[Voz] ${dto.transcript ?? ''}`.trim(), 'voz');
+  }
+
+  /** Aviso del asistente que no pasa por el servidor (p. ej., sin permiso de micrófono). */
+  notify(content: string): void {
+    this.#reply(content);
   }
 
   /**
@@ -106,10 +134,14 @@ export class AiAgentService {
     form.append('image', file, file.name);
     if (text) form.append('text', text);
     const instruction = text ? `[Imagen] ${text}` : '[Imagen]';
-    return this.#handleReply(this.http.post<AiReplyDto>(`${this.baseUrl}/images`, form), instruction, 'imagen');
+    return this.#handleReply(this.http.post<AiReplyDto>(`${this.baseUrl}/images`, form), () => instruction, 'imagen');
   }
 
-  #handleReply(request: Observable<AiReplyDto>, text: string, inputType: AiInputType): Observable<AiMessage> {
+  #handleReply(
+    request: Observable<AiReplyDto>,
+    instructionFor: (dto: AiReplyDto) => string,
+    inputType: AiInputType,
+  ): Observable<AiMessage> {
     return request.pipe(
       map((dto) => {
         let interactionId: string | undefined;
@@ -121,7 +153,7 @@ export class AiAgentService {
             userName: user?.fullName ?? 'Usuario',
             timestamp: new Date().toISOString(),
             inputType,
-            instruction: text,
+            instruction: instructionFor(dto),
             interpretedData: dto.proposal.summary,
             proposal: toProposal(String(dto.actionId), dto.proposal),
             result: 'pendiente',

@@ -107,3 +107,13 @@
   font-size: 1.125rem;
   flex-shrink: 0;
 }
+
+.ai-chat__icon-btn--active {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.ai-chat__icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

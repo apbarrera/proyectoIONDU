@@ -60,10 +60,27 @@ describe('AiAgentService', () => {
     expect(service.messages()[1].content).toBe('El agente de IA no está configurado.');
   });
 
-  it('la voz todavía no se envía al modelo', () => {
-    service.send('Mensaje de voz', 'voz').subscribe();
-    http.expectNone('/api/ai/messages');
-    expect(service.messages()[1].content).toContain('texto e imágenes');
+  it('un mensaje de voz se envía como audio y muestra lo que se entendió', () => {
+    const audio = new Blob([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3])], { type: 'audio/webm;codecs=opus' });
+    service.sendAudio(audio).subscribe();
+    expect(service.messages()[0].content).toBe('🎙️ Mensaje de voz');
+
+    const request = http.expectOne({ method: 'POST', url: '/api/ai/audio' });
+    expect(((request.request.body as FormData).get('audio') as File).name).toBe('mensaje.webm');
+    request.flush({ actionId: 40, reply: 'Te propongo registrar…', proposal: PROPOSAL, transcript: 'Gasté 25 en fundas' });
+
+    const [user, assistant] = service.messages();
+    expect(user.content).toBe('🎙️ «Gasté 25 en fundas»');
+    expect(assistant.interactionId).toBe('40');
+    expect(service.interactions()[0]).toMatchObject({ inputType: 'voz', instruction: '[Voz] Gasté 25 en fundas' });
+  });
+
+  it('el audio de Safari se envía como m4a', () => {
+    service.sendAudio(new Blob([new Uint8Array([0])], { type: 'audio/mp4' })).subscribe();
+    const request = http.expectOne('/api/ai/audio');
+    expect(((request.request.body as FormData).get('audio') as File).name).toBe('mensaje.m4a');
+    request.flush({ actionId: null, reply: 'No logré entender el audio.', proposal: null, transcript: '' });
+    expect(service.messages()[0].content).toBe('🎙️ Mensaje de voz');
   });
 
   it('una foto se envía como formulario con su indicación', () => {

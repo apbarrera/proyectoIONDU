@@ -40,7 +40,7 @@
 
   <div class="ai-chat__composer">
     @if (recording()) {
-      <div class="ai-chat__recording">🎙️ Grabando…</div>
+      <div class="ai-chat__recording" role="status">🎙️ Grabando… toca el micrófono para enviar</div>
     } @else {
       <input
         class="ai-chat__input"
@@ -54,7 +54,17 @@
       <app-icon name="camera" [size]="20" />
       <input type="file" accept="image/jpeg,image/png,image/webp" hidden [disabled]="sending()" (change)="uploadImage($event)" />
     </label>
-    <button type="button" class="ai-chat__icon-btn" aria-label="Grabar voz" (click)="toggleRecording()"><app-icon name="mic" [size]="20" /></button>
+    <button
+      type="button"
+      class="ai-chat__icon-btn"
+      [class.ai-chat__icon-btn--active]="recording()"
+      [attr.aria-label]="recording() ? 'Detener y enviar el mensaje de voz' : 'Grabar mensaje de voz'"
+      [attr.aria-pressed]="recording()"
+      [disabled]="sending() && !recording()"
+      (click)="toggleRecording()"
+    >
+      <app-icon [name]="recording() ? 'stop' : 'mic'" [size]="20" />
+    </button>
     <app-button [disabled]="!draft().trim()" [loading]="sending()" (clicked)="send()">Enviar</app-button>
   </div>
 </div>

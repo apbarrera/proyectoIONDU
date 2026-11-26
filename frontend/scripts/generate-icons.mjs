@@ -47,6 +47,7 @@ const ICONS = {
   moon: ['moon'],
   system: ['desktop'],
   mic: ['microphone'],
+  stop: ['stop'],
   camera: ['camera'],
   mailbox: ['tray'],
   mail: ['envelope-simple'],

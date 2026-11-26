@@ -33,6 +33,7 @@ OPERADOR_DEMO = uuid.UUID("22222222-2222-2222-2222-222222222222")
 CORREO_ADMIN_DEMO = "admin@demo.iondu.ec"
 CORREO_OPERADOR_DEMO = "operador@demo.iondu.ec"
 RUC_EMPRESA = "1790016919001"
+DIRECCION_EMPRESA = "Av. Amazonas N24-03 y Colón, Quito"
 SERVIDORES_LOCALES = {"127.0.0.1", "localhost", "db"}
 ZONA = ZoneInfo("America/Guayaquil")
 # sku, nombre, categoría, precio, costo, código IVA, stock inicial, stock mínimo, extra
@@ -104,9 +105,13 @@ def _preparar_usuarios(db) -> int:
             nombre_comercial="Café Demo",
             ruc=RUC_EMPRESA,
             correo_electronico="demo@iondu.ec",
+            direccion=DIRECCION_EMPRESA,
         )
         db.add(empresa)
         db.flush()
+    elif not empresa.direccion:
+        # Sin dirección matriz no se puede facturar (bases demo creadas antes de este campo).
+        empresa.direccion = DIRECCION_EMPRESA
 
     clave_demo = os.environ.get("DEMO_PASSWORD")
     if clave_demo:

@@ -1,6 +1,6 @@
 # IONDU · Estado del proyecto y siguientes pasos
 
-> Resumen de traspaso. Última actualización: 25 de noviembre de 2026 (inicio de sesión propio: el sistema completo corre en local sin Supabase Auth).
+> Resumen de traspaso. Última actualización: 26 de noviembre de 2026 (SRI simulado, límite de tokens del agente, compras que suman inventario e IVA real en Nueva venta).
 > Documentos relacionados: [`DECISIONES.md`](DECISIONES.md) (el porqué de cada decisión) · [`REQUISITOS.md`](REQUISITOS.md) · [`PRESUPUESTO.md`](PRESUPUESTO.md) · [`DESPLIEGUE.md`](DESPLIEGUE.md) · [`CORRECCIONES_PDF.md`](CORRECCIONES_PDF.md)
 
 ## 1. Qué está hecho
@@ -122,7 +122,7 @@ Estado por módulo (24/11/2026). Un servicio "real" usa `HttpClient` contra `/ap
 | Recetas y producción | Simulado (sin backend ni requisito); solo mueve el stock en memoria | `RecipesService`, `ProductionService` |
 | Usuarios (gestión) y cambio de contraseña | Real | `UserDirectoryService`, `AuthService.changePassword` |
 | Auditoría | Real: la escribe el backend, solo el Administrador la ve | `AuditService` (`GET /api/audit`) |
-| Agente de IA | Real para texto, fotos de facturas, tickets y guías, y mensajes de voz: gastos y movimientos de inventario (Ollama y Whisper en local, `DECISIONES.md` 2.32). Límites de tokens: siguiente etapa | `AiAgentService` (`/api/ai`) |
+| Agente de IA | Real para texto, fotos de facturas, tickets y guías, y mensajes de voz: gastos y movimientos de inventario (Ollama y Whisper en local, `DECISIONES.md` 2.32). Límite mensual de tokens por empresa en Configuración → IA | `AiAgentService` (`/api/ai`) |
 
 **Ventas, clientes y facturas (commits `6d5219a` y `1f143a0`):**
 - `SalesService`: `GET /api/sales` (todas las páginas de 100 en 100) y `POST /api/sales`. Envía `customerId`, `items` con `productId` y `quantity` (sin precio ni IVA: los calcula el backend) y `paymentMethod`. El método de pago `tarjeta` se separó en `tarjeta_debito` y `tarjeta_credito`.
@@ -158,117 +158,40 @@ Estado por módulo (24/11/2026). Un servicio "real" usa `HttpClient` contra `/ap
 
 ## 2. Qué falta, por orden
 
-### Progreso del backend (estimado, 20/11/2026)
+### Avance por módulo (26/11/2026)
 
-| Módulo (requisitos) | Avance | Hecho | Falta |
-|---|---|---|---|
-| Infraestructura | 90 % | Docker, base local, migraciones, CI, errores, Ruff | Desplegar en el VPS |
-| 1. Usuarios, roles y empresa | 95 % | Inicio de sesión propio, gestión de usuarios y cambio de contraseña, varias empresas por usuario y selector, rol y permiso de Administrador, `/api/me`, subir el certificado, datos y configuración de facturación de la empresa | Invitación y recuperación de contraseña por correo |
-| 2. Facturación y ventas | 85 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión, cifrado del `.p12` y firma XAdES-BES, clientes, registrar ventas, facturar la venta y descargar el RIDE | Reintentos del worker, anular ventas, prueba real con el SRI (`.p12`) |
-| 3. Gastos | 60 % | Categorías (7 predefinidas y propias), proveedores con RUC/cédula validados, registrar, filtrar y editar gastos | Lectura de facturas por correo (IMAP), anular gastos |
-| 4. Productos e inventario | 80 % | Categorías, productos (activar/desactivar, filtro de stock bajo), movimientos por venta, entradas y salidas manuales, ajustes del Administrador, historial con stock resultante | Compra que suma inventario (RF-4.4), recetas y producción |
-| 5. Dashboard | 90 % | Indicadores del período (ingresos, gastos, utilidad, ventas, ticket promedio, más vendidos, serie diaria, gastos por categoría) e inventario, solo Administrador | Nada: ya está conectado en el frontend |
-| 6. Agente IA | 0 % | — | Todo (Sprint 4) |
-| 7. Recomendaciones | 0 % | — | Todo (Sprint 5) |
-
-### Qué necesita el backend de cada uno
-
-| # | Quién | Qué | Desbloquea en el backend | Urgencia |
-|---|---|---|---|---|
-| 1 | Ariana | ✅ Modelos con el esquema corregido. Falta: migración que cree todo desde cero y los pendientes de `SEGURIDAD_BD.md` | Desplegar en Supabase | Media |
-| 2 | Equipo | Crear el proyecto de Supabase y pasar URL y claves por un canal seguro | Login real: validar el token y tomar la empresa del usuario | Alta |
-| 3 | Equipo | Decidir el tipo de producto y si Recetas/Producción entran en el MVP | Cerrar productos; tablas de recetas si entran | Media |
-| 4 | Denisse | ✅ Productos, ventas, clientes y facturas conectados. Falta conectar el resto (ver "Frontend: conexión con la API") | Pantallas con datos reales | Media |
-| 5 | Denisse | ✅ Consumidor final con 13 nueves | Evitar facturas rechazadas | — |
-| 6 | Denisse | ✅ Login de Angular con Supabase Auth | Enviar el token al backend | — |
-| 7 | Cliente | Certificado `.p12`, RUC del emisor, VPS y dominio | Probar la firma y el envío en el SRI de pruebas (el código ya está listo); desplegar | Pedirlo ya |
-
-El código de facturación está listo para probarse contra el SRI apenas llegue el `.p12`; guardar ventas y facturas espera el esquema corregido de Ariana.
-
-### A. Cosas rápidas
-1. Confirmar que el CI de GitHub (pestaña **Actions**) esté en verde tras el último push.
-2. Correr `/impeccable init` una vez en Claude Code, y decidir si se mantiene el hook que revisa la interfaz al editar.
-3. Reemplazar el logo vectorizado cuando exista el SVG original.
-
-### B. Frontend (lo que queda)
-1. Revisión visual, pantalla por pantalla y en móvil, de Gastos, Inventario, Agente IA y Configuración. Se comprobó que no se desbordan y que cumplen accesibilidad, pero falta revisar su aspecto con ojo de diseño.
-2. Pulido con `impeccable` (`/impeccable init` y luego `audit` y `polish`).
-3. Probar la instalación de la PWA y el service worker en Chrome.
-4. Ya están conectados todos los módulos que tienen backend. Lo que sigue simulado no tiene dónde guardarse todavía: bandeja de gastos por correo (IMAP), agente de IA, y recetas y producción (ver la tabla "Frontend: conexión con la API").
-5. Pasar `Product.id`, `User.tenantId` y los demás IDs de `string` a `number`, como pide `API.md` sección 9 (hoy los servicios convierten con `String(...)` y `Number(...)`).
-6. ✅ Ocultar en el menú lo que el backend restringe al Administrador (dashboard, recomendaciones y ajustes de inventario).
-7. Nueva venta: la vista previa del IVA usa una tasa fija del 15 %; mostrar el IVA real por producto (`vatPercentageCode`) y soportar líneas de concepto libre.
-8. ✅ Editar gastos (detalle del historial) y ✅ proveedores (`/expenses/suppliers`). ✅ Anular gastos y ✅ listar y editar clientes.
-9. Probar todo en el navegador contra el backend real con datos demo (`backend/scripts/cargar_datos_demo.py`), con un Administrador y un Operativo.
-5. Validaciones de negocio de la factura (por ejemplo, límites del SRI para consumidor final) se harán en el backend en el Sprint 2.
-### C. Sprint 1: lo que bloquea el resto
-1. Crear el proyecto en **Supabase** (plan gratis para desarrollo). Pasar `SUPABASE_URL` y la dirección del *Session Pooler* (puerto 5432). **Las contraseñas y las claves no se pegan en el chat ni van al repositorio.**
-2. Esquema multi-tenant con migraciones Alembic (`empresa`, `usuario_empresa`, `rol`, …) y RLS por `id_empresa`. Alembic ya está configurado: falta convertir el esquema corregido de `database/schema.sql` en la primera migración (ver 2.F).
-3. Validar el JWT de Supabase en el backend y filtrar todo por `id_empresa`.
-4. Conectar el login de Angular a Supabase Auth y reemplazar los datos *mock* por llamadas a `/api/...` (hoy todo el frontend usa datos de ejemplo).
-5. Primer despliegue de `staging` en el VPS del cliente.
-
-### D. Sprints siguientes
-| Sprint | Contenido |
-|---|---|
-| 2 | Facturación con el SRI: generación del XML, firma XAdES-BES, autorización, ventas. **Requiere el certificado `.p12` del cliente.** |
-| 3 | Gastos, inventario y lectura de facturas por correo (IMAP) con el worker. |
-| 4 | Agente de IA (texto, imagen y voz) con confirmación humana obligatoria. |
-| 5 | Dashboard con datos reales y recomendaciones. |
-| 6 | Producción: pruebas de carga (100 usuarios), respaldos y entrega. |
-
-### E. Fuera del código
-- Aplicar [`CORRECCIONES_PDF.md`](CORRECCIONES_PDF.md) en el PDF del proyecto (MySQL a PostgreSQL, autenticación, firma electrónica, diagrama de despliegue).
-- Pedir al cliente: certificado `.p12`, VPS (mínimo 2 vCPU y 4 GB de RAM) y dominio.
-
-### F. Coordinación entre base de datos, backend y frontend
-**Esquema (`database/schema.sql`), cambios pendientes** (detalle en [`CORRECCIONES_PDF.md`](CORRECCIONES_PDF.md)):
-1. Tabla `usuario` con `contrasena_hash` e ID entero → `usuario_empresa` con el UUID de Supabase Auth (decisión 2.3).
-2. Sin Row Level Security por `id_empresa` (decisión 2.4).
-3. `empresa.firma_electronica VARCHAR(255)` → `.p12` y su clave cifrados (`BYTEA`) y `p12_fecha_vencimiento` (decisión 2.5).
-4. Fechas `timestamp without time zone` → `timestamptz`.
-5. `producto`: falta `activo` (RF-4.1 pide desactivar), `UNIQUE (id_empresa, codigo_principal)`, `CHECK` contra precios y stock negativos e índices por `id_empresa`.
-6. `gasto`: falta `message_id_correo` y `clave_acceso` con `UNIQUE` por empresa (idempotencia del correo, RF-3.2).
-
-Después de corregirlo, el esquema pasa a ser **la primera migración de Alembic**, y desde ahí todo cambio de la base es una migración nueva (no se vuelve a exportar `schema.sql`).
-
-**Frontend vs. base de datos: el modelo de producto no coincide**
-
-| Frontend (`Product`) | Base de datos (`producto`) | Requisitos |
+| Módulo (requisitos) | Estado | Falta |
 |---|---|---|
-| `sku` | `codigo_principal` | "código interno" |
-| `type`: `simple`, `insumo`, `compuesto` | `tipo`: `VENTA` por defecto | venta, insumo o ambos (RF-4.1) |
-| `active` | no existe | desactivar productos (RF-4.1) |
-| no existe | `aplica_iva` | necesario para facturar |
-| pantallas de Recetas y Producción | sin tablas | no aparecen en `REQUISITOS.md` |
+| Infraestructura | Docker, base local, migraciones con permisos, CI, Ruff, `.gitattributes` | Desplegar en el VPS del cliente |
+| 1. Usuarios, roles y empresa | Inicio de sesión propio, gestión de usuarios, varias empresas por usuario, auditoría | Invitación y recuperación de contraseña por correo |
+| 2. Facturación y ventas | Ventas, clientes, emisión (XML, firma XAdES-BES, worker, RIDE en S3), reintentos, anulación. **SRI simulado** para demostración (`DECISIONES.md` 2.33) | Prueba real con el SRI de pruebas (requiere `.p12` y RUC habilitado) |
+| 3. Gastos | Categorías, proveedores, registrar, filtrar, editar y anular. **Compra que suma inventario** (RF-4.4) | Lectura de facturas por correo (IMAP, RF-3.2 y 3.3) |
+| 4. Productos e inventario | Productos, movimientos, ajustes, alertas, historial, compras desde gastos | Recetas y producción (por decidir si entran al MVP) |
+| 5. Dashboard | Indicadores reales, solo Administrador | — |
+| 6. Agente IA | Texto, foto y voz para gastos e inventario, siempre con confirmación. **Límite mensual de tokens** por empresa (RF-6.1, RF-6.14, RNF-12) | Probar con voces reales y con ruido; confirmar el `pattern` del esquema contra OpenAI antes de producción |
+| 7. Recomendaciones | Reglas fijas sobre el dashboard | Recomendaciones generadas con IA |
 
-**Frontend: consumidor final.** `new-sale.ts` y `sales-history.ts` usan `FINAL_CONSUMER_ID = '9999999999'`
-(10 nueves); el SRI exige `9999999999999` (13 nueves) con el tipo de identificación `07`. Con 10, la factura sería
-rechazada.
+### A. Lo que depende del cliente o del equipo
+1. **Cliente:** certificado `.p12`, RUC habilitado para facturación electrónica, VPS (mínimo 2 vCPU y 4 GB) y dominio.
+2. **Equipo:** decidir si Recetas y Producción entran al MVP (hoy son pantallas simuladas sin requisito).
+3. **Documento:** aplicar [`CORRECCIONES_PDF.md`](CORRECCIONES_PDF.md) al PDF del proyecto.
 
-**Tabla `factura` (para la fase 2 de ventas):**
-1. `numero_comprobante` es único en todo el sistema: la segunda empresa no podría emitir su factura
-   `001-001-000000001`. Debe ser único por empresa (agregar `id_empresa` a `factura`).
-2. Faltan columnas para el resultado del SRI: número y fecha de autorización, motivos de rechazo (JSONB) e
-   intentos de envío.
-3. `detalle_venta` no guarda la tarifa de IVA de cada línea (hace falta para el XML y para las líneas sin producto).
-4. Dónde se configuran el establecimiento, el punto de emisión, el ambiente y el secuencial de cada empresa.
+### B. Código pendiente
+1. Gastos por correo (IMAP) en el worker, con borradores que el usuario confirma (RF-3.2, RF-3.3).
+2. Invitación y recuperación de contraseña por correo (necesita un servicio de envío de correo).
+3. Recomendaciones con IA (RF-7).
+4. Frontend: pasar los IDs de `string` a `number` (`API.md` sección 9); hoy los servicios convierten con `String(...)` y `Number(...)`.
 
-**Por decidir en equipo:** los valores del tipo de producto, y si Recetas y Producción entran en el MVP (si entran, hay que agregarlas a los requisitos y crear sus tablas).
+### C. Pruebas pendientes
+1. Instalar la PWA en el celular y comprobar el service worker y la limpieza de caché al cerrar sesión.
+2. Revisión visual en móvil de Gastos, Inventario, Agente IA y Configuración.
+3. Agente de IA con voces reales y con ruido de fondo.
+4. Esquema del agente (`pattern` en los textos) contra la API de OpenAI en modo estricto.
 
-**Contrato de la API:** en [`API.md`](API.md), empezando por productos (ya implementados en el backend). El JSON usará los nombres que ya usa el frontend (`sku`, `name`, `salePrice`…) y el backend los traduce a las columnas de la base. Así, en el frontend basta con cambiar `simulateRequest(...)` por llamadas reales en cada servicio.
-
-### G. Pendientes del backend para el frontend
-Detectados al conectar Ventas y Facturación (24/11/2026). Cada uno bloquea una función de la interfaz:
-
-| # | Falta en el backend | Efecto hoy en el frontend |
-|---|---|---|
-| 1 | ✅ Resumen de la factura dentro de `Sale` | Conectado en el historial (25/11/2026) |
-| 2 | ✅ Reintentar una factura rechazada | Botón "Reintentar emisión" en el detalle. Falta corregir la cédula o RUC desde ahí (se hace en Clientes) |
-| 3 | ✅ `createdBy` en `Sale` | Columna "Usuario" en el historial |
-| 4 | ✅ Anular ventas (RF-2.7) | Botón "Anular venta" para el Administrador |
-| 5 | Prueba real con el SRI de pruebas (requiere el `.p12` y el RUC del cliente) | Las facturas no se han autorizado contra el SRI real |
-| 6 | Reintentos del worker para facturas en `por_enviar` o `por_autorizar` | Esas facturas quedan "En proceso" hasta que el worker las resuelva; la pantalla no se actualiza sola |
+### D. Cuando llegue el `.p12`
+1. Vaciar `SRI_SIMULADO_EMPRESAS` en el `.env`.
+2. Subir el certificado en Configuración → Empresa y reiniciar con `docker compose up -d`.
+3. Emitir una factura contra el SRI de pruebas y revisar el RIDE.
 
 ## 3. Cómo trabajar en el proyecto
 

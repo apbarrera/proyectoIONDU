@@ -144,6 +144,7 @@ export class ProductsApiService {
       type: dto.type,
       unit: dto.unit,
       salePrice: dto.type === 'insumo' ? null : dto.salePrice,
+      vatPercentageCode: dto.vatPercentageCode,
       cost: dto.cost,
       currentStock: dto.currentStock,
       minStock: dto.minStock ?? 0,

@@ -8,7 +8,6 @@ import { Customer } from '../../models/customer.model';
 import { BillingService } from '../../../billing/services/billing.service';
 import { ProductsApiService } from '../../../inventory/services/products-api.service';
 import { Product } from '../../../inventory/models/product.model';
-import { TenantService } from '../../../../core/services/tenant.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { PaymentMethod } from '../../models/sale.model';
 import { PageHeader } from '../../../../shared/components/page-header/page-header';
@@ -17,6 +16,7 @@ import { Card } from '../../../../shared/components/card/card';
 import { EmptyState } from '../../../../shared/components/empty-state/empty-state';
 import { Icon } from '../../../../shared/components/icon/icon';
 import { Switch } from '../../../../shared/components/switch/switch';
+import { calculateSaleTotals } from '../../utils/sale-totals';
 
 interface CartLine {
   productId: string;
@@ -24,6 +24,7 @@ interface CartLine {
   unitPrice: number;
   quantity: number;
   availableStock: number;
+  vatPercentageCode?: string;
 }
 
 const ID_PATTERN = /^\d{10}(\d{3})?$/;
@@ -40,7 +41,6 @@ export class NewSale {
   private customersApi = inject(CustomersApiService);
   private salesService = inject(SalesService);
   private billingService = inject(BillingService);
-  private tenant = inject(TenantService);
   private toast = inject(ToastService);
   private router = inject(Router);
 
@@ -65,11 +65,13 @@ export class NewSale {
 
   cart = signal<CartLine[]>([]);
 
-  ivaRate = this.tenant.ivaRate;
-
-  subtotal = computed(() => Math.round(this.cart().reduce((sum, l) => sum + l.unitPrice * l.quantity, 0) * 100) / 100);
-  ivaAmount = computed(() => Math.round(this.subtotal() * this.ivaRate * 100) / 100);
-  total = computed(() => Math.round((this.subtotal() + this.ivaAmount()) * 100) / 100);
+  /** Vista previa con la tarifa de IVA de cada producto (el backend recalcula al registrar). */
+  totals = computed(() => calculateSaleTotals(this.cart()));
+  subtotal = computed(() => this.totals().subtotal);
+  ivaAmount = computed(() => this.totals().iva);
+  total = computed(() => this.totals().total);
+  /** Filas de IVA a mostrar: solo las tarifas que generan impuesto. */
+  ivaRows = computed(() => this.totals().byRate.filter((r) => r.rate > 0));
 
   idError = computed(() => {
     if (!this.emitInvoice()) return '';
@@ -140,6 +142,7 @@ export class NewSale {
           unitPrice: product.salePrice!,
           quantity: 1,
           availableStock: product.currentStock,
+          vatPercentageCode: product.vatPercentageCode,
         },
       ];
     });

@@ -10,6 +10,8 @@ export interface Product {
   type: ProductType;
   unit: string;
   salePrice: number | null;
+  /** Código de porcentaje de IVA del SRI ('4' = 15 %, '0' = 0 %, …). */
+  vatPercentageCode?: string;
   cost: number;
   currentStock: number;
   minStock: number;

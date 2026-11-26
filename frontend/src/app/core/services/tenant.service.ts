@@ -11,9 +11,6 @@ export class TenantService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/company`;
 
-  /** IVA general vigente en Ecuador. Es solo para mostrar un estimado: el total real lo calcula el backend. */
-  readonly ivaRate = 0.15;
-
   #tenant = signal<Tenant | null>(null);
   readonly tenant = this.#tenant.asReadonly();
 

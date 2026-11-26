@@ -134,7 +134,11 @@
 
     <div class="new-sale__totals">
       <div><span>Subtotal</span><span>${{ subtotal().toFixed(2) }}</span></div>
-      <div><span>IVA ({{ (ivaRate * 100).toFixed(0) }}%)</span><span>${{ ivaAmount().toFixed(2) }}</span></div>
+      @for (row of ivaRows(); track row.rate) {
+        <div><span>IVA {{ row.rate }}%</span><span>${{ row.iva.toFixed(2) }}</span></div>
+      } @empty {
+        <div><span>IVA</span><span>${{ ivaAmount().toFixed(2) }}</span></div>
+      }
       <div class="new-sale__total"><span>Total</span><span>${{ total().toFixed(2) }}</span></div>
     </div>
 

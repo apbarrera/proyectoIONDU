@@ -115,6 +115,7 @@ describe('ProductsApiService', () => {
         type: 'venta',
         unit: 'UNIDAD',
         salePrice: 4.5,
+        vatPercentageCode: '4',
         cost: 2.8,
         currentStock: 18,
         minStock: 5,

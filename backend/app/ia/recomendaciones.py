@@ -58,10 +58,8 @@ def _f(valor) -> float:
 def _variacion(actual, anterior) -> dict[str, Any]:
     """La comparación la calcula el backend: un modelo pequeño se equivoca al restar."""
     actual, anterior = _f(actual), _f(anterior)
-    if actual == anterior:
-        direccion = "igual"
-    else:
-        direccion = "subió" if actual > anterior else "bajó"
+    direcciones = {True: "subió", False: "bajó"}
+    direccion = "igual" if actual == anterior else direcciones[actual > anterior]
     cambio = round((actual - anterior) / abs(anterior) * 100, 1) if anterior else None
     return {"actual": actual, "anterior": anterior, "direccion": direccion, "cambio_pct": cambio}
 

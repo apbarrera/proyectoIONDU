@@ -1,13 +1,13 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import type { Session } from '@supabase/auth-js';
 import { firstValueFrom } from 'rxjs';
-import { LoginCredentials } from '../models/auth.model';
+import { AuthTokenResponse, LoginCredentials } from '../models/auth.model';
 import { MeResponse } from '../models/company.model';
 import { User } from '../models/user.model';
 import { CompanyContextService } from './company-context.service';
+import { AuthApiService } from './auth-api.service';
+import { AuthTokenService } from './auth-token.service';
 import { MeApiService } from './me-api.service';
-import { StorageService } from './storage.service';
-import { SUPABASE_AUTH } from './supabase-auth.token';
 
 export type AuthStatus =
   | 'loading'
@@ -19,10 +19,10 @@ export type AuthStatus =
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly supabaseAuth = inject(SUPABASE_AUTH);
+  private readonly authApi = inject(AuthApiService);
+  private readonly tokens = inject(AuthTokenService);
   private readonly meApi = inject(MeApiService);
   private readonly companyContext = inject(CompanyContextService);
-  private readonly storage = inject(StorageService);
 
   #user = signal<User | null>(null);
   #hasSession = signal(false);
@@ -54,38 +54,25 @@ export class AuthService {
     this.#hasSession.set(false);
     this.#accountCreatedAt.set(null);
 
-    let result;
+    let session: AuthTokenResponse;
 
     try {
-      result = await this.supabaseAuth.signInWithPassword({
-        email: credentials.email.trim().toLowerCase(),
-        password: credentials.password,
-      });
-    } catch {
-      this.#status.set('unauthenticated');
-      throw new Error(
-        'No se pudo conectar con el servicio de autenticación. Comprueba tu conexión e inténtalo nuevamente.',
+      session = await firstValueFrom(
+        this.authApi.login({
+          email: credentials.email.trim().toLowerCase(),
+          password: credentials.password,
+        }),
       );
-    }
-
-    const { data, error } = result;
-
-    if (error) {
+    } catch (error) {
       this.#status.set('unauthenticated');
-      throw new Error(
-        error.message === 'Invalid login credentials'
-          ? 'Correo o contraseña incorrectos.'
-          : error.message,
-      );
+      throw new Error(this.#loginErrorMessage(error));
     }
 
-    if (!data.session) {
-      this.#status.set('unauthenticated');
-      throw new Error('Supabase no devolvió una sesión válida.');
-    }
-
+    this.tokens.set(session);
     this.#hasSession.set(true);
-    await this.#loadCompanyContext(data.session);
+    await this.#loadCompanyContext(session);
+    // La sesión ya está cargada: los guards no necesitan renovarla otra vez.
+    this.#initialization = Promise.resolve();
   }
 
   async selectCompany(companyId: number): Promise<void> {
@@ -110,15 +97,17 @@ export class AuthService {
 
   async logout(): Promise<void> {
     try {
-      await this.supabaseAuth.signOut();
+      await firstValueFrom(this.authApi.logout());
+    } catch {
+      // Sin conexión la cookie no se revoca en el servidor, pero la sesión local se cierra igual.
     } finally {
-      this.#user.set(null);
-      this.#hasSession.set(false);
-      this.#status.set('unauthenticated');
-      this.#initialization = null;
-      this.#accountCreatedAt.set(null);
-      this.companyContext.clear();
+      this.#resetSession();
     }
+  }
+
+  /** La sesión venció y no se pudo renovar (lo detecta el interceptor). */
+  handleSessionExpired(): void {
+    this.#resetSession();
   }
 
   defaultRouteForCurrentUser(): string {
@@ -128,27 +117,22 @@ export class AuthService {
   async #restoreSession(): Promise<void> {
     this.#status.set('loading');
 
-    const { data, error } = await this.supabaseAuth.getSession();
+    // Al recargar la página el token en memoria se perdió: se recupera con la cookie.
+    const session = await this.tokens.refresh();
 
-    if (error) throw error;
-
-    if (!data.session) {
-      this.#hasSession.set(false);
-      this.#user.set(null);
-      this.#accountCreatedAt.set(null);
-      this.#status.set('unauthenticated');
-      this.companyContext.clear();
+    if (!session) {
+      this.#resetSession();
       return;
     }
 
     this.#hasSession.set(true);
-    await this.#loadCompanyContext(data.session);
+    await this.#loadCompanyContext(session);
   }
 
-  async #loadCompanyContext(session: Session): Promise<void> {
+  async #loadCompanyContext(session: AuthTokenResponse): Promise<void> {
     this.#status.set('loading');
     this.#user.set(null);
-    this.#accountCreatedAt.set(session.user.created_at ?? null);
+    this.#accountCreatedAt.set(session.user.createdAt ?? null);
 
     try {
       const companies = await firstValueFrom(this.meApi.getCompanies());
@@ -215,4 +199,25 @@ export class AuthService {
     };
   }
 
+  #resetSession(): void {
+    this.tokens.clear();
+    this.#user.set(null);
+    this.#hasSession.set(false);
+    this.#status.set('unauthenticated');
+    this.#initialization = null;
+    this.#accountCreatedAt.set(null);
+    this.companyContext.clear();
+  }
+
+  #loginErrorMessage(error: unknown): string {
+    if (!(error instanceof HttpErrorResponse) || error.status === 0) {
+      return 'No se pudo conectar con el servicio de autenticación. Comprueba tu conexión e inténtalo nuevamente.';
+    }
+    const message: unknown = error.error?.error?.message;
+    if ((error.status === 401 || error.status === 429) && typeof message === 'string') {
+      return message;
+    }
+    if (error.status === 401) return 'Correo o contraseña incorrectos.';
+    return 'No se pudo iniciar sesión. Inténtalo nuevamente en unos minutos.';
+  }
 }

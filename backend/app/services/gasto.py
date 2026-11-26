@@ -15,8 +15,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import TIMEZONE
 from app.core.errors import ConflictError, NotFoundError, UnprocessableError
-from app.models import CategoriaGasto, Gasto, Proveedor
+from app.models import CategoriaGasto, Gasto, MovimientoInventario, Proveedor
 from app.repositories.gasto import CategoriaGastoRepository, GastoRepository, ProveedorRepository
+from app.repositories.inventario import ANULACION_COMPRA, COMPRA, InventarioRepository
 from app.schemas.common import Page
 from app.schemas.gasto import (
     Expense,
@@ -45,6 +46,10 @@ CATEGORIAS_PREDEFINIDAS = (  # RF-3.5
     "Otros gastos operativos",
 )
 _ZONA = ZoneInfo(TIMEZONE)
+
+
+def _motivo_compra(id_gasto: int) -> str:
+    return f"Compra (gasto #{id_gasto})"
 
 
 def _error(campo: str, mensaje: str, code: str = "VALIDATION_ERROR") -> UnprocessableError:
@@ -251,6 +256,7 @@ class GastoService:
         self._repo = GastoRepository(db, empresa_id)
         self._categorias = CategoriaGastoRepository(db, empresa_id)
         self._proveedores = ProveedorRepository(db, empresa_id)
+        self._inventario = InventarioRepository(db, empresa_id)
 
     def listar(
         self,
@@ -306,9 +312,40 @@ class GastoService:
             numero_comprobante=datos.receipt_number,
             estado="CONFIRMADO",
         )
-        self._repo.agregar(gasto)
-        self._db.commit()
+        try:
+            self._repo.agregar(gasto)
+            if datos.items:
+                self._sumar_al_inventario(gasto, datos, id_usuario)
+            self._db.commit()
+        except Exception:
+            self._db.rollback()
+            raise
         return self.obtener(gasto.id_gasto)
+
+    def _sumar_al_inventario(self, gasto: Gasto, datos: ExpenseCreate, id_usuario) -> None:
+        """RF-4.4: la compra suma al stock en la MISMA transacción que el gasto."""
+        ids = [item.product_id for item in datos.items]
+        if len(set(ids)) != len(ids):
+            raise _error(
+                "items", "Un producto no puede repetirse en la compra.", "DUPLICATE_PRODUCT"
+            )
+        productos = self._inventario.bloquear_productos(sorted(set(ids)))
+        for i, item in enumerate(datos.items):
+            producto = productos.get(item.product_id)
+            if producto is None:
+                raise _error(f"items[{i}].productId", "El producto no existe.", "PRODUCT_NOT_FOUND")
+            producto.stock_actual += item.quantity
+            if item.unit_cost is not None:
+                producto.precio_compra = item.unit_cost
+            self._inventario.agregar(
+                MovimientoInventario(
+                    id_producto=producto.id_producto,
+                    id_usuario=id_usuario,
+                    tipo_movimiento=COMPRA,
+                    cantidad=item.quantity,
+                    motivo=_motivo_compra(gasto.id_gasto),
+                )
+            )
 
     def actualizar(self, id_gasto: int, datos: ExpenseUpdate) -> Expense:
         encontrado = self._repo.obtener(id_gasto)
@@ -344,17 +381,52 @@ class GastoService:
         self._db.commit()
         return self.obtener(id_gasto)
 
-    def anular(self, id_gasto: int, motivo: str, quien: str | None) -> Expense:
-        """RF-3.7: el gasto no se borra; queda `anulado`, con el motivo, y deja de contar."""
-        encontrado = self._repo.obtener(id_gasto)
-        if encontrado is None:
-            raise NotFoundError("El gasto no existe.")
-        gasto = encontrado[0]
-        if gasto.estado == ANULADO:
-            raise ConflictError("El gasto ya está anulado.", code="EXPENSE_ALREADY_VOIDED")
-        fecha = datetime.now(_ZONA).strftime("%d/%m/%Y %H:%M")
-        nota = f"[ANULADO el {fecha} por {quien or 'usuario'}: {motivo}]"
-        gasto.concepto = f"{gasto.concepto} {nota}"
-        gasto.estado = ANULADO
-        self._db.commit()
+    def anular(self, id_gasto: int, motivo: str, quien: str | None, id_usuario) -> Expense:
+        """RF-3.7: el gasto no se borra; queda `anulado`, con el motivo, y deja de contar.
+
+        Si era una compra (RF-4.4), también retira del stock lo que había sumado."""
+        try:
+            encontrado = self._repo.obtener(id_gasto)
+            if encontrado is None:
+                raise NotFoundError("El gasto no existe.")
+            gasto = encontrado[0]
+            if gasto.estado == ANULADO:
+                raise ConflictError("El gasto ya está anulado.", code="EXPENSE_ALREADY_VOIDED")
+            self._retirar_del_inventario(id_gasto, id_usuario)
+            fecha = datetime.now(_ZONA).strftime("%d/%m/%Y %H:%M")
+            nota = f"[ANULADO el {fecha} por {quien or 'usuario'}: {motivo}]"
+            gasto.concepto = f"{gasto.concepto} {nota}"
+            gasto.estado = ANULADO
+            self._db.commit()
+        except Exception:
+            self._db.rollback()
+            raise
         return self.obtener(id_gasto)
+
+    def _retirar_del_inventario(self, id_gasto: int, id_usuario) -> None:
+        compras = self._inventario.de_un_gasto(_motivo_compra(id_gasto))
+        if not compras:
+            return
+        productos = self._inventario.bloquear_productos(sorted({m.id_producto for m in compras}))
+        sin_stock = [
+            productos[m.id_producto].nombre
+            for m in compras
+            if productos[m.id_producto].stock_actual < m.cantidad
+        ]
+        if sin_stock:
+            raise ConflictError(
+                "No se puede anular: parte de lo comprado ya salió del inventario "
+                f"({', '.join(sin_stock)}). Registra una salida o un ajuste en su lugar.",
+                code="INSUFFICIENT_STOCK",
+            )
+        for compra in compras:
+            productos[compra.id_producto].stock_actual -= compra.cantidad
+            self._inventario.agregar(
+                MovimientoInventario(
+                    id_producto=compra.id_producto,
+                    id_usuario=id_usuario,
+                    tipo_movimiento=ANULACION_COMPRA,
+                    cantidad=compra.cantidad,
+                    motivo=f"Anulación del gasto #{id_gasto}",
+                )
+            )

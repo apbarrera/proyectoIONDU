@@ -492,6 +492,26 @@ Cuerpo de `POST /api/expenses`:
 - `date` es opcional: sin ella se usa la hora actual; sin zona horaria se toma como hora de Ecuador.
 - Categoría o proveedor que no son de la empresa → `422 CATEGORY_NOT_FOUND` / `422 SUPPLIER_NOT_FOUND`.
 
+**Compra que suma inventario (RF-4.4).** Por ejemplo, "Compré 5 frascos por $12,50": el mismo
+`POST /api/expenses` acepta `items` opcionales y, **en una sola operación**, registra el gasto y suma el stock:
+
+```json
+{
+  "categoryId": 4, "supplierId": 2, "total": 12.50, "description": "Compra de 5 frascos",
+  "paymentMethod": "efectivo",
+  "items": [ { "productId": 9, "quantity": 5, "unitCost": 2.50 } ]
+}
+```
+
+- Cada línea deja en el historial de inventario un movimiento de tipo `compra`, con el motivo
+  `"Compra (gasto #<id>)"`. `unitCost` es opcional: si viene, actualiza el costo del producto (y con eso el
+  valor del inventario del dashboard).
+- Producto que no es de la empresa → `422 PRODUCT_NOT_FOUND`; producto repetido → `422 DUPLICATE_PRODUCT`.
+  Si algo falla no se guarda nada: ni el gasto ni el stock.
+- **Anular** un gasto de compra (`POST /api/expenses/{id}/void`) también **retira** del stock lo que había sumado
+  (movimiento `anulacion`). Si parte ya salió del inventario → `409 INSUFFICIENT_STOCK` y el gasto no se anula:
+  se corrige con una salida o un ajuste.
+
 Objeto `Expense`:
 
 ```json
@@ -515,7 +535,7 @@ historial siempre cuadra con el stock (DECISIONES 2.15). Registrar un movimiento
 
 | Estado | Método y ruta | Qué hace | Respuesta |
 |---|---|---|---|
-| ✅ | `GET /api/inventory/movements` | Historial paginado, el más reciente primero. Filtros: `productId`, `type` (`entrada`, `salida`, `ajuste`, `venta`, `anulacion`), `from`, `to` (fechas de Ecuador) | `200` con `Page<InventoryMovement>` |
+| ✅ | `GET /api/inventory/movements` | Historial paginado, el más reciente primero. Filtros: `productId`, `type` (`entrada`, `salida`, `ajuste`, `venta`, `compra`, `anulacion`), `from`, `to` (fechas de Ecuador) | `200` con `Page<InventoryMovement>` |
 | ✅ | `GET /api/inventory/movements/{id}` | Un movimiento | `200` o `404` |
 | ✅ | `POST /api/inventory/movements` | Entrada o salida manual (RF-4.3): `{ "productId", "type": "entrada" \| "salida", "quantity" (> 0), "reason" }` | `201` con `InventoryMovement` |
 | ✅ | `POST /api/inventory/adjustments` | **Solo Administrador** (RF-4.8). Ajuste al conteo físico: `{ "productId", "newStock" (≥ 0), "reason" }`. Se envía el stock real, no la diferencia | `201` con `StockAdjustment` |
@@ -534,7 +554,8 @@ Objeto `InventoryMovement` (igual que el modelo del frontend):
 ```
 
 - `quantity` lleva signo: **positiva si entra** al inventario, **negativa si sale** (ventas, salidas y ajustes a la baja).
-- `anulacion`: stock que vuelve al anular una venta (positivo).
+- `compra`: stock que entra con un gasto de compra (positivo).
+- `anulacion`: deshace una venta (devuelve stock, positivo) o un gasto de compra (lo retira, negativo).
 - `resultingStock`: stock del producto justo después de ese movimiento.
 - Para la pantalla de ajustes: `GET /api/inventory/movements?type=ajuste`.
 

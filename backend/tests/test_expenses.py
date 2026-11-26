@@ -272,3 +272,108 @@ def test_anular_un_gasto(client, empresas, usuario, nuevo_usuario):
     # Sigue en el historial, pero ya no cuenta en el dashboard.
     assert client.get("/api/expenses", headers=_h(a)).json()["total"] == 1
     assert client.get("/api/dashboard", headers=_h(a)).json()["expenses"] == 0
+
+
+# ---------- Compra que suma inventario (RF-4.4) ----------
+def _producto(client, empresa_id: int, stock: float = 2, costo: float = 2) -> int:
+    categoria = client.post(
+        "/api/product-categories", json={"name": "Envases"}, headers=_h(empresa_id)
+    ).json()
+    response = client.post(
+        "/api/products",
+        json={
+            "sku": "FRA-250",
+            "name": "Frasco 250 ml",
+            "categoryId": categoria["id"],
+            "currentStock": stock,
+            "cost": costo,
+        },
+        headers=_h(empresa_id),
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
+
+
+def _stock_y_costo(client, empresa_id: int, id_producto: int) -> tuple[float, float]:
+    producto = client.get(f"/api/products/{id_producto}", headers=_h(empresa_id)).json()
+    return producto["currentStock"], producto["cost"]
+
+
+def test_una_compra_registra_el_gasto_y_suma_al_inventario(client, empresas, usuario):
+    a, _ = empresas
+    frasco = _producto(client, a)
+    # "Compré 5 frascos por $12,50"
+    response = _gasto(
+        client,
+        usuario,
+        _categoria(client, a, "Empaque"),
+        total=12.5,
+        description="Compra de 5 frascos",
+        items=[{"productId": frasco, "quantity": 5, "unitCost": 2.5}],
+    )
+    assert response.status_code == 201, response.text
+    gasto = response.json()
+    assert _stock_y_costo(client, a, frasco) == (7, 2.5)
+
+    movimientos = client.get(
+        "/api/inventory/movements", params={"type": "compra"}, headers=_h(a)
+    ).json()["items"]
+    assert [(m["quantity"], m["resultingStock"]) for m in movimientos] == [(5, 7)]
+    assert movimientos[0]["reason"] == f"Compra (gasto #{gasto['id']})"
+
+    # Anular el gasto retira lo que había sumado.
+    anulado = client.post(
+        f"/api/expenses/{gasto['id']}/void",
+        json={"reason": "Pedido devuelto"},
+        headers=con_token(usuario),
+    )
+    assert anulado.status_code == 200, anulado.text
+    assert _stock_y_costo(client, a, frasco)[0] == 2
+    retiro = client.get(
+        "/api/inventory/movements", params={"type": "anulacion"}, headers=_h(a)
+    ).json()["items"]
+    assert [m["quantity"] for m in retiro] == [-5]
+
+
+def test_compra_invalida_no_guarda_nada(client, empresas, usuario):
+    a, b = empresas
+    frasco = _producto(client, a)
+    ajeno = _producto(client, b)
+    categoria = _categoria(client, a, "Empaque")
+    for items, codigo in (
+        ([{"productId": ajeno, "quantity": 1}], "PRODUCT_NOT_FOUND"),
+        (
+            [{"productId": frasco, "quantity": 1}, {"productId": frasco, "quantity": 2}],
+            "DUPLICATE_PRODUCT",
+        ),
+    ):
+        response = _gasto(client, usuario, categoria, items=items)
+        assert (response.status_code, response.json()["error"]["code"]) == (422, codigo)
+    assert (
+        _gasto(client, usuario, categoria, items=[{"productId": frasco, "quantity": 0}]).status_code
+        == 422
+    )
+    # Nada quedó a medias: ni gastos ni stock.
+    assert client.get("/api/expenses", headers=_h(a)).json()["total"] == 0
+    assert _stock_y_costo(client, a, frasco) == (2, 2)
+
+
+def test_no_se_anula_una_compra_ya_vendida(client, empresas, usuario):
+    a, _ = empresas
+    frasco = _producto(client, a, stock=0)
+    gasto = _gasto(
+        client, usuario, _categoria(client, a), items=[{"productId": frasco, "quantity": 3}]
+    ).json()
+    salida = client.post(
+        "/api/inventory/movements",
+        json={"productId": frasco, "type": "salida", "quantity": 2, "reason": "Uso interno"},
+        headers=con_token(usuario),
+    )
+    assert salida.status_code == 201, salida.text
+    response = client.post(
+        f"/api/expenses/{gasto['id']}/void", json={"reason": "X"}, headers=con_token(usuario)
+    )
+    assert (response.status_code, response.json()["error"]["code"]) == (409, "INSUFFICIENT_STOCK")
+    assert _stock_y_costo(client, a, frasco)[0] == 1
+    estado = client.get(f"/api/expenses/{gasto['id']}", headers=_h(a)).json()["status"]
+    assert estado == "confirmado"

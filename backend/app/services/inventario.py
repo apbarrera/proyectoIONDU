@@ -17,7 +17,9 @@ from app.models import MovimientoInventario, Producto
 from app.repositories.inventario import (
     AJUSTE_ENTRADA,
     AJUSTE_SALIDA,
+    ANULACION_COMPRA,
     ANULACION_VENTA,
+    COMPRA,
     ENTRADA,
     QUE_ENTRAN,
     SALIDA,
@@ -43,13 +45,16 @@ _TIPOS_API = {
     AJUSTE_ENTRADA: "ajuste",
     AJUSTE_SALIDA: "ajuste",
     ANULACION_VENTA: "anulacion",
+    ANULACION_COMPRA: "anulacion",
+    COMPRA: "compra",
 }
 _TIPOS_BASE = {
     "entrada": (ENTRADA,),
     "salida": (SALIDA,),
     "venta": (VENTA,),
     "ajuste": (AJUSTE_ENTRADA, AJUSTE_SALIDA),
-    "anulacion": (ANULACION_VENTA,),
+    "anulacion": (ANULACION_VENTA, ANULACION_COMPRA),
+    "compra": (COMPRA,),
 }
 
 

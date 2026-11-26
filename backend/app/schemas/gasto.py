@@ -10,9 +10,11 @@ from app.schemas.common import (
     ApiInput,
     ApiModel,
     OptionalText255,
+    Quantity,
     Text20,
     Text100,
     Text255,
+    UnitPrice,
 )
 
 ExpensePaymentMethod = Literal[
@@ -71,6 +73,14 @@ class Supplier(ApiModel):
 
 
 # ---------- Gastos ----------
+class ExpenseItem(ApiInput):
+    """Producto comprado con el gasto: suma `quantity` a su stock (RF-4.4)."""
+
+    product_id: int = Field(gt=0)
+    quantity: Quantity
+    unit_cost: UnitPrice | None = None  # si viene, actualiza el costo del producto
+
+
 class ExpenseCreate(ApiInput):
     category_id: int = Field(gt=0)
     supplier_id: int | None = Field(default=None, gt=0)
@@ -79,6 +89,8 @@ class ExpenseCreate(ApiInput):
     payment_method: ExpensePaymentMethod
     date: datetime | None = None  # por defecto, ahora
     receipt_number: Text50 | None = None
+    # Compra de mercadería: el gasto y el aumento de stock se guardan juntos.
+    items: list[ExpenseItem] = Field(default_factory=list, max_length=100)
 
 
 class ExpenseUpdate(ApiInput):

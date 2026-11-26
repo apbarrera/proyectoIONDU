@@ -16,7 +16,9 @@ VENTA = "VENTA"
 AJUSTE_ENTRADA = "AJUSTE_ENTRADA"
 AJUSTE_SALIDA = "AJUSTE_SALIDA"
 ANULACION_VENTA = "ANULACION_VENTA"  # devuelve el stock de una venta anulada
-QUE_ENTRAN = (ENTRADA, AJUSTE_ENTRADA, ANULACION_VENTA)
+COMPRA = "COMPRA"  # mercadería comprada con un gasto (RF-4.4)
+ANULACION_COMPRA = "ANULACION_COMPRA"  # retira lo sumado por un gasto de compra anulado
+QUE_ENTRAN = (ENTRADA, AJUSTE_ENTRADA, ANULACION_VENTA, COMPRA)
 
 Fila = tuple[MovimientoInventario, Producto, Decimal, str | None]
 
@@ -138,3 +140,25 @@ class InventarioRepository:
         return [
             (por_id[i][0], por_id[i][1], stock[i], por_id[i][2]) for i, _ in pares if i in por_id
         ]
+
+    def bloquear_productos(self, ids: list[int]) -> dict[int, Producto]:
+        """Varios productos de la empresa, bloqueados en orden de id (sin deadlocks)."""
+        filas = self._db.scalars(
+            select(Producto)
+            .where(Producto.id_empresa == self._empresa_id, Producto.id_producto.in_(ids))
+            .order_by(Producto.id_producto)
+            .with_for_update()
+        )
+        return {p.id_producto: p for p in filas}
+
+    def de_un_gasto(self, motivo: str) -> list[MovimientoInventario]:
+        """Movimientos de compra registrados por un gasto (los identifica su motivo)."""
+        return list(
+            self._db.scalars(
+                select(MovimientoInventario).where(
+                    MovimientoInventario.id_empresa == self._empresa_id,
+                    MovimientoInventario.tipo_movimiento == COMPRA,
+                    MovimientoInventario.motivo == motivo,
+                )
+            )
+        )

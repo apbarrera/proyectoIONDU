@@ -136,5 +136,7 @@ def update_expense(id: Id, datos: ExpenseUpdate, contexto: ContextoActual, db: D
 # RF-3.7: solo el Administrador anula; el gasto queda en el historial como "anulado".
 @router.post("/expenses/{id}/void", response_model=Expense)
 def void_expense(id: Id, datos: VoidRequest, contexto: SoloAdministrador, db: DbSession):
-    _id_usuario(contexto)
-    return GastoService(db, contexto.empresa_id).anular(id, datos.reason, contexto.nombre)
+    id_usuario = _id_usuario(contexto)
+    return GastoService(db, contexto.empresa_id).anular(
+        id, datos.reason, contexto.nombre, id_usuario
+    )

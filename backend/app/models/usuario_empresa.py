@@ -26,7 +26,7 @@ class UsuarioEmpresa(Base):
     __table_args__ = (
         ForeignKeyConstraint(
             ["id_usuario"],
-            ["auth.users.id"],
+            ["usuario.id"],
             name="usuario_empresa_id_usuario_fkey",
             ondelete="CASCADE",
         ),

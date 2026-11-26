@@ -4,8 +4,7 @@ Todo modelo hereda de `Base`; así queda registrado en `Base.metadata`, que es
 lo que Alembic compara contra la base de datos para generar migraciones.
 """
 
-from sqlalchemy import Column, MetaData, Table
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import MetaData
 from sqlalchemy.orm import DeclarativeBase
 
 # Nombres de restricciones e índices fijos y predecibles (mismo estilo que
@@ -22,11 +21,3 @@ NAMING_CONVENTION = {
 
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
-
-
-auth_users = Table(
-    "users",
-    Base.metadata,
-    Column("id", UUID(as_uuid=True), primary_key=True),
-    schema="auth",
-)

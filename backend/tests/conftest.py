@@ -23,10 +23,10 @@ from sqlalchemy.exc import OperationalError  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.api.deps import get_verificador  # noqa: E402
-from app.db.base import Base, auth_users  # noqa: E402
+from app.db.base import Base  # noqa: E402
 from app.db.session import get_db  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Empresa, Rol, UsuarioEmpresa  # noqa: E402
+from app.models import Empresa, Rol, Usuario, UsuarioEmpresa  # noqa: E402
 from app.models.rol import ADMINISTRADOR, OPERATIVO  # noqa: E402
 from tests.tokens import crear_token, verificador_de_prueba  # noqa: E402
 
@@ -92,12 +92,7 @@ def engine():
                 returncode=1,
             )
 
-        # Esquema mínimo para representar la dependencia externa de Supabase Auth.
-        with eng.begin() as conn:
-            conn.exec_driver_sql("CREATE SCHEMA IF NOT EXISTS auth")
-
         Base.metadata.drop_all(eng)
-        # Imita el esquema auth.users de Supabase en la base de pruebas.
         Base.metadata.create_all(eng)
         inicializado = True
         yield eng
@@ -151,7 +146,8 @@ def empresas(db, roles) -> tuple[int, int]:
     db.flush()
 
     usuario_demo = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
-    db.execute(auth_users.insert().values(id=usuario_demo))
+    db.add(Usuario(id=usuario_demo, email="demo@test.ec", password_hash="!"))
+    db.flush()
     db.add_all(
         [
             UsuarioEmpresa(
@@ -168,10 +164,10 @@ def empresas(db, roles) -> tuple[int, int]:
     return a.id_empresa, b.id_empresa
 
 
-# ---------- Usuarios con sesión (token de un "Supabase falso", ver tests/tokens.py) ----------
+# ---------- Usuarios con sesión (tokens firmados en las pruebas, ver tests/tokens.py) ----------
 @pytest.fixture
 def supabase_falso():
-    """La API verifica los tokens con la llave de prueba en vez de la de Supabase."""
+    """La API verifica los tokens con la llave de prueba en vez de la configurada."""
     app.dependency_overrides[get_verificador] = verificador_de_prueba
     yield
     app.dependency_overrides.pop(get_verificador, None)
@@ -208,11 +204,12 @@ def agregar_pertenencia(db, roles):
 
 @pytest.fixture
 def nuevo_usuario(db, agregar_pertenencia):
-    """Crea un usuario de Supabase (auth.users) con pertenencia a una empresa."""
+    """Crea un usuario (sin contraseña utilizable) con pertenencia a una empresa."""
 
     def crear(id_empresa: int, rol: str = ADMINISTRADOR, estado: str = "ACTIVO") -> uuid.UUID:
         usuario = uuid.uuid4()
-        db.execute(auth_users.insert().values(id=usuario))
+        db.add(Usuario(id=usuario, email=f"{usuario}@test.ec", password_hash="!"))
+        db.flush()
         agregar_pertenencia(usuario, id_empresa, rol, estado)
         return usuario
 

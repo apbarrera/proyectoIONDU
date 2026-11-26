@@ -63,6 +63,16 @@ jobs:
           docker run --rm --network host
           -e TEST_DATABASE_URL=postgresql+psycopg://iondu_test_runner@127.0.0.1:5432/iondu_test
           iondu-backend-test python -m pytest -q
+
+      # Instalación desde cero: todas las migraciones sobre una base vacía (incluidos los
+      # permisos de iondu_app e iondu_worker) y modelos sincronizados con el esquema.
+      - name: Migraciones sobre una base vacía
+        run: |
+          docker run --rm --network host postgres:17-alpine \
+            psql -h 127.0.0.1 -U iondu -d iondu_test -v ON_ERROR_STOP=1 -c "CREATE DATABASE iondu_migraciones"
+          docker run --rm --network host \
+            -e MIGRATION_DATABASE_URL=postgresql+psycopg://iondu@127.0.0.1:5432/iondu_migraciones \
+            iondu-backend-test sh -c "alembic upgrade head && alembic check"
   imagenes:
     name: Imágenes Docker (build completo)
     runs-on: ubuntu-latest

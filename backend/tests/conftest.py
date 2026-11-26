@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session  # noqa: E402
 
 from app.api.deps import get_verificador  # noqa: E402
 from app.db.base import Base  # noqa: E402
-from app.db.session import get_db  # noqa: E402
+from app.db.session import get_auth_db, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Empresa, Rol, Usuario, UsuarioEmpresa  # noqa: E402
 from app.models.rol import ADMINISTRADOR, OPERATIVO  # noqa: E402
@@ -38,6 +38,24 @@ RETURNS boolean LANGUAGE sql STABLE AS $$
         SELECT 1 FROM public.usuario_empresa AS ue
         WHERE ue.id_usuario = p_usuario AND ue.id_empresa <> p_empresa AND ue.estado = 'ACTIVO'
     );
+$$
+"""
+# Misma lógica que la migración d6a8c0e2f417 (aquí sin roles ni SECURITY DEFINER).
+FUNCION_PUEDE_RESTABLECER = """
+CREATE OR REPLACE FUNCTION public.auth_puede_restablecer(p_usuario uuid, p_empresa integer)
+RETURNS text LANGUAGE sql STABLE AS $$
+    SELECT CASE
+        WHEN NOT EXISTS (
+            SELECT 1 FROM public.usuario_empresa AS ue
+            WHERE ue.id_usuario = p_usuario AND ue.id_empresa = p_empresa
+        ) THEN 'NO_PERTENECE'
+        WHEN EXISTS (
+            SELECT 1 FROM public.usuario_empresa AS ue
+            WHERE ue.id_usuario = p_usuario AND ue.id_empresa <> p_empresa
+              AND ue.estado = 'ACTIVO'
+        ) THEN 'OTRA_EMPRESA'
+        ELSE 'OK'
+    END;
 $$
 """
 SERVIDORES_DE_PRUEBA = {"127.0.0.1", "localhost", "db"}
@@ -106,6 +124,7 @@ def engine():
         # Función que crea la migración f7a2d4c8e915 (create_all no ejecuta migraciones).
         with eng.begin() as conn:
             conn.exec_driver_sql(FUNCION_OTRAS_EMPRESAS)
+            conn.exec_driver_sql(FUNCION_PUEDE_RESTABLECER)
         inicializado = True
         yield eng
     finally:
@@ -143,6 +162,9 @@ def client(db):
             session.close()
 
     app.dependency_overrides[get_db] = sesion_por_peticion
+    # Estas pruebas usan una sola base sin roles: la conexión de autenticación
+    # (iondu_auth en producción) es la misma sesión. tests/postgres_auth prueba los roles.
+    app.dependency_overrides[get_auth_db] = sesion_por_peticion
     try:
         yield TestClient(app)
     finally:

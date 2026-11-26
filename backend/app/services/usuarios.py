@@ -14,16 +14,16 @@ import secrets
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, insert, select, text, update
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from app.core import contrasenas
 from app.core.errors import ConflictError, NotFoundError, UnprocessableError
-from app.models import Rol, SesionRefresh, Usuario, UsuarioEmpresa
+from app.models import Rol, Usuario, UsuarioEmpresa
 from app.models.rol import ADMINISTRADOR, OPERATIVO
 from app.models.usuario_empresa import ACTIVO, INACTIVO
 from app.schemas.usuario import CompanyUser, RolApi, UserCreate, UserCreated, UserUpdate
 from app.services.autenticacion import normalizar_email
+from app.services.cuentas import CuentasAuth
 
 ROL_DESDE_API = {"admin": ADMINISTRADOR, "operator": OPERATIVO}
 ROL_HACIA_API: dict[str, RolApi] = {ADMINISTRADOR: "admin", OPERATIVO: "operator"}
@@ -35,10 +35,20 @@ def generar_contrasena_temporal() -> str:
 
 
 class UsuarioService:
-    def __init__(self, db: Session, empresa_id: int, usuario_actual: uuid.UUID | None):
+    def __init__(
+        self,
+        db: Session,
+        empresa_id: int,
+        usuario_actual: uuid.UUID | None,
+        *,
+        auth_db: Session | None = None,
+    ):
         self.db = db
         self.empresa_id = empresa_id
         self.actual_id = usuario_actual
+        # Cuentas (correo, contraseña, sesiones): conexión iondu_auth. Las pruebas con una
+        # sola base pueden omitirla y se usa la misma sesión.
+        self.cuentas = CuentasAuth(auth_db if auth_db is not None else db)
 
     # ---------- Consultas ----------
     def listar(self) -> list[CompanyUser]:
@@ -60,19 +70,12 @@ class UsuarioService:
         if not (local and arroba and "." in dominio):
             raise UnprocessableError("El correo no es válido.", code="INVALID_EMAIL")
 
-        id_usuario = self.db.scalar(select(Usuario.id).where(Usuario.email == email))
-        contrasena: str | None = None
-        if id_usuario is None:
-            contrasena = generar_contrasena_temporal()
-            id_usuario = uuid.uuid4()
-            # INSERT explícito con solo estas columnas: es lo único que iondu_app puede
-            # insertar en `usuario` (el ORM agregaría bloqueado_hasta = NULL).
-            self.db.execute(
-                insert(Usuario).values(
-                    id=id_usuario, email=email, password_hash=contrasenas.hashear(contrasena)
-                )
-            )
-        elif self.db.get(UsuarioEmpresa, (id_usuario, self.empresa_id)) is not None:
+        # La cuenta se busca o se crea con iondu_auth: iondu_app no ve correos de otras
+        # empresas ni puede escribir en `usuario`. Si ya existía, conserva su contraseña.
+        temporal = generar_contrasena_temporal()
+        id_usuario, creada = self.cuentas.buscar_o_crear(email, temporal)
+        contrasena: str | None = temporal if creada else None
+        if not creada and self.db.get(UsuarioEmpresa, (id_usuario, self.empresa_id)) is not None:
             raise ConflictError(
                 "Ese correo ya es usuario de esta empresa. Búscalo en la lista para editarlo.",
                 code="USER_ALREADY_MEMBER",
@@ -135,18 +138,11 @@ class UsuarioService:
                 code="USER_IN_OTHER_COMPANY",
             )
 
-        usuario = self.db.get(Usuario, id_usuario, with_for_update=True)
+        # Contraseña, contadores y revocación de TODAS sus sesiones, en una transacción de
+        # iondu_auth que vuelve a comprobar la pertenencia (la contraseña anterior deja de
+        # servir también en las sesiones abiertas).
         contrasena = generar_contrasena_temporal()
-        usuario.password_hash = contrasenas.hashear(contrasena)
-        usuario.intentos_fallidos = 0
-        usuario.bloqueado_hasta = None
-        # La contraseña anterior deja de servir también en las sesiones abiertas.
-        self.db.execute(
-            update(SesionRefresh)
-            .where(SesionRefresh.id_usuario == id_usuario, SesionRefresh.revocada_en.is_(None))
-            .values(revocada_en=func.now())
-        )
-        self.db.commit()
+        self.cuentas.restablecer_contrasena(id_usuario, self.empresa_id, contrasena)
         return contrasena
 
     # ---------- Internos ----------

@@ -15,7 +15,7 @@ from uuid import UUID
 from fastapi import APIRouter, Cookie, Depends, Response, status
 from pydantic import Field
 
-from app.api.deps import DbSession, UsuarioActual, get_emisor
+from app.api.deps import AuthDbSession, UsuarioActual, get_emisor
 from app.core.config import get_settings
 from app.core.errors import ServiceUnavailableError
 from app.core.seguridad import EmisorTokens
@@ -50,7 +50,7 @@ class TokenAcceso(ApiModel):
 
 
 def get_servicio(
-    db: DbSession,
+    db: AuthDbSession,
     emisor: Annotated[EmisorTokens | None, Depends(get_emisor)],
 ) -> ServicioAutenticacion:
     if emisor is None:

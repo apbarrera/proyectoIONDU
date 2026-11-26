@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # PostgreSQL. En Supabase: Session Pooler (puerto 5432).
     database_url: str | None = None
     worker_database_url: str | None = None
+    # Conexión exclusiva de la autenticación (rol iondu_auth): login, renovación, cierre y
+    # cambio de contraseña. Es el único rol que lee hashes de contraseñas y sesiones.
+    auth_database_url: str | None = None
     migration_database_url: str | None = None
 
     # Almacenamiento de archivos por la API S3: SeaweedFS en local, Supabase Storage (su
@@ -90,6 +93,7 @@ class Settings(BaseSettings):
     @field_validator(
         "database_url",
         "worker_database_url",
+        "auth_database_url",
         "migration_database_url",
         mode="before",
     )
@@ -109,6 +113,7 @@ class Settings(BaseSettings):
     @field_validator(
         "database_url",
         "worker_database_url",
+        "auth_database_url",
         "migration_database_url",
         "storage_endpoint_url",
         "storage_access_key_id",

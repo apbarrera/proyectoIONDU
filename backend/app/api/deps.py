@@ -27,7 +27,7 @@ from app.core.seguridad import (
     VerificadorTokens,
     cargar_llave_privada,
 )
-from app.db.session import establecer_contexto_rls, get_db
+from app.db.session import establecer_contexto_rls, get_auth_db, get_db
 from app.models.rol import ADMINISTRADOR
 from app.repositories.usuario_empresa import (
     obtener_empresas_activas,
@@ -36,6 +36,8 @@ from app.repositories.usuario_empresa import (
 from app.services.auditoria import Auditor
 
 DbSession = Annotated[Session, Depends(get_db)]
+# Conexión de autenticación (rol iondu_auth): solo para usuario y sesion_refresh.
+AuthDbSession = Annotated[Session, Depends(get_auth_db)]
 
 
 # ---------- Tokens del inicio de sesión propio ----------

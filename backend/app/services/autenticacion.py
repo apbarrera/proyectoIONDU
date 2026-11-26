@@ -1,3 +1,4 @@
+
 """Inicio de sesión propio: contraseñas, bloqueo por intentos y sesiones renovables.
 
 - El token de acceso (JWT, 15 min por defecto) viaja en `Authorization: Bearer`.
@@ -112,7 +113,8 @@ class ServicioAutenticacion:
         # Limpieza: las sesiones vencidas de este usuario ya no sirven.
         self.db.execute(
             delete(SesionRefresh).where(
-                SesionRefresh.id_usuario == usuario.id, SesionRefresh.expira_en <= ahora
+                SesionRefresh.id_usuario == usuario.id,
+                SesionRefresh.expira_en <= ahora,
             )
         )
         sesion = self._crear_sesion(usuario, ahora)
@@ -123,12 +125,35 @@ class ServicioAutenticacion:
     def renovar(self, refresh_token: str | None) -> SesionEmitida:
         if not refresh_token:
             raise _sesion_invalida()
+
         ahora = self._reloj()
-        fila = self.db.scalar(
-            select(SesionRefresh)
-            .where(SesionRefresh.token_hash == hash_token(refresh_token))
+        token_hash = hash_token(refresh_token)
+
+        # Primera lectura sin bloqueo: solo obtenemos el propietario de la sesión.
+        id_usuario = self.db.scalar(
+            select(SesionRefresh.id_usuario).where(
+                SesionRefresh.token_hash == token_hash
+            )
+        )
+        if id_usuario is None:
+            raise _sesion_invalida()
+
+        # Orden uniforme de bloqueos: primero usuario, después sesión.
+        usuario = self.db.scalar(
+            select(Usuario)
+            .where(Usuario.id == id_usuario)
             .with_for_update()
         )
+        if usuario is None:
+            raise _sesion_invalida()
+
+        # Volvemos a consultar la sesión y la bloqueamos para validar su estado actual.
+        fila = self.db.scalar(
+            select(SesionRefresh)
+            .where(SesionRefresh.token_hash == token_hash)
+            .with_for_update()
+        )
+
         if fila is None or fila.revocada_en is not None or fila.expira_en <= ahora:
             raise _sesion_invalida()
 
@@ -138,14 +163,14 @@ class ServicioAutenticacion:
             self.db.commit()
             raise _sesion_invalida()
 
-        usuario = self.db.get(Usuario, fila.id_usuario)
-        if usuario is None or not usuario.activo:
+        if not usuario.activo:
             self._revocar_todas(fila.id_usuario, ahora)
             self.db.commit()
             raise _sesion_invalida()
 
         if fila.rotada_en is None:
             fila.rotada_en = ahora
+
         sesion = self._crear_sesion(usuario, ahora)
         self.db.commit()
         return sesion
@@ -179,10 +204,30 @@ class ServicioAutenticacion:
     def cerrar(self, refresh_token: str | None) -> None:
         if not refresh_token:
             return
+
+        token_hash = hash_token(refresh_token)
+
+        # Primero identificamos al usuario sin bloquear la sesión.
+        id_usuario = self.db.scalar(
+            select(SesionRefresh.id_usuario).where(
+                SesionRefresh.token_hash == token_hash
+            )
+        )
+        if id_usuario is None:
+            self.db.commit()
+            return
+
+        # Conservamos el mismo orden de bloqueos que las demás operaciones.
+        self.db.scalar(
+            select(Usuario.id)
+            .where(Usuario.id == id_usuario)
+            .with_for_update()
+        )
+
         self.db.execute(
             update(SesionRefresh)
             .where(
-                SesionRefresh.token_hash == hash_token(refresh_token),
+                SesionRefresh.token_hash == token_hash,
                 SesionRefresh.revocada_en.is_(None),
             )
             .values(revocada_en=self._reloj())
@@ -213,6 +258,9 @@ class ServicioAutenticacion:
     def _revocar_todas(self, id_usuario: UUID, ahora: datetime) -> None:
         self.db.execute(
             update(SesionRefresh)
-            .where(SesionRefresh.id_usuario == id_usuario, SesionRefresh.revocada_en.is_(None))
+            .where(
+                SesionRefresh.id_usuario == id_usuario,
+                SesionRefresh.revocada_en.is_(None),
+            )
             .values(revocada_en=ahora)
         )

@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Path, Response
 
-from app.api.deps import AuditorActual, DbSession, SoloAdministrador
+from app.api.deps import AuditorActual, AuthDbSession, DbSession, SoloAdministrador
 from app.schemas.usuario import CompanyUser, PasswordReset, UserCreate, UserCreated, UserUpdate
 from app.services.usuarios import UsuarioService
 
@@ -15,9 +15,11 @@ UserId = Annotated[UUID, Path()]
 ROLES = {"admin": "Administrador", "operator": "Operativo"}
 
 
-def _servicio(db: DbSession, contexto: SoloAdministrador) -> UsuarioService:
+def _servicio(
+    db: DbSession, contexto: SoloAdministrador, auth_db: AuthDbSession | None = None
+) -> UsuarioService:
     usuario = contexto.usuario.id if contexto.usuario else None
-    return UsuarioService(db, contexto.empresa_id, usuario)
+    return UsuarioService(db, contexto.empresa_id, usuario, auth_db=auth_db)
 
 
 @router.get("", response_model=list[CompanyUser])
@@ -31,11 +33,12 @@ def create_user(
     response: Response,
     contexto: SoloAdministrador,
     db: DbSession,
+    auth_db: AuthDbSession,
     auditor: AuditorActual,
 ):
     # La respuesta puede traer la contraseña temporal: que nadie la guarde en caché.
     response.headers["Cache-Control"] = "no-store"
-    creado = _servicio(db, contexto).crear(datos)
+    creado = _servicio(db, contexto, auth_db).crear(datos)
     cuenta = "cuenta nueva" if creado.temporary_password else "cuenta existente"
     auditor.registrar(
         "usuarios",
@@ -79,10 +82,11 @@ def reset_password(
     response: Response,
     contexto: SoloAdministrador,
     db: DbSession,
+    auth_db: AuthDbSession,
     auditor: AuditorActual,
 ):
     response.headers["Cache-Control"] = "no-store"
-    servicio = _servicio(db, contexto)
+    servicio = _servicio(db, contexto, auth_db)
     temporal = servicio.restablecer_contrasena(id)
     # La contraseña temporal nunca se guarda en la auditoría.
     auditor.registrar(

@@ -53,6 +53,8 @@ class AiReply(ApiModel):
     action_id: int | None
     reply: str
     proposal: AiProposal | None
+    # Solo en mensajes de voz: lo que se entendió del audio.
+    transcript: str | None = None
 
 
 class AiConfirm(ApiInput):
@@ -87,4 +89,4 @@ class AiAction(ApiModel):
     status: AiActionStatus
     expense_id: int | None
     movement_id: int | None
-    input_type: Literal["texto", "imagen"] = "texto"
+    input_type: Literal["texto", "imagen", "voz"] = "texto"

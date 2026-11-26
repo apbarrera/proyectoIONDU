@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.core.errors import ForbiddenError
 from app.ia.cliente import ClienteOpenAICompatible, ModeloLenguaje
 from app.ia.imagen import TAMANO_MAXIMO_BYTES, preparar_imagen
+from app.ia.voz import TAMANO_MAXIMO_AUDIO, Transcriptor, TranscriptorOpenAICompatible
 from app.schemas.agente_ia import (
     AiAction,
     AiConfirm,
@@ -54,6 +55,22 @@ Modelo = Annotated[ModeloLenguaje | None, Depends(get_modelo)]
 ModeloVision = Annotated[ModeloLenguaje | None, Depends(get_modelo_vision)]
 
 
+def get_transcriptor() -> Transcriptor | None:
+    """Servicio de voz a texto (STT_*); None si no está configurado."""
+    settings = get_settings()
+    if not settings.stt_base_url:
+        return None
+    return TranscriptorOpenAICompatible(
+        settings.stt_base_url,
+        settings.stt_model,
+        settings.stt_api_key.get_secret_value() if settings.stt_api_key else None,
+        settings.llm_timeout_seconds,
+    )
+
+
+TranscriptorActual = Annotated[Transcriptor | None, Depends(get_transcriptor)]
+
+
 def _servicio(db, contexto, modelo=None) -> ServicioAgente:
     # Las acciones del agente quedan a nombre de un usuario real.
     if contexto.usuario is None:
@@ -91,6 +108,22 @@ def send_image(
         image.file.close()
     servicio = _servicio(db, contexto, modelo)
     return servicio.interpretar_imagen(preparar_imagen(contenido), (text or "").strip() or None)
+
+
+@router.post("/audio", response_model=AiReply)
+def send_audio(
+    contexto: ContextoActual,
+    db: DbSession,
+    modelo: Modelo,
+    transcriptor: TranscriptorActual,
+    audio: Annotated[UploadFile, File(description="Mensaje de voz (webm, ogg, mp4, wav o mp3)")],
+):
+    """Transcribe un mensaje de voz y lo interpreta (RF-6.4). El audio no se guarda."""
+    try:
+        contenido = audio.file.read(TAMANO_MAXIMO_AUDIO + 1)
+    finally:
+        audio.file.close()
+    return _servicio(db, contexto, modelo).interpretar_voz(contenido, transcriptor)
 
 
 @router.post("/actions/{id}/confirm", response_model=AiConfirmResult)

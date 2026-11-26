@@ -36,6 +36,7 @@ from app.ia.agente import (
     prompt_sistema,
 )
 from app.ia.cliente import ModeloLenguaje, RespuestaModelo
+from app.ia.voz import Transcriptor, detectar_formato
 from app.models import AccionIA, ConsumoTokens, Empresa, Producto, Usuario, UsuarioEmpresa
 from app.schemas.agente_ia import (
     AiAction,
@@ -89,7 +90,9 @@ class ServicioAgente:
         self.es_administrador = es_administrador
 
     # ---------- Interpretar ----------
-    def interpretar(self, texto: str) -> AiReply:
+    def interpretar(
+        self, texto: str, *, instruccion: str | None = None, extra: dict | None = None
+    ) -> AiReply:
         self._exigir_modelo()
         categorias = self._categorias()
         productos = self._productos()
@@ -102,7 +105,30 @@ class ServicioAgente:
             esquema(list(categorias), productos),
         )
         interpretacion = interpretar(respuesta.datos, list(categorias), hoy, productos, texto)
-        return self._proponer(respuesta, interpretacion, categorias, texto)
+        return self._proponer(respuesta, interpretacion, categorias, instruccion or texto, extra)
+
+    def interpretar_voz(self, audio: bytes, transcriptor: Transcriptor | None) -> AiReply:
+        """Transcribe el audio y lo interpreta como si se hubiera escrito (RF-6.4)."""
+        self._exigir_modelo()
+        if transcriptor is None:
+            raise ServiceUnavailableError(
+                "La entrada por voz no está configurada en este servidor.",
+                code="AI_VOICE_NOT_CONFIGURED",
+            )
+        transcripcion = transcriptor.transcribir(audio, detectar_formato(audio))
+        if not transcripcion.texto:
+            return AiReply(
+                action_id=None,
+                reply="No logré entender el audio. Intenta de nuevo, más cerca del micrófono.",
+                proposal=None,
+                transcript="",
+            )
+        respuesta = self.interpretar(
+            transcripcion.texto,
+            instruccion=f"[Voz] {transcripcion.texto}",
+            extra={"entrada": "voz", "modelo_voz": transcripcion.modelo},
+        )
+        return respuesta.model_copy(update={"transcript": transcripcion.texto})
 
     def interpretar_imagen(self, imagen: str, texto: str | None = None) -> AiReply:
         """`imagen` es la foto ya validada y reducida, como data URL (app.ia.imagen)."""
@@ -330,7 +356,7 @@ class ServicioAgente:
                     status=ESTADOS_API.get(accion.estado, "sin_propuesta"),
                     expense_id=datos.get("id_gasto"),
                     movement_id=datos.get("id_movimiento"),
-                    input_type="imagen" if datos.get("entrada") == "imagen" else "texto",
+                    input_type=datos.get("entrada", "texto"),
                 )
             )
         return Page(items=items, total=total, page=page, page_size=page_size)

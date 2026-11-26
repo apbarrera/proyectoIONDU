@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     # Modelo con visión para leer fotos de facturas y tickets (en local, qwen2.5vl:7b).
     # Usa el mismo servicio que LLM_BASE_URL. Vacío: el agente no acepta imágenes.
     llm_vision_model: str | None = None
+    # Voz a texto (RF-6.4): API de OpenAI /v1/audio/transcriptions. En local, el servicio
+    # "stt" (Whisper) de docker-compose.override.yml. Vacío: el agente no acepta audio.
+    stt_base_url: str | None = None
+    stt_model: str = "Systran/faster-whisper-small"
+    stt_api_key: SecretStr | None = None
 
     # Inicio de sesión propio: llave privada EC P-256 (PEM) que firma los tokens de acceso (ES256).
     # En .env puede escribirse en una línea, con "\n" en lugar de los saltos de línea.
@@ -98,6 +103,9 @@ class Settings(BaseSettings):
         "storage_secret_access_key",
         "llm_base_url",
         "llm_api_key",
+        "llm_vision_model",
+        "stt_base_url",
+        "stt_api_key",
         "auth_jwt_private_key",
         "dev_user_id",
         mode="before",

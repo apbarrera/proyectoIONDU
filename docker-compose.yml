@@ -74,6 +74,10 @@ services:
       LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b}
       # Modelo con visión para fotos de facturas; vacío: el agente no acepta imágenes.
       LLM_VISION_MODEL: ${LLM_VISION_MODEL:-}
+      # Voz a texto (API de OpenAI /v1/audio/transcriptions). Vacío: el agente no acepta audio.
+      STT_BASE_URL: ${STT_BASE_URL:-}
+      STT_MODEL: ${STT_MODEL:-Systran/faster-whisper-small}
+      STT_API_KEY: ${STT_API_KEY:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-120}
     expose:

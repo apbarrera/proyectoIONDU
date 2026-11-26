@@ -482,7 +482,7 @@ Cuerpo de `POST /api/expenses`:
 
 ```json
 {
-  "categoryId": 3, "supplierId": 4, "total": 25.50, "description": "Pago de internet",
+  "categoryId": 3, "supplierId": 4, "total": 25.50, "ivaAmount": 3.33, "description": "Pago de internet",
   "paymentMethod": "transferencia", "date": "2026-11-20T10:30:00-05:00", "receiptNumber": "001-001-000000123"
 }
 ```
@@ -490,6 +490,8 @@ Cuerpo de `POST /api/expenses`:
 - Obligatorios: `categoryId`, `total` (mayor a 0), `description`, `paymentMethod`
   (`efectivo`, `tarjeta_debito`, `tarjeta_credito`, `transferencia`, `cheque`).
 - `date` es opcional: sin ella se usa la hora actual; sin zona horaria se toma como hora de Ecuador.
+- `ivaAmount` es opcional (por defecto 0): la parte de `total` que es IVA. `total` es lo pagado, **con** IVA,
+  y es lo que cuenta en el dashboard. `ivaAmount` mayor que `total` → `422`, también al editar.
 - Categoría o proveedor que no son de la empresa → `422 CATEGORY_NOT_FOUND` / `422 SUPPLIER_NOT_FOUND`.
 
 **Compra que suma inventario (RF-4.4).** Por ejemplo, "Compré 5 frascos por $12,50": el mismo
@@ -518,14 +520,13 @@ Objeto `Expense`:
 {
   "id": 12, "date": "2026-11-20T10:30:00-05:00", "categoryId": 3, "categoryName": "Servicios",
   "supplierId": 4, "supplierName": "Corporación Favorita", "supplierIdentification": "1790016919001",
-  "total": 25.5, "description": "Pago de internet", "paymentMethod": "transferencia",
+  "total": 25.5, "ivaAmount": 3.33, "description": "Pago de internet", "paymentMethod": "transferencia",
   "receiptNumber": "001-001-000000123", "status": "confirmado", "source": "manual"
 }
 ```
 
 - `source`: `manual` o `correo` (cuando lo lea el worker desde una factura recibida, RF-3.2).
-- La base todavía no guarda el IVA del gasto por separado: el `ivaAmount` del frontend no tiene dónde
-  guardarse (pendiente con Ariana).
+- `ivaAmount`: IVA incluido en el total (columna `gasto.iva`; los gastos anteriores quedan en 0).
 
 ## 12. Inventario: historial, entradas, salidas y ajustes
 

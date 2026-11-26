@@ -235,6 +235,7 @@ def _a_gasto(gasto: Gasto, categoria: CategoriaGasto, proveedor: Proveedor | Non
         supplier_name=proveedor.razon_social if proveedor else None,
         supplier_identification=proveedor.ruc_identificacion if proveedor else None,
         total=gasto.monto,
+        iva_amount=gasto.iva,
         description=gasto.concepto,
         payment_method=gasto.metodo_pago.lower(),
         receipt_number=gasto.numero_comprobante,
@@ -306,6 +307,7 @@ class GastoService:
             id_proveedor=datos.supplier_id,
             id_usuario=id_usuario,
             monto=datos.total,
+            iva=datos.iva_amount,
             fecha=_en_ecuador(datos.date),
             concepto=datos.description,
             metodo_pago=datos.payment_method.upper(),
@@ -360,6 +362,7 @@ class GastoService:
             {
                 "category_id": "categoryId",
                 "total": "total",
+                "iva_amount": "ivaAmount",
                 "description": "description",
                 "payment_method": "paymentMethod",
                 "date": "date",
@@ -370,6 +373,7 @@ class GastoService:
             "category_id": ("id_categoria_gasto", lambda v: v),
             "supplier_id": ("id_proveedor", lambda v: v),
             "total": ("monto", lambda v: v),
+            "iva_amount": ("iva", lambda v: v),
             "description": ("concepto", lambda v: v),
             "payment_method": ("metodo_pago", lambda v: v.upper()),
             "date": ("fecha", _en_ecuador),
@@ -378,6 +382,9 @@ class GastoService:
         for campo, valor in cambios.items():
             columna, convertir = columnas[campo]
             setattr(gasto, columna, convertir(valor) if valor is not None else None)
+        if gasto.iva > gasto.monto:  # p. ej. se bajó el total sin bajar el IVA
+            self._db.rollback()
+            raise _error("ivaAmount", "El IVA no puede ser mayor que el total.")
         self._db.commit()
         return self.obtener(id_gasto)
 

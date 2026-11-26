@@ -1,9 +1,10 @@
 """Datos de entrada y salida de gastos, sus categorías y proveedores (docs/API.md, sección 11)."""
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import Field, StringConstraints
+from pydantic import Field, StringConstraints, model_validator
 
 from app.schemas.common import (
     Amount,
@@ -84,7 +85,8 @@ class ExpenseItem(ApiInput):
 class ExpenseCreate(ApiInput):
     category_id: int = Field(gt=0)
     supplier_id: int | None = Field(default=None, gt=0)
-    total: PositiveAmount
+    total: PositiveAmount  # lo pagado, con IVA
+    iva_amount: Amount = Decimal("0")  # parte del total que es IVA
     description: Text1000
     payment_method: ExpensePaymentMethod
     date: datetime | None = None  # por defecto, ahora
@@ -92,11 +94,18 @@ class ExpenseCreate(ApiInput):
     # Compra de mercadería: el gasto y el aumento de stock se guardan juntos.
     items: list[ExpenseItem] = Field(default_factory=list, max_length=100)
 
+    @model_validator(mode="after")
+    def _iva_dentro_del_total(self):
+        if self.iva_amount > self.total:
+            raise ValueError("El IVA no puede ser mayor que el total.")
+        return self
+
 
 class ExpenseUpdate(ApiInput):
     category_id: int | None = Field(default=None, gt=0)
     supplier_id: int | None = Field(default=None, gt=0)
     total: PositiveAmount | None = None
+    iva_amount: Amount | None = None
     description: Text1000 | None = None
     payment_method: ExpensePaymentMethod | None = None
     date: datetime | None = None
@@ -112,6 +121,7 @@ class Expense(ApiModel):
     supplier_name: str | None
     supplier_identification: str | None
     total: Amount
+    iva_amount: Amount
     description: str
     payment_method: ExpensePaymentMethod
     receipt_number: str | None

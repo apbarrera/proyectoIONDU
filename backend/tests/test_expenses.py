@@ -377,3 +377,25 @@ def test_no_se_anula_una_compra_ya_vendida(client, empresas, usuario):
     assert _stock_y_costo(client, a, frasco)[0] == 1
     estado = client.get(f"/api/expenses/{gasto['id']}", headers=_h(a)).json()["status"]
     assert estado == "confirmado"
+
+
+# ---------- IVA del gasto ----------
+def test_el_iva_del_gasto_se_guarda_por_separado(client, empresas, usuario):
+    a, _ = empresas
+    categoria = _categoria(client, a)
+    sin_iva = _gasto(client, usuario, categoria).json()
+    assert sin_iva["ivaAmount"] == 0
+
+    gasto = _gasto(client, usuario, categoria, total=23, ivaAmount=3).json()
+    assert (gasto["total"], gasto["ivaAmount"]) == (23, 3)
+    url = f"/api/expenses/{gasto['id']}"
+    assert client.get(url, headers=_h(a)).json()["ivaAmount"] == 3
+
+    editado = client.patch(url, json={"ivaAmount": 2.5}, headers=con_token(usuario))
+    assert (editado.status_code, editado.json()["ivaAmount"]) == (200, 2.5)
+    # El IVA es parte del total: nunca puede superarlo, ni al crear ni al editar.
+    assert _gasto(client, usuario, categoria, total=10, ivaAmount=11).status_code == 422
+    assert _gasto(client, usuario, categoria, ivaAmount=-1).status_code == 422
+    bajar_total = client.patch(url, json={"total": 2}, headers=con_token(usuario))
+    assert bajar_total.status_code == 422
+    assert client.get(url, headers=_h(a)).json()["total"] == 23

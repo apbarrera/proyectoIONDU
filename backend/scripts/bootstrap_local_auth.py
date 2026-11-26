@@ -1,7 +1,9 @@
 """Inicializa el esquema auth mínimo para desarrollo local.
 
-No sustituye Supabase Auth. No debe ejecutarse en producción.
-Solo permite crear auth.users(id UUID) en localhost, base iondu.
+La primera migración (heredada de Supabase) crea una FK hacia auth.users; en una base
+PostgreSQL nueva esa tabla no existe. Este marcador solo permite aplicar esa migración:
+la migración e5b1c7a9d203 mueve la FK a la tabla propia `usuario`, y desde ahí auth.users
+ya no se usa. No debe ejecutarse en producción. Solo actúa sobre localhost, base iondu.
 """
 
 import sys
@@ -65,7 +67,7 @@ def main() -> None:
                 )
 
         print("OK: esquema auth local disponible y auth.users.id es UUID NOT NULL.")
-        print("Nota: esta tabla auxiliar no implementa autenticación ni reemplaza Supabase Auth.")
+        print("Nota: solo es un marcador para la primera migración; los usuarios van en `usuario`.")
     finally:
         engine.dispose()
 

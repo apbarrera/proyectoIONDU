@@ -30,6 +30,7 @@ COPY pyproject.toml alembic.ini ./
 COPY app ./app
 COPY alembic ./alembic
 COPY tests ./tests
+COPY scripts ./scripts
 RUN ruff check . && ruff format --check .
 RUN python -m pytest -q
 
@@ -55,6 +56,8 @@ COPY --chown=app:app app ./app
 # Alembic se ejecuta desde un entorno administrativo separado, nunca desde API o worker.
 COPY --chown=app:app alembic.ini ./
 COPY --chown=app:app alembic ./alembic
+# Tareas administrativas: docker compose exec api python -m scripts.<nombre>
+COPY --chown=app:app scripts ./scripts
 
 USER app
 EXPOSE 8000

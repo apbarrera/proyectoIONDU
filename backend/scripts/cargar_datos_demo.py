@@ -10,7 +10,10 @@ Uso (con Docker encendido), desde backend/:
     $env:APP_ENV = "development"
     .venv\\Scripts\\python.exe -m scripts.cargar_datos_demo
 
-En Swagger (/api/docs) se usa con los encabezados X-Empresa-Id y X-Usuario-Id que imprime.
+Si se define DEMO_PASSWORD (mínimo 10 caracteres), los dos usuarios demo pueden iniciar
+sesión en el frontend con esa contraseña; si no, se les asigna después con
+scripts/crear_usuario.py. En Swagger (/api/docs) también sirven los encabezados
+X-Empresa-Id y X-Usuario-Id que imprime.
 Solo funciona contra la base `iondu` de esta computadora y no se puede repetir: si la
 empresa ya tiene productos, no hace nada.
 """
@@ -27,6 +30,8 @@ from sqlalchemy.engine import make_url
 
 ADMIN_DEMO = uuid.UUID("11111111-1111-1111-1111-111111111111")
 OPERADOR_DEMO = uuid.UUID("22222222-2222-2222-2222-222222222222")
+CORREO_ADMIN_DEMO = "admin@demo.iondu.ec"
+CORREO_OPERADOR_DEMO = "operador@demo.iondu.ec"
 RUC_EMPRESA = "1790016919001"
 SERVIDORES_LOCALES = {"127.0.0.1", "localhost", "db"}
 ZONA = ZoneInfo("America/Guayaquil")
@@ -65,8 +70,8 @@ def _validar_destino() -> None:
 
 def _preparar_usuarios(db) -> int:
     """Roles, empresa demo y los dos usuarios demo con su pertenencia."""
-    from app.db.base import auth_users
-    from app.models import Empresa, Rol, UsuarioEmpresa
+    from app.core import contrasenas
+    from app.models import Empresa, Rol, Usuario, UsuarioEmpresa
     from app.models.rol import ADMINISTRADOR, OPERATIVO
 
     roles = {r.nombre: r.id_rol for r in db.scalars(select(Rol))}
@@ -88,12 +93,25 @@ def _preparar_usuarios(db) -> int:
         db.add(empresa)
         db.flush()
 
-    for usuario, rol, nombre in (
-        (ADMIN_DEMO, ADMINISTRADOR, "Admin Demo"),
-        (OPERADOR_DEMO, OPERATIVO, "Operador Demo"),
+    clave_demo = os.environ.get("DEMO_PASSWORD")
+    if clave_demo:
+        try:
+            contrasenas.validar_nueva(clave_demo)
+        except ValueError as exc:
+            sys.exit(f"DEMO_PASSWORD: {exc}")
+    for usuario, correo, rol, nombre in (
+        (ADMIN_DEMO, CORREO_ADMIN_DEMO, ADMINISTRADOR, "Admin Demo"),
+        (OPERADOR_DEMO, CORREO_OPERADOR_DEMO, OPERATIVO, "Operador Demo"),
     ):
-        if db.scalar(select(auth_users.c.id).where(auth_users.c.id == usuario)) is None:
-            db.execute(auth_users.insert().values(id=usuario))
+        cuenta = db.get(Usuario, usuario)
+        if cuenta is None:
+            cuenta = Usuario(id=usuario, email=correo, password_hash="!")
+            db.add(cuenta)
+        elif cuenta.email.endswith("@pendiente.invalid"):  # migrado desde auth.users
+            cuenta.email = correo
+        if clave_demo:
+            cuenta.password_hash = contrasenas.hashear(clave_demo)
+        db.flush()
         if db.get(UsuarioEmpresa, (usuario, empresa.id_empresa)) is None:
             db.add(
                 UsuarioEmpresa(
@@ -306,6 +324,10 @@ def main() -> None:
 
 
 def _imprimir_ayuda(id_empresa: int) -> None:
+    if os.environ.get("DEMO_PASSWORD"):
+        print("\nInicio de sesión (contraseña: la de DEMO_PASSWORD):")
+        print(f"  {CORREO_ADMIN_DEMO}   (Administrador)")
+        print(f"  {CORREO_OPERADOR_DEMO}   (Operativo)")
     print("\nEn Swagger (http://localhost:8080/api/docs) usa estos encabezados:")
     print(f"  X-Empresa-Id: {id_empresa}")
     print(f"  X-Usuario-Id: {ADMIN_DEMO}   (Admin Demo, Administrador)")

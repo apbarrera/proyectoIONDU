@@ -19,7 +19,8 @@ PWA para PyMEs ecuatorianas: facturación electrónica, ventas, gastos, inventar
 cp .env.example .env
 # Completar en .env: POSTGRES_PASSWORD, APP_ENV=development, las tres conexiones
 # (DATABASE_URL, WORKER_DATABASE_URL, MIGRATION_DATABASE_URL; ver la nota en .env.example)
-# y DEV_USER_ID=11111111-1111-1111-1111-111111111111
+# DEV_USER_ID=11111111-1111-1111-1111-111111111111 y AUTH_JWT_PRIVATE_KEY, que se genera con:
+#   docker compose run --rm --no-deps api python -m scripts.generar_llave_jwt
 docker compose up --build
 # abrir http://localhost:8080 (API interactiva en http://localhost:8080/api/docs)
 ```
@@ -31,9 +32,17 @@ está en `127.0.0.1:15432`, así que las conexiones se pasan con ese host en vez
 $env:DATABASE_URL = "postgresql+psycopg://iondu:<POSTGRES_PASSWORD>@127.0.0.1:15432/iondu"
 $env:MIGRATION_DATABASE_URL = $env:DATABASE_URL; $env:WORKER_DATABASE_URL = $env:DATABASE_URL
 $env:APP_ENV = "development"
-.venv\Scripts\python.exe scripts\bootstrap_local_auth.py   # auth.users local (en vez de Supabase)
+.venv\Scripts\python.exe scripts\bootstrap_local_auth.py   # solo en una base nueva (marcador para la 1.ª migración)
 .venv\Scripts\alembic.exe upgrade head                     # crea el esquema completo
+$env:DEMO_PASSWORD = "<mínimo 10 caracteres>"
 .venv\Scripts\python.exe -m scripts.cargar_datos_demo      # cafetería demo con un mes de datos
+```
+
+Inicio de sesión: `admin@demo.iondu.ec` (Administrador) u `operador@demo.iondu.ec` (Operativo), con la
+contraseña de `DEMO_PASSWORD`. Para crear usuarios o cambiar contraseñas:
+
+```powershell
+docker compose exec api python -m scripts.crear_usuario --email ana@empresa.ec --nombre "Ana Torres" --rol Operativo
 ```
 
 ## Pruebas del backend

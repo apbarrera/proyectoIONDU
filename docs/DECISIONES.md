@@ -98,22 +98,37 @@
   salir por IPv4. Con el Transaction Pooler (6543) hay que desactivar los *prepared statements*.
 - La región de Supabase debe estar cerca del VPS para no sumar latencia.
 
-### 2.3 Autenticación: Supabase Auth
-- **Decisión:** Supabase Auth para la identidad; una tabla propia `usuario_empresa (id_usuario UUID, id_empresa, id_rol, …)`
-  para el tenant y los permisos.
-- **Por qué:** el presupuesto ya incluía Supabase Auth, pero el diagrama de login usaba contraseñas propias con IDs
-  enteros. Supabase identifica a los usuarios con UUID y guarda sus propias contraseñas; no se duplican.
-- **Verificación del token en el backend (27/10/2026):** `app/core/seguridad.py` valida el JWT con **PyJWT** y las
-  llaves públicas que publica Supabase (`/auth/v1/.well-known/jwks.json`, guardadas en memoria 10 minutos).
-  - Solo se aceptan los algoritmos asimétricos `ES256` y `RS256`: bloquea el token sin firma (`alg: none`) y la
-    confusión de algoritmos (usar la llave pública como secreto de `HS256`); hay pruebas de ambos ataques.
-  - Se exige vencimiento (`exp`, con 30 s de margen por diferencias de reloj), emisor (`iss`) de nuestro proyecto,
-    audiencia `authenticated` (no la llave anónima) y el id del usuario (`sub`) como UUID.
-  - Token vencido: `401 TOKEN_EXPIRED` (el frontend renueva la sesión). Si Supabase no responde al pedir las
-    llaves: `503 AUTH_UNAVAILABLE`.
-  - `GET /api/me` devuelve el usuario del token, para comprobar el login de punta a punta.
-  - **Pendiente:** obtener la empresa y el rol del usuario desde `usuario_empresa` (esquema de Ariana); mientras
-    tanto, la empresa sigue saliendo del encabezado provisional (decisión 2.14).
+### 2.3 Autenticación propia (reemplaza a Supabase Auth)
+- **Decisión (25/11/2026):** la identidad la gestiona el backend. Tabla `usuario` (correo único en minúsculas, hash
+  argon2id, bloqueo por intentos) y `sesion_refresh` (hash SHA-256 de cada token de renovación). `usuario_empresa`
+  sigue guardando empresa, rol y estado; su FK apunta ahora a `usuario.id` (migración `e5b1c7a9d203`, que conserva
+  los UUID de los usuarios existentes).
+- **Por qué:** permite levantar y probar todo el sistema en local sin un proyecto de Supabase, quita una dependencia
+  externa del login y deja el control de la sesión (bloqueo, revocación) en el backend. La base de datos y Storage
+  pueden seguir en Supabase: solo cambia la autenticación.
+- **Antes (27/10/2026 a 25/11/2026):** Supabase Auth, con el JWT verificado por las llaves públicas de Supabase
+  (JWKS). Se retiró junto con `@supabase/auth-js` del frontend.
+- **Tokens:**
+  - **Acceso:** JWT `ES256` firmado con `AUTH_JWT_PRIVATE_KEY` (EC P-256; solo la API la tiene, el worker no),
+    15 minutos (`AUTH_ACCESS_TOKEN_MINUTES`), `iss=iondu`, `aud=iondu-api`, 30 s de margen de reloj. Solo se acepta
+    `ES256`: bloquea el token sin firma (`alg: none`) y la confusión con `HS256`; hay pruebas de ambos ataques.
+  - **Renovación:** valor aleatorio de 32 bytes en la cookie `iondu_refresh` (`HttpOnly`, `SameSite=Strict`,
+    `Path=/api/auth`, `Secure` fuera de desarrollo), 7 días (`AUTH_REFRESH_TOKEN_DAYS`). Se rota en cada uso; si
+    llega uno ya rotado después de 30 s de gracia, alguien lo copió y se cierran todas las sesiones del usuario.
+  - La llave se genera con `python -m scripts.generar_llave_jwt`; cada ambiente tiene la suya y cambiarla cierra
+    todas las sesiones.
+- **Contraseñas:** argon2id (parámetros por defecto de `argon2-cffi`), mínimo 10 caracteres. Tras 5 intentos
+  fallidos, la cuenta se bloquea 15 minutos. El mensaje es el mismo exista o no el correo, y se calcula un hash
+  ficticio para que el tiempo de respuesta no lo delate.
+- **Permisos en la base:** `iondu_app` lee `usuario` y solo modifica `password_hash`, `intentos_fallidos` y
+  `bloqueado_hasta`; en `sesion_refresh` lee, inserta, borra y solo modifica `rotada_en` y `revocada_en`. Estas
+  tablas no usan RLS por empresa porque el login busca al usuario antes de saber quién es. El worker no tiene
+  acceso. Crear usuarios exige la credencial de migraciones (`scripts/crear_usuario.py`).
+- **Frontend:** el token de acceso vive solo en memoria (nunca en `localStorage`); al recargar la página, la sesión
+  se recupera con la cookie. El interceptor renueva el token si está por vencer o si recibe `401 TOKEN_EXPIRED` y
+  repite la petición una vez; si no puede renovarlo, cierra la sesión y lleva al login.
+- **Pendiente:** limitar intentos por IP en Nginx (hoy el bloqueo es por cuenta), gestión de usuarios desde la
+  aplicación y "olvidé mi contraseña" (requiere enviar correos).
 
 ### 2.4 Multi-tenant: filtro por `id_empresa` **y** RLS
 - **Decisión:** todo endpoint y consulta filtra estrictamente por `id_empresa`, y además se activa **Row Level

@@ -1,6 +1,6 @@
 # IONDU · Estado del proyecto y siguientes pasos
 
-> Resumen de traspaso. Última actualización: 24 de noviembre de 2026 (todo el frontend que tiene backend ya usa la API; ver "Frontend: conexión con la API").
+> Resumen de traspaso. Última actualización: 25 de noviembre de 2026 (inicio de sesión propio: el sistema completo corre en local sin Supabase Auth).
 > Documentos relacionados: [`DECISIONES.md`](DECISIONES.md) (el porqué de cada decisión) · [`REQUISITOS.md`](REQUISITOS.md) · [`PRESUPUESTO.md`](PRESUPUESTO.md) · [`DESPLIEGUE.md`](DESPLIEGUE.md) · [`CORRECCIONES_PDF.md`](CORRECCIONES_PDF.md)
 
 ## 1. Qué está hecho
@@ -14,16 +14,18 @@
 - Corregido: `api` y `worker` compartían nombre de imagen y la construcción fallaba a veces con `image ... already exists`.
 - `CLAUDE.md` con las reglas del proyecto y el formato obligatorio de commits.
 
-### Backend: sesión con Supabase Auth (verificación del token)
-- `app/core/seguridad.py`: verifica el JWT de Supabase (firma con sus llaves públicas, algoritmo, vencimiento,
-  proyecto y audiencia) y bloquea los ataques `alg: none` y confusión con `HS256` (`DECISIONES.md` 2.3).
+### Backend: inicio de sesión propio
+- `POST /api/auth/login`, `/refresh` y `/logout` (25/11/2026, `DECISIONES.md` 2.3): contraseñas con argon2id,
+  bloqueo tras 5 intentos, token de acceso `ES256` de 15 minutos firmado por la API y token de renovación rotativo
+  en cookie `HttpOnly`. Reemplaza a Supabase Auth; el frontend ya no depende de Supabase para entrar.
+- `app/core/seguridad.py` verifica el token (firma, algoritmo, vencimiento, emisor y audiencia) y bloquea los
+  ataques `alg: none` y confusión con `HS256`.
 - **Empresa y rol desde el token** (`app/api/deps.py`): se buscan en `usuario_empresa`. Un usuario puede tener
   **varias empresas**: con una sola se usa esa; con varias, el frontend elige con `X-Empresa-Id` y el backend
   comprueba la pertenencia. Sin token, `X-Empresa-Id` solo vale en desarrollo. Permiso `SoloAdministrador` para
   lo exclusivo del Administrador (`DECISIONES.md` 2.14).
 - `GET /api/me/companies` (selector de empresa) y `GET /api/me` (perfil con los campos de `User` del frontend);
-  flujo completo en [`API.md`](API.md), sección 5. Probado con llaves generadas en las pruebas; con Supabase real
-  solo hace falta `SUPABASE_URL`.
+  flujo completo en [`API.md`](API.md), sección 5.
 - `PUT /api/company/certificate` (Ariana): el Administrador sube el `.p12`, que se guarda cifrado (`API.md` 6).
 
 ### Backend: ventas (fase 1)
@@ -160,7 +162,7 @@ Estado por módulo (24/11/2026). Un servicio "real" usa `HttpClient` contra `/ap
 | Módulo (requisitos) | Avance | Hecho | Falta |
 |---|---|---|---|
 | Infraestructura | 90 % | Docker, base local, migraciones, CI, errores, Ruff | Desplegar en el VPS |
-| 1. Usuarios, roles y empresa | 70 % | Token de Supabase, varias empresas por usuario y selector, rol y permiso de Administrador, `/api/me`, subir el certificado, datos y configuración de facturación de la empresa | Gestión de usuarios |
+| 1. Usuarios, roles y empresa | 75 % | Inicio de sesión propio, varias empresas por usuario y selector, rol y permiso de Administrador, `/api/me`, subir el certificado, datos y configuración de facturación de la empresa | Gestión de usuarios |
 | 2. Facturación y ventas | 85 % | Identificación, clave de acceso, totales e IVA, XML validado, RIDE, cliente del SRI, flujo de emisión, cifrado del `.p12` y firma XAdES-BES, clientes, registrar ventas, facturar la venta y descargar el RIDE | Reintentos del worker, anular ventas, prueba real con el SRI (`.p12`) |
 | 3. Gastos | 60 % | Categorías (7 predefinidas y propias), proveedores con RUC/cédula validados, registrar, filtrar y editar gastos | Lectura de facturas por correo (IMAP), anular gastos |
 | 4. Productos e inventario | 80 % | Categorías, productos (activar/desactivar, filtro de stock bajo), movimientos por venta, entradas y salidas manuales, ajustes del Administrador, historial con stock resultante | Compra que suma inventario (RF-4.4), recetas y producción |
@@ -286,13 +288,13 @@ Detectados al conectar Ventas y Facturación (24/11/2026). Cada uno bloquea una 
 
 **Probar todo el sistema en local (frontend contra el backend real):**
 1. Node 22.22.3 o superior, 24.15 o superior, o 26 (el Angular CLI no corre con menos). Luego `cd frontend && npm ci && npx ng test --no-watch`.
-2. Con Docker encendido: copiar `.env.example` a `.env` y completar `POSTGRES_PASSWORD`, `APP_ENV=development`, las tres conexiones y `DEV_USER_ID=11111111-1111-1111-1111-111111111111`. Luego `docker compose up --build -d`.
-3. Preparar la base (desde `backend/`, con las variables de conexión del README): `scripts\bootstrap_local_auth.py`, `alembic upgrade head` y `python -m scripts.cargar_datos_demo` (cafetería con un mes de ventas).
-4. El login usa **Supabase real** (el `.env` del frontend apunta a su proyecto), no usuarios de ejemplo. La base local no conoce a ese usuario: tras entrar la API responde `NO_COMPANY`. Se soluciona con `python -m scripts.asignar_usuario_local --usuario <uuid de Supabase> --nombre "Nombre" [--rol Operativo]`. Para probar el rol Operativo hay que repetirlo con otro usuario.
+2. Con Docker encendido: copiar `.env.example` a `.env` y completar `POSTGRES_PASSWORD`, `APP_ENV=development`, las tres conexiones, `DEV_USER_ID=11111111-1111-1111-1111-111111111111` y `AUTH_JWT_PRIVATE_KEY` (generarla con `docker compose run --rm --no-deps api python -m scripts.generar_llave_jwt`). Luego `docker compose up --build -d`.
+3. Preparar la base (desde `backend/`, con las variables de conexión del README): `scripts\bootstrap_local_auth.py` (solo en una base nueva: la primera migración aún espera `auth.users`), `alembic upgrade head` y `python -m scripts.cargar_datos_demo` con `DEMO_PASSWORD` definida (cafetería con un mes de ventas y usuarios demo con contraseña).
+4. Entrar con `admin@demo.iondu.ec` (Administrador) u `operador@demo.iondu.ec` (Operativo) y la contraseña de `DEMO_PASSWORD`. Para crear otro usuario o cambiar una contraseña: `docker compose exec api python -m scripts.crear_usuario --email <correo> --nombre "Nombre" [--empresa 1] [--rol Operativo]` (pide la contraseña sin mostrarla).
 5. Abrir http://localhost:8080 y recorrer: venta con cliente nuevo y con consumidor final (baja el stock), emitir factura (sin `.p12` debe dar un error claro), entrada, salida y ajuste de inventario, gasto con y sin proveedor, dashboard con distintos períodos, y configuración de la empresa. Con el Operativo, Dashboard, Recomendaciones, Ajustes y Empresa deben responder 403.
 6. Para separar fallos del frontend de los del backend, probar la API sola en http://localhost:8080/api/docs con los encabezados `X-Empresa-Id` y `X-Usuario-Id`.
 
-Ya no existen los usuarios de ejemplo `admin@iondu.demo` y `operador@iondu.demo`: el login simulado se reemplazó por Supabase Auth.
+Ya no existen los usuarios de ejemplo `admin@iondu.demo` y `operador@iondu.demo` ni `scripts/asignar_usuario_local.py`: el login usa los usuarios de la tabla `usuario`.
 
 ## 4. Cosas a tener en cuenta
 - El contenedor en `localhost:8080` usa la imagen que se construyó la última vez; se actualiza con `docker compose up -d --build`.

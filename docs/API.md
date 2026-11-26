@@ -137,15 +137,32 @@ No hay `DELETE`: un producto con ventas o movimientos no se puede borrar sin rom
 
 ## 5. Sesión
 
-El frontend inicia sesión con Supabase Auth y envía su `access_token` en cada petición:
-`Authorization: Bearer <token>`. El backend verifica la firma (llaves públicas de Supabase), el vencimiento, el
-proyecto (`iss`) y que sea de un usuario autenticado (`aud`). Luego busca su empresa y su rol en `usuario_empresa`
-(solo usuarios con estado `ACTIVO`).
+El backend gestiona el inicio de sesión (`DECISIONES.md` 2.3). El login entrega un **token de acceso** (JWT de
+15 minutos) que el frontend guarda en memoria y envía en cada petición: `Authorization: Bearer <token>`. La sesión
+se mantiene con una **cookie de renovación** (`iondu_refresh`, `HttpOnly`) que el navegador envía solo a
+`/api/auth`. Con el token, el backend busca la empresa y el rol del usuario en `usuario_empresa` (solo pertenencias
+`ACTIVO`).
 
 | Estado | Método y ruta | Qué hace | Respuesta |
 |---|---|---|---|
+| ✅ | `POST /api/auth/login` | Cuerpo `{ "email", "password" }`. Verifica la contraseña y crea la sesión | `200` con `AuthToken` y la cookie |
+| ✅ | `POST /api/auth/refresh` | Con la cookie: entrega un token nuevo y rota la cookie. Sirve también para recuperar la sesión al recargar la página | `200` con `AuthToken` y la cookie nueva |
+| ✅ | `POST /api/auth/logout` | Revoca la cookie de renovación y la borra. Sin cookie no falla | `204` |
 | ✅ | `GET /api/me/companies` | Empresas activas del usuario, con su rol en cada una. **No** exige haber elegido empresa: sirve para mostrar el selector | `200` con `CompanyOption[]` |
 | ✅ | `GET /api/me` | Perfil del usuario en la empresa de la petición. Sirve para comprobar que el login funciona de punta a punta | `200` con `Me` |
+
+Objeto `AuthToken`:
+
+```json
+{
+  "accessToken": "eyJhbGciOiJFUzI1NiIs…",
+  "tokenType": "Bearer",
+  "expiresIn": 900,
+  "user": { "id": "6f1c2a1e-…", "email": "ana@empresa.ec", "createdAt": "2026-11-25T23:04:55-05:00" }
+}
+```
+
+`expiresIn` está en segundos. Las respuestas de `/api/auth` llevan `Cache-Control: no-store`.
 
 Objeto `Me` (mismos campos que `User` del frontend, `core/models/user.model.ts`):
 
@@ -170,23 +187,29 @@ Objeto `CompanyOption`:
 
 **Flujo de inicio de sesión:**
 
-1. Login con Supabase Auth (`signInWithPassword`).
-2. `GET /api/me/companies`. Si devuelve **una** empresa, se usa esa. Si devuelve **varias**, se muestra el
+1. Al abrir la app, `POST /api/auth/refresh`: si hay cookie válida se recupera la sesión; si responde `401`, se
+   muestra el login.
+2. Login con `POST /api/auth/login`.
+3. `GET /api/me/companies`. Si devuelve **una** empresa, se usa esa. Si devuelve **varias**, se muestra el
    selector y desde ahí toda petición lleva `X-Empresa-Id: <id elegido>` (se puede cambiar de empresa en cualquier
    momento). Si devuelve **ninguna**, mostrar "tu usuario no tiene acceso".
-3. `GET /api/me` (con `X-Empresa-Id` si corresponde) para el perfil y el rol en esa empresa.
+4. `GET /api/me` (con `X-Empresa-Id` si corresponde) para el perfil y el rol en esa empresa.
+5. Al cerrar sesión, `POST /api/auth/logout`.
 
 Errores de sesión:
 
 | HTTP | `code` | Cuándo | Qué hacer en el frontend |
 |---|---|---|---|
-| 401 | `UNAUTHENTICATED` | Sin token, token inválido o de otro proyecto | Ir al login |
-| 401 | `TOKEN_EXPIRED` | El token venció | Renovar la sesión con Supabase (`refreshSession`) y reintentar; si falla, ir al login |
+| 401 | `INVALID_CREDENTIALS` | Correo o contraseña incorrectos, cuenta sin contraseña o desactivada (mismo mensaje en todos los casos) | Mostrar el mensaje en el login |
+| 429 | `TOO_MANY_ATTEMPTS` | La cuenta está bloqueada 15 minutos tras 5 intentos fallidos | Mostrar el mensaje en el login |
+| 401 | `SESSION_INVALID` | Cookie de renovación ausente, vencida, revocada o reutilizada | Ir al login |
+| 401 | `UNAUTHENTICATED` | Sin token o token inválido | Ir al login |
+| 401 | `TOKEN_EXPIRED` | El token de acceso venció | Renovar con `POST /api/auth/refresh` y repetir la petición; si falla, ir al login |
 | 403 | `NO_COMPANY` | El usuario no tiene empresa asignada o está inactivo | Mostrar "tu usuario no tiene acceso; contacta al administrador" |
 | 403 | `COMPANY_ACCESS_DENIED` | `X-Empresa-Id` es de una empresa a la que el usuario no pertenece (o su pertenencia está inactiva) | Volver al selector de empresa |
 | 403 | `FORBIDDEN` | Su rol no permite esa acción (por ejemplo, el dashboard es solo para Administrador) | Ocultar o bloquear esa opción |
 | 409 | `COMPANY_SELECTION_REQUIRED` | El usuario tiene varias empresas y no envió `X-Empresa-Id` | Mostrar el selector de empresa |
-| 503 | `AUTH_UNAVAILABLE` | No se pudieron obtener las llaves de Supabase | Mostrar "intenta en un momento" |
+| 503 | `AUTH_NOT_CONFIGURED` | Falta `AUTH_JWT_PRIVATE_KEY` en el servidor | Mostrar "intenta en un momento" |
 
 ## 6. Certificado de firma electrónica de la empresa
 

@@ -49,6 +49,7 @@ interface AiActionDto {
   status: AiInteractionResult;
   expenseId: number | null;
   movementId: number | null;
+  inputType?: AiInputType;
 }
 
 /**
@@ -73,15 +74,43 @@ export class AiAgentService {
       { id: generateId(), role: 'user', content: text, attachments, timestamp: new Date().toISOString() },
     ]);
 
-    if (inputType !== 'texto') {
+    if (inputType === 'voz') {
       return of(
         this.#reply(
-          'Por ahora el agente entiende solo texto. Escribe el gasto, por ejemplo: "Gasté $25 en empaques".',
+          'Por ahora el agente entiende texto e imágenes. Escribe el gasto, por ejemplo: "Gasté $25 en empaques".',
         ),
       );
     }
 
-    return this.http.post<AiReplyDto>(`${this.baseUrl}/messages`, { text }).pipe(
+    return this.#handleReply(this.http.post<AiReplyDto>(`${this.baseUrl}/messages`, { text }), text, inputType);
+  }
+
+  /**
+   * Envía la foto de una factura, ticket o guía (RF-6.3). `caption` es el texto opcional
+   * que la acompaña. El servidor la reduce y no la guarda.
+   */
+  sendImage(file: File, caption = ''): Observable<AiMessage> {
+    const text = caption.trim();
+    this.#messages.update((list) => [
+      ...list,
+      {
+        id: generateId(),
+        role: 'user',
+        content: text || file.name,
+        attachments: [{ type: 'image', url: URL.createObjectURL(file), name: file.name }],
+        timestamp: new Date().toISOString(),
+      },
+    ]);
+
+    const form = new FormData();
+    form.append('image', file, file.name);
+    if (text) form.append('text', text);
+    const instruction = text ? `[Imagen] ${text}` : '[Imagen]';
+    return this.#handleReply(this.http.post<AiReplyDto>(`${this.baseUrl}/images`, form), instruction, 'imagen');
+  }
+
+  #handleReply(request: Observable<AiReplyDto>, text: string, inputType: AiInputType): Observable<AiMessage> {
+    return request.pipe(
       map((dto) => {
         let interactionId: string | undefined;
         if (dto.actionId !== null && dto.proposal) {
@@ -136,7 +165,7 @@ export class AiAgentService {
           userId: '',
           userName: dto.userName,
           timestamp: dto.timestamp,
-          inputType: 'texto' as AiInputType,
+          inputType: dto.inputType ?? 'texto',
           instruction: dto.instruction,
           interpretedData: dto.proposal?.summary ?? dto.reply,
           proposal: dto.proposal ? toProposal(String(dto.id), dto.proposal) : null,

@@ -33,11 +33,17 @@ export class AiChat {
     this.aiAgent.send(text).subscribe(() => this.sending.set(false));
   }
 
+  /** Envía la foto; lo escrito en el cuadro de texto la acompaña como indicación. */
   uploadImage(event: Event): void {
-    const file = (event.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    this.aiAgent.send(`Imagen: ${file.name}`, 'imagen', [{ type: 'image', url, name: file.name }]).subscribe();
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // permite volver a elegir la misma foto
+    if (!file || this.sending()) return;
+
+    this.sending.set(true);
+    const caption = this.draft();
+    this.draft.set('');
+    this.aiAgent.sendImage(file, caption).subscribe(() => this.sending.set(false));
   }
 
   toggleRecording(): void {

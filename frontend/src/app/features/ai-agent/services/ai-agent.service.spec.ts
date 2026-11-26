@@ -60,10 +60,36 @@ describe('AiAgentService', () => {
     expect(service.messages()[1].content).toBe('El agente de IA no está configurado.');
   });
 
-  it('imagen y voz todavía no se envían al modelo', () => {
+  it('la voz todavía no se envía al modelo', () => {
     service.send('Mensaje de voz', 'voz').subscribe();
     http.expectNone('/api/ai/messages');
-    expect(service.messages()[1].content).toContain('solo texto');
+    expect(service.messages()[1].content).toContain('texto e imágenes');
+  });
+
+  it('una foto se envía como formulario con su indicación', () => {
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff])], 'ticket.jpg', { type: 'image/jpeg' });
+    service.sendImage(file, '  Compra de fundas ').subscribe();
+
+    const request = http.expectOne({ method: 'POST', url: '/api/ai/images' });
+    const body = request.request.body as FormData;
+    expect((body.get('image') as File).name).toBe('ticket.jpg');
+    expect(body.get('text')).toBe('Compra de fundas');
+    request.flush({ actionId: 31, reply: 'Te propongo registrar…', proposal: PROPOSAL });
+
+    const [user, assistant] = service.messages();
+    expect(user.attachments?.[0]).toMatchObject({ type: 'image', name: 'ticket.jpg' });
+    expect(assistant.interactionId).toBe('31');
+    expect(service.interactions()[0]).toMatchObject({ inputType: 'imagen', instruction: '[Imagen] Compra de fundas' });
+  });
+
+  it('una foto sin indicación no envía el campo de texto', () => {
+    const file = new File([new Uint8Array([0xff])], 'guia.png', { type: 'image/png' });
+    service.sendImage(file).subscribe();
+
+    const request = http.expectOne('/api/ai/images');
+    expect((request.request.body as FormData).has('text')).toBe(false);
+    request.flush({ actionId: null, reply: 'La foto está borrosa.', proposal: null });
+    expect(service.messages()[0].content).toBe('guia.png');
   });
 
   it('confirmar actualiza el resultado con el gasto creado', () => {

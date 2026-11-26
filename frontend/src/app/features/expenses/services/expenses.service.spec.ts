@@ -74,10 +74,37 @@ describe('ExpensesService', () => {
       paymentMethod: 'efectivo',
       date: '2026-11-20T12:00:00',
       receiptNumber: null,
+      items: [],
     });
     req.flush(expenseDto(13));
 
     expect(service.expenses()[0].id).toBe('13');
+  });
+
+  it('envía los productos comprados para sumarlos al inventario (RF-4.4)', () => {
+    service
+      .createExpense({
+        date: '2026-11-20T12:00:00',
+        category: 'Servicios',
+        providerName: '',
+        providerRuc: '',
+        total: 12.5,
+        paymentMethod: 'efectivo',
+        description: 'Frascos',
+        items: [
+          { productId: '7', quantity: 5, unitCost: 2.5 },
+          { productId: '9', quantity: 2 },
+        ],
+      })
+      .subscribe();
+
+    httpMock.expectOne('/api/expense-categories').flush(categories);
+    const req = httpMock.expectOne((r) => r.url === '/api/expenses' && r.method === 'POST');
+    expect(req.request.body.items).toEqual([
+      { productId: 7, quantity: 5, unitCost: 2.5 },
+      { productId: 9, quantity: 2, unitCost: null },
+    ]);
+    req.flush(expenseDto(14));
   });
 
   it('una categoría desconocida va a "Otros gastos operativos"', () => {

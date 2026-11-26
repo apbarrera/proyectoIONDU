@@ -42,6 +42,69 @@
     </app-form-field>
   </form>
 
+  <div class="new-expense__purchase">
+    <app-switch
+      [checked]="addsStock()"
+      (checkedChange)="toggleAddsStock($event)"
+      label="Esta compra suma al inventario"
+      description="Registra el gasto y aumenta el stock de los productos comprados en una sola operación."
+    />
+
+    @if (addsStock()) {
+      <ul class="new-expense__rows" aria-label="Productos comprados">
+        @for (row of rows(); track row.key; let i = $index) {
+          <li class="new-expense__row">
+            <app-form-field label="Producto" required>
+              <select
+                [value]="row.productId"
+                (change)="updateRow(row.key, { productId: $any($event.target).value })"
+              >
+                <option value="" disabled>Elige un producto</option>
+                @for (p of products(); track p.id) {
+                  <option [value]="p.id">{{ p.name }} ({{ p.sku }})</option>
+                }
+              </select>
+            </app-form-field>
+            <app-form-field [label]="'Cantidad' + (unitOf(row.productId) ? ' (' + unitOf(row.productId) + ')' : '')" required>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                inputmode="decimal"
+                [value]="row.quantity"
+                (input)="updateRow(row.key, { quantity: numberFrom($event) })"
+              />
+            </app-form-field>
+            <app-form-field label="Costo unitario" hint="Opcional: actualiza el costo del producto.">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputmode="decimal"
+                [value]="row.unitCost"
+                (input)="updateRow(row.key, { unitCost: numberFrom($event) })"
+              />
+            </app-form-field>
+            <button
+              type="button"
+              class="new-expense__remove"
+              (click)="removeRow(row.key)"
+              [attr.aria-label]="'Quitar el producto ' + (i + 1)"
+            >
+              <app-icon name="trash" [size]="18" />
+            </button>
+          </li>
+        }
+      </ul>
+      <button type="button" class="new-expense__add" (click)="addRow()">
+        <app-icon name="plus" [size]="16" /> Agregar producto
+      </button>
+      @if (purchaseError() && form.touched) {
+        <p class="new-expense__error" role="alert">{{ purchaseError() }}</p>
+      }
+    }
+  </div>
+
   @if (form.touched && form.errors?.['providerRuc']) {
     <p class="new-expense__error" role="alert">Ingresa una cédula (10 dígitos) o un RUC (13 dígitos) válido.</p>
   } @else if (form.touched && form.errors?.['providerName']) {

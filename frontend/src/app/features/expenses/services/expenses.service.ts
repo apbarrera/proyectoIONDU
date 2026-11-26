@@ -40,6 +40,15 @@ export interface NewExpenseInput {
   paymentMethod: ExpensePaymentMethod;
   description: string;
   receiptNumber?: string;
+  /** Productos comprados: el backend suma su cantidad al stock en la misma operación (RF-4.4). */
+  items?: PurchaseItem[];
+}
+
+export interface PurchaseItem {
+  productId: string;
+  quantity: number;
+  /** Si viene, actualiza el costo del producto. */
+  unitCost?: number | null;
 }
 
 /** Datos del formulario de edición; la fecha es `AAAA-MM-DD` y el proveedor va por RUC o cédula. */
@@ -201,6 +210,11 @@ export class ExpensesService {
               paymentMethod: input.paymentMethod,
               date: input.date,
               receiptNumber: input.receiptNumber?.trim() || null,
+              items: (input.items ?? []).map((item) => ({
+                productId: Number(item.productId),
+                quantity: item.quantity,
+                unitCost: item.unitCost ?? null,
+              })),
             }),
           ),
         );

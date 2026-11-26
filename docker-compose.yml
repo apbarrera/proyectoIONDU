@@ -31,6 +31,14 @@ x-backend-env: &backend-env
   MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY:-}
   # Facturación de demostración sin .p12 (ids de empresa; solo en ambiente de pruebas).
   SRI_SIMULADO_EMPRESAS: ${SRI_SIMULADO_EMPRESAS:-}
+  # Correo saliente (recuperación de contraseña e invitaciones). Vacío: sin correos.
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USERNAME: ${SMTP_USERNAME:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+  SMTP_FROM: ${SMTP_FROM:-IONDU <no-responder@iondu.ec>}
+  APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:8080}
 
 services:
   # ---------------- Frontend (público) ----------------

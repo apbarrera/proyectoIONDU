@@ -4,6 +4,8 @@
 #
 # También agrega un PostgreSQL local ("db") para desarrollar sin depender de
 # Supabase, y un almacenamiento S3 local ("storage") para los PDF de las facturas.
+# Con COMPOSE_PROFILES=ia en .env se levanta además "stt" (Whisper) para los mensajes
+# de voz del agente de IA.
 # Las tres conexiones de .env son obligatorias; en local pueden apuntar
 # a este PostgreSQL (ver la nota de DATABASE_URL en .env.example).
 
@@ -56,6 +58,32 @@ services:
     volumes:
       - storage-data:/data
 
+  # Voz a texto para el agente de IA (Whisper, API de OpenAI /v1/audio/transcriptions).
+  # Opcional: solo con el perfil "ia". Corre en CPU para no competir con Ollama por la GPU;
+  # la primera vez descarga el modelo (~500 MB) y lo guarda en el volumen.
+  stt:
+    image: ghcr.io/speaches-ai/speaches:latest-cpu
+    profiles: ["ia"]
+    restart: unless-stopped
+    # Arranca el servidor y, cuando responde, descarga el modelo si todavía no está en el
+    # volumen (speaches no lo hace solo; si ya está, la descarga termina enseguida).
+    command:
+      - sh
+      - -c
+      - |
+        uvicorn --factory speaches.main:create_app &
+        until python -c "import urllib.request as u; u.urlopen('http://localhost:8000/health')" 2>/dev/null; do sleep 1; done
+        python -c "import urllib.request as u; u.urlopen(u.Request('http://localhost:8000/v1/models/$$STT_MODEL', method='POST'), timeout=1800)" && echo "Modelo de voz listo: $$STT_MODEL"
+        wait
+    environment:
+      STT_MODEL: ${STT_MODEL:-Systran/faster-whisper-small}
+      ENABLE_UI: "false"
+      LOG_LEVEL: info
+    expose:
+      - "8000"
+    volumes:
+      - stt-models:/home/ubuntu/.cache/huggingface/hub
+
   # Misma versión mayor de PostgreSQL que Supabase.
   db:
     image: postgres:17-alpine
@@ -80,3 +108,4 @@ services:
 volumes:
   db-data:
   storage-data:
+  stt-models:

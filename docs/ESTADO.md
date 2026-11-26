@@ -122,7 +122,7 @@ Estado por módulo (24/11/2026). Un servicio "real" usa `HttpClient` contra `/ap
 | Recetas y producción | Simulado (sin backend ni requisito); solo mueve el stock en memoria | `RecipesService`, `ProductionService` |
 | Usuarios (gestión) y cambio de contraseña | Real | `UserDirectoryService`, `AuthService.changePassword` |
 | Auditoría | Real: la escribe el backend, solo el Administrador la ve | `AuditService` (`GET /api/audit`) |
-| Agente de IA | Real para texto y fotos de facturas, tickets y guías: gastos y movimientos de inventario (Ollama en local, `DECISIONES.md` 2.32). Voz y límites de tokens: siguientes etapas | `AiAgentService` (`/api/ai`) |
+| Agente de IA | Real para texto, fotos de facturas, tickets y guías, y mensajes de voz: gastos y movimientos de inventario (Ollama y Whisper en local, `DECISIONES.md` 2.32). Límites de tokens: siguiente etapa | `AiAgentService` (`/api/ai`) |
 
 **Ventas, clientes y facturas (commits `6d5219a` y `1f143a0`):**
 - `SalesService`: `GET /api/sales` (todas las páginas de 100 en 100) y `POST /api/sales`. Envía `customerId`, `items` con `productId` y `quantity` (sin precio ni IVA: los calcula el backend) y `paymentMethod`. El método de pago `tarjeta` se separó en `tarjeta_debito` y `tarjeta_credito`.

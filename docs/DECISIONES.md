@@ -524,7 +524,21 @@
   crédito), ticket de gasolinera (Transporte, efectivo), guía de remisión (entrada de 24 croissants), factura emitida
   por la empresa (rechazada como venta) y una foto sin comprobante (pide otra). De 5 a 25 s por foto; la primera tarda
   más porque Ollama carga el modelo.
-- **Etapas:** 1) texto y gastos ✅; 2) inventario ✅; 3) imagen ✅; 4) voz; 5) límites de tokens.
+- **Voz (etapa 4, RF-6.4):** `POST /api/ai/audio`. El audio se transcribe con la API de OpenAI
+  (`/v1/audio/transcriptions`, variables `STT_*`) y luego sigue exactamente el camino del texto: mismas reglas, mismo
+  modelo. En local, el servicio `stt` (speaches con Whisper `faster-whisper-small`, en CPU para no competir con Ollama
+  por la GPU) solo se levanta con `COMPOSE_PROFILES=ia`; al arrancar descarga el modelo (~500 MB) si no está en el
+  volumen, porque esta versión de speaches ya no lo precarga. En producción basta con apuntar `STT_BASE_URL` a un
+  proveedor (p. ej. OpenAI con `whisper-1`). El formato se valida por sus primeros bytes (no por el nombre) y el audio
+  no se guarda: en `accion_ia` queda la transcripción. La respuesta incluye `transcript` y el chat la muestra en la
+  burbuja del usuario, para que se vea qué se entendió antes de confirmar. El navegador graba con `MediaRecorder`
+  (WebM/Opus en Chrome, MP4 en Safari), hasta un minuto.
+- **Probado con el modelo real (etapa 4):** con voces sintéticas de Kokoro, las cuatro frases se transcribieron
+  palabra por palabra y dieron la propuesta correcta (gasto de empaque, entrada de croissants, luz por transferencia) o
+  el rechazo de la venta; de 8 a 19 s por mensaje. Una voz sintética de peor calidad (Piper) se transcribía mal
+  ("Gasté" → "Verás") también con el modelo `medium`: el problema era la voz, no el tamaño del modelo, así que se dejó
+  `small` (unos 5 s por mensaje en CPU frente a unos 14 s de `medium`). Falta probarlo con voces reales y con ruido.
+- **Etapas:** 1) texto y gastos ✅; 2) inventario ✅; 3) imagen ✅; 4) voz ✅; 5) límites de tokens.
 
 ## 3. Producto
 

@@ -13,5 +13,7 @@ tzdata==2025.2
 python-multipart==0.0.32
 pypdf==6.21.4
 xmlsig==1.0.1
-supabase==2.34.1
+boto3==1.44.12
+# TestClient de FastAPI (pruebas y scripts/cargar_datos_demo.py).
+httpx==0.28.1
 argon2-cffi==25.1.0

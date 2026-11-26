@@ -4,15 +4,12 @@ import logging
 import threading
 from pathlib import Path
 
-import httpx
 from sqlalchemy import and_, or_, select
-from supabase import create_client
-from supabase.lib.client_options import SyncClientOptions
 
 from app.core.config import get_settings
 from app.models.empresa import Empresa
 from app.models.factura import Factura
-from app.services.almacenamiento import AlmacenamientoRideService
+from app.services.almacenamiento import crear_almacenamiento
 from app.sri.clave_acceso import Ambiente
 from app.sri.emision import EstadoEmision, ServicioEmision
 from app.sri.ride import generar_ride
@@ -91,38 +88,6 @@ def _obtener_pendientes(session_factory) -> list[tuple[int, int]]:
         )
 
         return [(int(fila[1]), int(fila[2])) for fila in filas]
-
-
-def _crear_almacenamiento(settings):
-    """Crea un cliente independiente de Supabase para este ciclo."""
-    if not settings.supabase_url or not settings.supabase_service_role_key:
-        logger.warning("Supabase no está configurado; los RIDE no se subirán desde el worker.")
-        return None, None
-
-    cliente_http = None
-
-    try:
-        cliente_http = httpx.Client(timeout=20)
-        opciones = SyncClientOptions(
-            auto_refresh_token=False,
-            persist_session=False,
-            httpx_client=cliente_http,
-        )
-        cliente = create_client(
-            settings.supabase_url,
-            settings.supabase_service_role_key,
-            options=opciones,
-        )
-        return AlmacenamientoRideService(cliente), cliente_http
-    except Exception as exc:
-        if cliente_http is not None:
-            cliente_http.close()
-
-        logger.error(
-            "No se pudo inicializar Storage para este ciclo. tipo=%s",
-            type(exc).__name__,
-        )
-        return None, None
 
 
 def _serializar_mensajes(mensajes) -> list[dict]:
@@ -339,19 +304,20 @@ def run_cycle() -> None:
     if not pendientes:
         return
 
-    almacenamiento, cliente_http = _crear_almacenamiento(settings)
-
     try:
-        for empresa_id, factura_id in pendientes:
-            _procesar_factura(
-                session_factory,
-                empresa_id,
-                factura_id,
-                almacenamiento,
-            )
-    finally:
-        if cliente_http is not None:
-            cliente_http.close()
+        almacenamiento = crear_almacenamiento(settings)
+    except Exception as exc:
+        # Sin almacenamiento la factura se autoriza igual; el RIDE se genera al descargarlo.
+        logger.error("No se pudo inicializar el almacenamiento. tipo=%s", type(exc).__name__)
+        almacenamiento = None
+
+    for empresa_id, factura_id in pendientes:
+        _procesar_factura(
+            session_factory,
+            empresa_id,
+            factura_id,
+            almacenamiento,
+        )
 
 
 def main() -> None:

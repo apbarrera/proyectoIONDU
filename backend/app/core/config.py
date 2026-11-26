@@ -35,12 +35,18 @@ class Settings(BaseSettings):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
 
-    # Supabase: conexión por Session Pooler (puerto 5432).
+    # PostgreSQL. En Supabase: Session Pooler (puerto 5432).
     database_url: str | None = None
     worker_database_url: str | None = None
     migration_database_url: str | None = None
-    supabase_url: str | None = None
-    supabase_service_role_key: str | None = None
+
+    # Almacenamiento de archivos por la API S3: SeaweedFS en local, Supabase Storage (su
+    # endpoint S3) u otro proveedor compatible en producción. Sin endpoint, no hay RIDE.
+    storage_endpoint_url: str | None = None
+    storage_region: str = "us-east-1"
+    storage_access_key_id: str | None = None
+    storage_secret_access_key: SecretStr | None = None
+    storage_bucket: str = "rides"
 
     master_encryption_key: SecretStr | None = None
 
@@ -76,8 +82,9 @@ class Settings(BaseSettings):
         "database_url",
         "worker_database_url",
         "migration_database_url",
-        "supabase_url",
-        "supabase_service_role_key",
+        "storage_endpoint_url",
+        "storage_access_key_id",
+        "storage_secret_access_key",
         "auth_jwt_private_key",
         "dev_user_id",
         mode="before",

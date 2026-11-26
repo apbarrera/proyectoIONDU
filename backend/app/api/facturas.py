@@ -17,13 +17,8 @@ SaleId = Annotated[int, Path(gt=0)]
 
 
 def _obtener_almacenamiento(request: Request) -> AlmacenamientoRideService | None:
-    """Obtiene el servicio a partir del cliente compartido de Supabase."""
-
-    cliente = getattr(request.app.state, "supabase", None)
-    if cliente is None:
-        return None
-
-    return AlmacenamientoRideService(cliente)
+    """Servicio de almacenamiento S3 creado al arrancar la API (None si no está configurado)."""
+    return getattr(request.app.state, "almacenamiento", None)
 
 
 @router.post("/sales/{id}/invoice", response_model=Invoice, status_code=201)

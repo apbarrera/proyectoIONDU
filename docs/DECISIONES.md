@@ -539,6 +539,29 @@
   ("Gasté" → "Verás") también con el modelo `medium`: el problema era la voz, no el tamaño del modelo, así que se dejó
   `small` (unos 5 s por mensaje en CPU frente a unos 14 s de `medium`). Falta probarlo con voces reales y con ruido.
 - **Etapas:** 1) texto y gastos ✅; 2) inventario ✅; 3) imagen ✅; 4) voz ✅; 5) límites de tokens.
+- **Largo de los textos (26/11/2026):** ante un saludo, `qwen2.5:7b` repetía la misma frase en `respuesta` hasta los
+  800 tokens y el agente contestaba "no disponible". Cada texto libre del esquema lleva un `pattern`
+  (`^[^"\\\n\r\t]{0,N}$`): largo máximo y sin comillas ni saltos de línea, porque con `.` el modelo escribía una comilla
+  y cerraba el JSON antes de tiempo. Se usa `pattern` y no `maxLength` porque OpenAI lo admite en modo estricto;
+  falta confirmarlo contra la API real antes de producción.
+
+### 2.33 SRI simulado para demostración (sin .p12)
+- **Decisión (26/11/2026):** mientras el cliente no entregue el `.p12` ni habilite su RUC, la empresa demo factura en
+  modo simulado. `SRI_SIMULADO_EMPRESAS=1` (ids separados por comas) activa `app/sri/simulado.py` para esas empresas:
+  la factura se firma con la firma XAdES-BES real usando un certificado autofirmado generado en memoria, y el worker
+  usa `ClienteSriSimulado`, que responde "RECIBIDA" y "AUTORIZADO" sin red (número de autorización = clave de acceso).
+  Todo lo demás es el flujo real: XML validado contra el XSD, totales, secuencial, worker, RIDE y almacenamiento S3.
+- **Por qué no el SRI de pruebas con un certificado inventado:** el SRI rechaza firmas de entidades no autorizadas y
+  exige el RUC habilitado. Tampoco `FirmadorSinFirma`: la firma, la parte más delicada, quedaría sin ejecutarse.
+- **Barreras:** solo actúa si la empresa está en ambiente de PRUEBAS (`"1"`); en producción se ignora y la emisión
+  exige el `.p12` como siempre. `ClienteSriSimulado` además se niega a recibir comprobantes de producción. La
+  autorización queda marcada con el mensaje `SIMULADO` en `mensajes_sri` y el RIDE lleva arriba, en rojo,
+  "SIMULADO - SIN VALIDEZ TRIBUTARIA". La marca vive en la factura: el RIDE se sigue reconstruyendo con el aviso
+  aunque luego se quite la variable.
+- **Cuando llegue el `.p12`:** vaciar `SRI_SIMULADO_EMPRESAS`, subir el certificado en Configuración → Empresa y
+  emitir contra el SRI de pruebas. Mientras la variable incluya a la empresa, se simula aunque tenga `.p12`.
+- **Probado (26/11/2026):** venta de un agua, factura `001-001-000000001` autorizada por el worker en unos 30 s y RIDE
+  descargado con el aviso.
 
 ## 3. Producto
 

@@ -48,6 +48,10 @@ agente responde que no está configurado y el resto del sistema funciona igual. 
 Para los mensajes de voz: `COMPOSE_PROFILES=ia` y `STT_BASE_URL=http://stt:8000/v1` levantan un Whisper local en CPU
 (la primera vez descarga unos 500 MB).
 
+Facturación sin certificado `.p12` (demostración): con `SRI_SIMULADO_EMPRESAS=1` en `.env`, la empresa demo (en
+ambiente de pruebas) emite facturas firmadas con un certificado de prueba que el worker "autoriza" sin enviarlas al
+SRI. El RIDE dice "SIMULADO - SIN VALIDEZ TRIBUTARIA". En producción no tiene efecto (`DECISIONES.md` 2.33).
+
 Inicio de sesión: `admin@demo.iondu.ec` (Administrador) u `operador@demo.iondu.ec` (Operativo), con la
 contraseña de `DEMO_PASSWORD`. Para crear usuarios o cambiar contraseñas:
 

@@ -41,6 +41,10 @@ class Gasto(Base):
             "monto >= 0",
             name=conv("gasto_monto_check"),
         ),
+        CheckConstraint(
+            "iva >= 0 AND iva <= monto",
+            name=conv("gasto_iva_check"),
+        ),
         ForeignKeyConstraint(
             ["id_empresa", "id_categoria_gasto"],
             [
@@ -104,6 +108,13 @@ class Gasto(Base):
     monto: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,
+    )
+
+    # Parte del monto que corresponde al IVA (el monto ya lo incluye).
+    iva: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
+        nullable=False,
+        server_default=text("0"),
     )
 
     fecha: Mapped[datetime] = mapped_column(

@@ -75,6 +75,9 @@ services:
     environment:
       <<: *backend-env
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+      # Conexión de la autenticación (rol iondu_auth): la única que lee hashes de
+      # contraseñas y sesiones. Solo la recibe la API, nunca el worker.
+      AUTH_DATABASE_URL: ${AUTH_DATABASE_URL:?Define AUTH_DATABASE_URL (usuario iondu_auth)}
       # Inicio de sesión propio: solo la API firma tokens (el worker no recibe la llave).
       AUTH_JWT_PRIVATE_KEY: ${AUTH_JWT_PRIVATE_KEY:-}
       AUTH_ACCESS_TOKEN_MINUTES: ${AUTH_ACCESS_TOKEN_MINUTES:-15}

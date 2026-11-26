@@ -51,8 +51,8 @@ def upgrade() -> None:
         sa.UniqueConstraint("token_hash", name=op.f("restablecimiento_contrasena_token_hash_key")),
     )
     op.create_index("idx_restablecimiento_usuario", "restablecimiento_contrasena", ["id_usuario"])
-    op.execute("GRANT SELECT, INSERT ON public.restablecimiento_contrasena TO iondu_app")
-    op.execute("GRANT UPDATE (usado_en) ON public.restablecimiento_contrasena TO iondu_app")
+    op.execute("GRANT SELECT, INSERT ON public.restablecimiento_contrasena TO iondu_auth")
+    op.execute("GRANT UPDATE (usado_en) ON public.restablecimiento_contrasena TO iondu_auth")
 
 
 def downgrade() -> None:

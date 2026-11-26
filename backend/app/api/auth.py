@@ -15,7 +15,7 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, Response, status
 from pydantic import Field
 
-from app.api.deps import DbSession, UsuarioActual, get_emisor
+from app.api.deps import AuthDbSession, UsuarioActual, get_emisor
 from app.core.config import get_settings
 from app.core.correo import Enviador, crear_enviador, enviar_sin_fallar
 from app.core.errors import ServiceUnavailableError
@@ -52,7 +52,7 @@ class TokenAcceso(ApiModel):
 
 
 def get_servicio(
-    db: DbSession,
+    db: AuthDbSession,
     emisor: Annotated[EmisorTokens | None, Depends(get_emisor)],
 ) -> ServicioAutenticacion:
     if emisor is None:
@@ -143,7 +143,10 @@ class MensajeRespuesta(ApiModel):
 
 @router.post("/password-reset", response_model=MensajeRespuesta, status_code=202)
 def request_password_reset(
-    datos: PasswordResetRequest, db: DbSession, enviador: EnviadorActual, tareas: BackgroundTasks
+    datos: PasswordResetRequest,
+    db: AuthDbSession,
+    enviador: EnviadorActual,
+    tareas: BackgroundTasks,
 ):
     """Envía un enlace de un solo uso. Responde igual exista o no el correo."""
     if enviador is None:
@@ -167,7 +170,7 @@ def request_password_reset(
 
 
 @router.post("/password-reset/confirm", status_code=status.HTTP_204_NO_CONTENT)
-def confirm_password_reset(datos: PasswordResetConfirm, db: DbSession) -> Response:
+def confirm_password_reset(datos: PasswordResetConfirm, db: AuthDbSession) -> Response:
     """Cambia la contraseña con el enlace del correo y cierra todas las sesiones."""
     ServicioRecuperacion(db).confirmar(datos.token, datos.new_password)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

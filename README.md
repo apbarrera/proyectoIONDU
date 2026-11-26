@@ -17,8 +17,9 @@ PWA para PyMEs ecuatorianas: facturación electrónica, ventas, gastos, inventar
 
 ```bash
 cp .env.example .env
-# Completar en .env: POSTGRES_PASSWORD, APP_ENV=development, las tres conexiones
-# (DATABASE_URL, WORKER_DATABASE_URL, MIGRATION_DATABASE_URL; ver la nota en .env.example)
+# Completar en .env: POSTGRES_PASSWORD, APP_ENV=development, las cuatro conexiones
+# (DATABASE_URL, AUTH_DATABASE_URL, WORKER_DATABASE_URL, MIGRATION_DATABASE_URL;
+# ver la nota en .env.example)
 # DEV_USER_ID=11111111-1111-1111-1111-111111111111, STORAGE_ACCESS_KEY_ID y STORAGE_SECRET_ACCESS_KEY
 # (cualquier valor: son del almacenamiento S3 local) y AUTH_JWT_PRIVATE_KEY, que se genera con:
 #   docker compose run --rm --no-deps api python -m scripts.generar_llave_jwt
@@ -32,13 +33,14 @@ contenedores; no hace falta Python instalado:
 ```powershell
 docker compose up -d db storage
 docker compose run --rm --no-deps api alembic upgrade head                      # esquema completo
-docker compose run --rm --no-deps api python -m scripts.configurar_roles_locales # login de iondu_app e iondu_worker
+docker compose run --rm --no-deps api python -m scripts.configurar_roles_locales # login de iondu_app, iondu_auth e iondu_worker
 docker compose up -d --build
 docker compose run --rm --no-deps -e DEMO_PASSWORD="<mínimo 10 caracteres>" api python -m scripts.cargar_datos_demo
 ```
 
-La API se conecta como `iondu_app` y el worker como `iondu_worker`, igual que en producción: sin privilegios
-de administrador y con RLS. Si algo falla con "permission denied", falta un permiso en las migraciones
+La API se conecta como `iondu_app` (negocio) e `iondu_auth` (login y contraseñas) y el worker como
+`iondu_worker`, igual que en producción: sin privilegios de administrador y con RLS. `AUTH_DATABASE_URL`
+debe estar en `.env` antes de `alembic upgrade head` (Compose la exige para el servicio `api`). Si algo falla con "permission denied", falta un permiso en las migraciones
 (ver `DECISIONES.md` 1.9).
 
 Agente de IA en local (opcional): instalar [Ollama](https://ollama.com), descargar el modelo con
@@ -75,6 +77,17 @@ Luego, desde `backend/`:
 ```powershell
 $env:TEST_DATABASE_URL = "postgresql+psycopg://iondu_test_runner:<clave>@127.0.0.1:15432/iondu_test"
 .venv\Scripts\python.exe -m pytest -q
+```
+
+Autenticación y RLS con las **migraciones reales** y los roles `iondu_app`, `iondu_auth` e
+`iondu_worker` (`tests/postgres_auth/`). Como asignan contraseñas a roles globales, necesitan un
+PostgreSQL **desechable** y se niegan a correr si encuentran otra base (como `iondu`):
+
+```powershell
+docker run -d --rm --name iondu-pg-auth -p 127.0.0.1:26432:5432 -e POSTGRES_USER=iondu -e POSTGRES_PASSWORD=pruebas -e POSTGRES_DB=postgres postgres:17-alpine
+$env:TEST_ADMIN_DATABASE_URL = "postgresql+psycopg://iondu:pruebas@127.0.0.1:26432/postgres"
+.venv\Scripts\python.exe -m pytest -q tests/postgres_auth
+docker stop iondu-pg-auth
 ```
 
 ## Ejecutar sin Docker (desarrollo del frontend)

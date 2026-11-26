@@ -8,6 +8,7 @@ from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import TIMEZONE, get_settings
+from app.core.errors import ServiceUnavailableError
 
 # Claves privadas utilizadas para conservar el contexto entre transacciones.
 _RLS_USER_KEY = "rls_usuario_id"
@@ -116,6 +117,42 @@ def _session_factory() -> sessionmaker[APISession]:
 def get_db() -> Iterator[Session]:
     """Entrega una sesión por petición y la cierra al terminar."""
     with _session_factory()() as session:
+        yield session
+
+
+# ---------- Autenticación (rol iondu_auth) ----------
+# `usuario` y `sesion_refresh` tienen RLS forzado: iondu_app solo ve el id y el correo de
+# los usuarios de su empresa y nada de las sesiones. El login y la renovación ocurren
+# ANTES de conocer al usuario y a la empresa, así que usan una conexión aparte con el rol
+# iondu_auth, que no tiene acceso a las tablas de negocio. Una inyección SQL en cualquier
+# otro endpoint (que usa iondu_app) no puede leer hashes de contraseñas ni sesiones.
+@lru_cache
+def get_auth_engine() -> Engine | None:
+    url = get_settings().auth_database_url
+    if not url:
+        return None
+    return create_engine(
+        url,
+        pool_pre_ping=True,
+        pool_size=2,
+        max_overflow=3,
+        connect_args={"options": f"-c timezone={TIMEZONE}", "connect_timeout": 5},
+    )
+
+
+@lru_cache
+def _auth_session_factory() -> sessionmaker[Session]:
+    return sessionmaker(bind=get_auth_engine(), autoflush=False, expire_on_commit=False)
+
+
+def get_auth_db() -> Iterator[Session]:
+    """Sesión de la conexión de autenticación (iondu_auth), una por petición."""
+    if get_auth_engine() is None:
+        raise ServiceUnavailableError(
+            "El inicio de sesión no está configurado (falta AUTH_DATABASE_URL).",
+            code="AUTH_NOT_CONFIGURED",
+        )
+    with _auth_session_factory()() as session:
         yield session
 
 

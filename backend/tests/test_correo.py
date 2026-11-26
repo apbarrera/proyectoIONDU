@@ -75,7 +75,10 @@ def test_lee_la_factura_dentro_del_xml_de_autorizacion():
         b"<notaCredito/>",
         XML.replace(b"<codDoc>01</codDoc>", b"<codDoc>04</codDoc>"),
         b'<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><x>&e;</x>',
-        b"<factura>" + b"x" * 1_000_001 + b"</factura>",
+        pytest.param(
+            b"<factura>" + b"x" * 1_000_001 + b"</factura>",
+            id="xml_mayor_a_1mb",
+        ),
     ],
 )
 def test_descarta_lo_que_no_es_una_factura_valida(contenido):

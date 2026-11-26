@@ -73,6 +73,17 @@ jobs:
           docker run --rm --network host \
             -e MIGRATION_DATABASE_URL=postgresql+psycopg://iondu@127.0.0.1:5432/iondu_migraciones \
             iondu-backend-test sh -c "alembic upgrade head && alembic check"
+
+      # Autenticación con los roles reales: crea sus propias bases con `alembic upgrade head`
+      # y se conecta como iondu_app, iondu_auth e iondu_worker (login, renovación, contraseñas,
+      # aislamiento de usuario y sesion_refresh, privilegios y bajada de la migración).
+      # IONDU_REQUIRE_DB=1: si falta la base, fallan en lugar de omitirse.
+      - name: Autenticación y RLS con PostgreSQL real
+        run: >-
+          docker run --rm --network host
+          -e TEST_ADMIN_DATABASE_URL=postgresql+psycopg://iondu@127.0.0.1:5432/postgres
+          -e IONDU_REQUIRE_DB=1
+          iondu-backend-test python -m pytest -q tests/postgres_auth
   imagenes:
     name: Imágenes Docker (build completo)
     runs-on: ubuntu-latest
@@ -85,5 +96,6 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://iondu:ci_only@localhost:5432/iondu_test
           WORKER_DATABASE_URL: postgresql+psycopg://iondu_worker:ci_only@localhost:5432/iondu_test
+          AUTH_DATABASE_URL: postgresql+psycopg://iondu_auth:ci_only@localhost:5432/iondu_test
           MIGRATION_DATABASE_URL: postgresql+psycopg://iondu_migrator:ci_only@localhost:5432/iondu_test
         run: docker compose -f docker-compose.yml build

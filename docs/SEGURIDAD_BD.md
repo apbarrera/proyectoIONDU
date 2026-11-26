@@ -1,3 +1,118 @@
+## Autenticación: RLS en `usuario` y `sesion_refresh` — 26/11/2026
+
+> Migraciones `e1f3a5b7c902_dueno_de_funciones_security_definer` y
+> `d6a8c0e2f417_proteger_usuarios_y_sesiones`. Validadas en PostgreSQL 17 desechable (instalación limpia
+> de punta a punta, subida, `alembic check`, bajada y nueva subida). **No aplicadas en la base `iondu`**:
+> requieren revisión, respaldo reciente y autorización expresa (procedimiento en el punto 6).
+
+### 1. Problema
+
+Las dos tablas no tenían RLS. `iondu_app` podía leer todos los usuarios con su hash de contraseña,
+todas las sesiones, y cambiar contraseñas o revocar sesiones de cualquiera. El login y la renovación
+ocurren antes de conocer al usuario y a la empresa, así que no sirve una política por empresa.
+
+### 2. Alternativas evaluadas
+
+| | Funciones `SECURITY DEFINER` llamadas por `iondu_app` | Rol `iondu_auth` con conexión propia (**elegida**) |
+|---|---|---|
+| Hash de la contraseña | El login lo verifica en Python (argon2): la función tendría que devolverlo a `iondu_app`, y cualquier consulta de `iondu_app` (por ejemplo, una inyección SQL en otro endpoint) podría pedirlo por correo | Solo lo lee `iondu_auth`, cuya conexión usa únicamente el servicio de autenticación |
+| Bloqueo de filas y atomicidad | Hay que reescribir la lógica en PL/pgSQL | El código actual (`FOR UPDATE`, una transacción) no cambia |
+| Costo | Ninguna variable nueva | `AUTH_DATABASE_URL` y un pool pequeño en la API |
+
+### 3. Diseño aplicado
+
+| Rol | `usuario` | `sesion_refresh` | Otros |
+|---|---|---|---|
+| `iondu_app` | `SELECT (id, email)` con RLS: su propio usuario y los miembros de la empresa del contexto que el RLS de `usuario_empresa` le muestre (el Administrador, todos; el Operativo, solo a sí mismo) | Nada | — |
+| `iondu_auth` | `SELECT` de sus 7 columnas, `INSERT (id, email, password_hash)`, `UPDATE (password_hash, intentos_fallidos, bloqueado_hasta)` | `SELECT`, `INSERT` (solo de cuentas activas, por política), `UPDATE (rotada_en, revocada_en)`, `DELETE` (limpieza de vencidas) | Ninguna otra tabla. Solo `EXECUTE` de `auth_puede_restablecer` |
+| `iondu_worker`, `PUBLIC` | Nada | Nada | Nada |
+| `iondu_funciones` (`NOLOGIN`) | — | — | Dueño de las funciones `SECURITY DEFINER`. Solo `SELECT (id_usuario, id_empresa, id_rol, estado)` de `usuario_empresa` y `SELECT (id_rol, nombre)` de `rol`, con políticas exclusivas |
+
+RLS habilitado y **forzado** en `usuario` y `sesion_refresh`. Ningún rol es superusuario ni tiene
+`BYPASSRLS`; `iondu_app` e `iondu_auth` no comparten membresía.
+
+`auth_puede_restablecer(usuario, empresa)` responde solo `OK`, `NO_PERTENECE` u `OTRA_EMPRESA`: así
+`iondu_auth` impide que un Administrador restablezca la contraseña de quien trabaja en otra empresa sin
+poder leer `usuario_empresa`. La ejecuta solo `iondu_auth`.
+
+Código: `get_auth_db` (`app/db/session.py`) da la sesión de `iondu_auth`. La usan el login, la
+renovación, el cierre, el cambio de contraseña (con el id del token verificado, nunca uno del
+cliente) y `app/services/cuentas.py` (crear o reutilizar una cuenta, restablecer una contraseña).
+`UsuarioService` comprueba con `iondu_app` y el RLS que quien llama es Administrador y que el usuario
+pertenece a su empresa; `CuentasAuth` lo vuelve a comprobar en la misma transacción que escribe.
+
+### 4. Corrección: el dueño de las funciones `SECURITY DEFINER`
+
+`app_es_admin_de` y `app_usuario_en_otras_empresas` consultan `usuario_empresa` y `rol` (RLS forzado,
+políticas solo para `iondu_app`). Una función `SECURITY DEFINER` se ejecuta como su dueño. Comprobado en
+PostgreSQL 17: si el dueño es `iondu_migrator` (sin `BYPASSRLS`, con permisos sobre las tablas como en la
+base local), **devuelven siempre `false`**; si además no tuviera `SELECT`, fallarían con *permission
+denied*. Lo que se rompe:
+
+| Consumidor | Efecto con las funciones rotas |
+|---|---|
+| Políticas `usuario_empresa_app_admin_select/insert/update` | El Administrador solo se ve a sí mismo: no lista, no agrega ni edita usuarios de su empresa |
+| Política `auditoria_app_select` | El Administrador no ve la auditoría |
+| `UsuarioService._en_otras_empresas` | Diría que nadie trabaja en otra empresa |
+| `usuario_app_select` (nueva) | El listado de usuarios no mostraría sus correos |
+
+La migración `e1f3a5b7c902` las pasa a `iondu_funciones`, sin dar `BYPASSRLS` a nadie. El cambio de
+dueño exige ejecutar la migración como administrador (en local, `iondu`, como el resto).
+
+### 5. Pruebas (`backend/tests/postgres_auth/`, 79 con roles reales)
+
+Login correcto e incorrecto, bloqueo, usuario inactivo, renovación, reutilización de un token rotado,
+cierre, cambio y restablecimiento de contraseña (revocan todas las sesiones), cuentas de otra empresa o de
+varias, creación de usuarios; operaciones del Administrador (listar, editar rol y estado, no
+modificarse a sí mismo, no tocar otra empresa, auditoría); reproducción del fallo de las funciones y su
+corrección; privilegios de `iondu_app`, `iondu_auth`, `iondu_worker` e `iondu_funciones`; quién ejecuta
+cada función (nunca `PUBLIC`); RLS de negocio intacto; las migraciones suben y bajan sin cambiar las
+políticas existentes; los roles se crean con los atributos exigidos y un rol preexistente con
+un atributo obligatorio incumplido detiene la migración sin aplicar nada (6 atributos en
+`iondu_funciones`, 5 en `iondu_auth`, que sí puede tener LOGIN); bajar y volver a subir funciona con
+`iondu_auth` en uso; la bajada restaura una foto completa de permisos, dueños, RLS, políticas y funciones
+(con el dueño por defecto y con las funciones a nombre de `iondu_migrator`).
+
+`scripts/configurar_roles_locales.py` solo ejecuta `ALTER ROLE … LOGIN PASSWORD`: exige que cada URL use su
+rol (`DATABASE_URL` → `iondu_app`, `AUTH_DATABASE_URL` → `iondu_auth`, `WORKER_DATABASE_URL` →
+`iondu_worker`), contraseñas de 12 caracteres o más, distintas entre sí y de la del administrador, sin
+marcadores del `.env.example`; no habilita un rol con privilegios de administrador y exige que
+`iondu_funciones` no tenga LOGIN.
+
+### 6. Orden de instalación
+
+Instalación nueva y base existente siguen el mismo orden (el README lo describe con Docker):
+
+1. Base existente: respaldo, `docker exec proyectoiondu-db-1 pg_dump -U iondu -d iondu -Fc > iondu_antes_auth.dump`.
+2. `.env`: `AUTH_DATABASE_URL=postgresql+psycopg://iondu_auth:<clave>@db:5432/iondu`. Va antes del paso 3 porque
+   Compose la exige para el servicio `api`.
+3. `docker compose run --rm --no-deps api alembic upgrade head` (como `iondu`): crea `iondu_auth` e
+   `iondu_funciones` con `NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOINHERIT`, corrige el
+   dueño de las funciones y protege las tablas. **Antes de conceder nada valida los atributos** de los
+   roles que ya existan, sin cambiarlos nunca:
+
+   | Rol | Obligatorio | LOGIN |
+   |---|---|---|
+   | `iondu_funciones` | `NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOINHERIT` | Prohibido (`NOLOGIN`) |
+   | `iondu_auth` | `NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOINHERIT` | Permitido: la API se conecta con él |
+
+   Si un atributo obligatorio no se cumple, la migración se detiene con un error que lo nombra y no
+   aplica nada.
+4. `docker compose run --rm --no-deps api python -m scripts.configurar_roles_locales`: LOGIN de `iondu_app`,
+   `iondu_auth` e `iondu_worker` con las claves de `.env`. `iondu_funciones` nunca tiene LOGIN.
+5. `docker compose up -d --build` y probar: login, renovación, cambio de contraseña, gestión de usuarios, auditoría.
+   Después de una bajada, la migración se puede volver a ejecutar sin tocar `iondu_auth`: conserva su
+   LOGIN y su contraseña.
+6. Vuelta atrás (base existente): `alembic downgrade c4e6a8b0d215`. Restaura exactamente los permisos (de
+   tabla y de columna), las políticas, el RLS y el dueño anterior de cada función, que la subida guarda en
+   su comentario (`[iondu:dueno_anterior=…]`). Solo quedan los roles `iondu_auth` e `iondu_funciones`, sin
+   ningún permiso ni objeto. Si hiciera falta, el respaldo.
+
+`scripts/crear_usuario.py` y `scripts/cargar_datos_demo.py` (siembra) usan `MIGRATION_DATABASE_URL`: con el
+RLS forzado debe ser el administrador (`iondu`).
+
+---
+
 ## Auditoría actualizada - 2026-11-24
 
 ### 1. Estado de migraciones

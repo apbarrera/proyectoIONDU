@@ -695,13 +695,14 @@ contraseña). Nunca se guardan contraseñas ni el contenido del `.p12`.
 ## 15. Agente de IA
 
 Cualquier usuario de la empresa lo usa. **El modelo solo propone**: el backend valida su respuesta, guarda la
-propuesta y la ejecuta únicamente cuando alguien la confirma (`DECISIONES.md` 2.32). Por ahora entiende **texto** y
-propone **gastos** y **movimientos de inventario** (entrada, salida y ajuste por conteo, este último solo del
-Administrador); imagen, voz y límites de tokens llegan en las siguientes etapas.
+propuesta y la ejecuta únicamente cuando alguien la confirma (`DECISIONES.md` 2.32). Entiende **texto** y **fotos**
+(facturas, tickets y guías) y propone **gastos** y **movimientos de inventario** (entrada, salida y ajuste por conteo,
+este último solo del Administrador); voz y límites de tokens llegan en las siguientes etapas.
 
 | Estado | Método y ruta | Qué hace | Respuesta |
 |---|---|---|---|
 | ✅ | `POST /api/ai/messages` | Cuerpo `{ "text" }` (máx. 2000 caracteres). Interpreta el mensaje | `200` con `AiReply` |
+| ✅ | `POST /api/ai/images` | `multipart/form-data`: `image` (JPG, PNG o WEBP, máx. 8 MB) y `text` opcional (máx. 500, indicación que acompaña la foto). La foto se reduce a 1280 px y se procesa en memoria: **no se guarda** | `200` con `AiReply` |
 | ✅ | `POST /api/ai/actions/{id}/confirm` | Ejecuta la propuesta. Cuerpo opcional con correcciones: gasto (`total`, `ivaAmount`, `categoryId`, `description`, `paymentMethod`, `date`) o inventario (`quantity`: cantidad, o stock contado en un ajuste) | `200` con `{ "actionId", "status": "confirmado" \| "corregido", "expenseId", "movementId" }` |
 | ✅ | `POST /api/ai/actions/{id}/cancel` | Descarta la propuesta | `204` |
 | ✅ | `GET /api/ai/actions` | Historial de la empresa (RF-6.13), del más reciente al más antiguo; `page`, `pageSize` | `200` con `Page<AiAction>` |
@@ -738,11 +739,15 @@ Propuesta de inventario (`proposal.type = "inventory"`):
 ```
 
 `AiAction` (historial): `id`, `timestamp`, `userName`, `instruction`, `reply`, `proposal`, `status`
-(`pendiente`, `confirmado`, `corregido`, `cancelado`, `sin_propuesta`), `expenseId` y `movementId`.
+(`pendiente`, `confirmado`, `corregido`, `cancelado`, `sin_propuesta`), `expenseId`, `movementId` e `inputType`
+(`texto` o `imagen`; en una foto, `instruction` es `[Imagen]` más la indicación, si la hubo).
 
 | HTTP | `code` | Cuándo |
 |---|---|---|
 | 503 | `AI_NOT_CONFIGURED` | Falta `LLM_BASE_URL` en el servidor |
+| 503 | `AI_VISION_NOT_CONFIGURED` | Se envió una foto y falta `LLM_VISION_MODEL` |
+| 422 | `INVALID_IMAGE` | El archivo no es una foto JPG, PNG o WEBP válida |
+| 422 | `IMAGE_TOO_LARGE` | La foto pesa más de 8 MB |
 | 503 | `AI_UNAVAILABLE` | El modelo no respondió o respondió con un formato inválido |
 | 404 | `AI_ACTION_NOT_FOUND` | La propuesta no existe o es de otra empresa |
 | 409 | `AI_ACTION_RESOLVED` | La propuesta ya fue confirmada o cancelada |

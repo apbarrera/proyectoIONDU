@@ -488,7 +488,7 @@
   el modelo y la clave del proveedor externo que pide RF-6.1 (variables `LLM_*`). El VPS previsto (2 vCPU, 4 GB, sin GPU)
   no puede correr un modelo útil.
 - **El modelo solo propone.** Responde con salida estructurada (JSON Schema) y el backend la valida con reglas en código:
-  acciones permitidas (`registrar_gasto`, `pedir_aclaracion`, `fuera_de_alcance`), montos entre $0,01 y $1.000.000, IVA
+  acciones permitidas (`registrar_gasto`, `movimiento_inventario`, `pedir_aclaracion`, `fuera_de_alcance`), montos entre $0,01 y $1.000.000, IVA
   no mayor que el total, categoría existente, método de pago válido y fecha de hasta un año atrás. Lo que no cumple se
   trata como "no entendí".
 - **Nunca toca ingresos (RF-6.7):** no existe ningún camino de código del agente a ventas o facturas; no depende del
@@ -506,7 +506,25 @@
   solo los propone y confirma un Administrador (RF-4.8). Si el modelo corta el JSON, se reintenta una vez.
 - **Pendiente:** una compra con precio ("compré 10 croissants por $8") hoy propone solo el gasto; proponer gasto y
   entrada de inventario juntos (RF-6.8) queda para después.
-- **Etapas:** 1) texto y gastos ✅; 2) inventario ✅; 3) imagen; 4) voz; 5) límites de tokens.
+- **Imagen (etapa 3, RF-6.3):** `POST /api/ai/images` con un modelo de visión aparte (`LLM_VISION_MODEL`; en local
+  `qwen2.5vl:7b`, unos 6 GB, que Ollama alterna en la GPU con el de texto). La foto se valida con Pillow (formato real,
+  tope de píxeles contra "bombas" de descompresión), se gira según el EXIF, se le quitan los metadatos (GPS) y se reduce
+  a 1280 px; se procesa en memoria y **no se guarda** (contenedores sin estado): en `accion_ia` queda solo lo que el
+  modelo leyó (`lectura`, máx. 400 caracteres). El prompt agrega reglas de comprobantes: el total a pagar, el IVA, el
+  emisor como proveedor y la fecha de emisión; una guía de remisión es una entrada de inventario; una factura emitida
+  por la propia empresa (se le da su razón social y RUC) es una venta y se rechaza. Tres correcciones en código, vistas
+  con el modelo real: el **método de pago** sale de lo leído cuando dice uno solo ("Tarjeta de crédito"), porque el
+  modelo lo transcribía bien pero elegía débito; el producto debe **aparecer en lo leído** o en la indicación (misma
+  regla que en texto); y si el modelo clasifica la foto como `otra_cosa`, el mensaje lo pone el código (el modelo decía
+  "no puedo interpretar imágenes"). Un sí/no (`es_comprobante`) fallaba más que tres opciones descriptivas.
+- **Reintento distinto:** con temperatura 0 un reintento repite la misma respuesta. El modelo de visión entró en bucle
+  ("#IONDU #IONDU…" hasta agotar los tokens) con una factura de venta; el reintento usa temperatura 0,4 y penalización
+  por repetición, y lo resolvió. Los tokens de los dos intentos se suman en `consumo_tokens`.
+- **Probado con el modelo real (etapa 3):** factura de compra (total, IVA, proveedor, fecha, Empaque, tarjeta de
+  crédito), ticket de gasolinera (Transporte, efectivo), guía de remisión (entrada de 24 croissants), factura emitida
+  por la empresa (rechazada como venta) y una foto sin comprobante (pide otra). De 5 a 25 s por foto; la primera tarda
+  más porque Ollama carga el modelo.
+- **Etapas:** 1) texto y gastos ✅; 2) inventario ✅; 3) imagen ✅; 4) voz; 5) límites de tokens.
 
 ## 3. Producto
 

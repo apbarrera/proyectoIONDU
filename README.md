@@ -43,7 +43,8 @@ de administrador y con RLS. Si algo falla con "permission denied", falta un perm
 
 Agente de IA en local (opcional): instalar [Ollama](https://ollama.com), descargar el modelo con
 `ollama pull qwen2.5:7b` y poner en `.env` `LLM_BASE_URL=http://host.docker.internal:11434/v1`. Sin esa variable, el
-agente responde que no está configurado y el resto del sistema funciona igual.
+agente responde que no está configurado y el resto del sistema funciona igual. Para que lea fotos de facturas:
+`ollama pull qwen2.5vl:7b` y `LLM_VISION_MODEL=qwen2.5vl:7b` (unos 6 GB; con 8 GB de GPU, Ollama alterna los dos modelos).
 
 Inicio de sesión: `admin@demo.iondu.ec` (Administrador) u `operador@demo.iondu.ec` (Operativo), con la
 contraseña de `DEMO_PASSWORD`. Para crear usuarios o cambiar contraseñas:

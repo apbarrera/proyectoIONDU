@@ -205,7 +205,11 @@ def upgrade() -> None:
     op.execute("GRANT CREATE ON SCHEMA public TO iondu_funciones")
     op.execute(f"ALTER FUNCTION {PUEDE_RESTABLECER} OWNER TO iondu_funciones")
     op.execute("REVOKE CREATE ON SCHEMA public FROM iondu_funciones")
+
+    # El migrador no es propietario; el GRANT se ejecuta como iondu_funciones.
+    op.execute("SET LOCAL ROLE iondu_funciones")
     op.execute(f"GRANT EXECUTE ON FUNCTION {PUEDE_RESTABLECER} TO {AUTH}")
+    op.execute("RESET ROLE")
 
     for tabla in ("usuario", "sesion_refresh"):
         op.execute(f"ALTER TABLE public.{tabla} ENABLE ROW LEVEL SECURITY")

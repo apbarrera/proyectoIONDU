@@ -18,6 +18,7 @@ from app.correo_entrante.factura_recibida import es_para_la_empresa, leer_factur
 from app.correo_entrante.imap import (
     CLAVE_RECHAZADA,
     BuzonInaccesibleError,
+    LectorImap,
     Lectura,
     MensajeRecibido,
     leer_mensaje,
@@ -64,7 +65,12 @@ def test_lee_la_factura_del_proveedor():
 
 
 def test_lee_la_factura_dentro_del_xml_de_autorizacion():
-    assert leer_factura(_autorizacion(XML)).clave_acceso == leer_factura(XML).clave_acceso
+    autorizada = leer_factura(_autorizacion(XML))
+    directa = leer_factura(XML)
+
+    assert autorizada is not None
+    assert directa is not None
+    assert autorizada.clave_acceso == directa.clave_acceso
     assert leer_factura(_autorizacion(XML, "NO AUTORIZADO")) is None
 
 
@@ -87,6 +93,7 @@ def test_descarta_lo_que_no_es_una_factura_valida(contenido):
 
 def test_solo_acepta_facturas_dirigidas_a_la_empresa():
     factura = leer_factura(XML)
+    assert factura is not None
     assert es_para_la_empresa(factura, RUC_EMPRESA)
     assert not es_para_la_empresa(factura, "0990000000001")
     cedula = replace(factura, comprador_identificacion="1710000009")
@@ -107,24 +114,39 @@ def test_lee_los_adjuntos_xml_del_correo():
 
     assert (mensaje.uid, mensaje.message_id) == (7, "<abc@proveedor.ec>")
     assert mensaje.adjuntos_xml == [XML]
+    assert mensaje.recibido_en is not None
     assert mensaje.recibido_en.year == 2026
 
 
 # ---------- Proceso del worker ----------
-class LectorFalso:
+class LectorFalso(LectorImap):
     lectura: Lectura | None = None
     error: Exception | None = None
-    llamadas: list = []
+    llamadas: list[tuple[str, str, str, str]] = []
 
-    def __init__(self, servidor, puerto, seguridad, usuario, clave, carpeta):
+    def __init__(
+        self,
+        servidor: str,
+        puerto: int,
+        seguridad: str,
+        usuario: str,
+        clave: str,
+        carpeta: str = "INBOX",
+    ):
         LectorFalso.llamadas.append((servidor, usuario, clave, carpeta))
 
-    def leer_nuevos(self, uid_validity, ultimo_uid, desde):
+    def leer_nuevos(
+        self,
+        uid_validity: int | None,
+        ultimo_uid: int | None,
+        desde: date,
+    ) -> Lectura:
         if LectorFalso.error:
             raise LectorFalso.error
+        assert LectorFalso.lectura is not None
         return LectorFalso.lectura
 
-    def probar(self):
+    def probar(self) -> None:
         if LectorFalso.error:
             raise LectorFalso.error
 
@@ -257,8 +279,12 @@ def test_confirmar_un_borrador_crea_el_gasto_y_el_proveedor(client, db, buzon, a
 
     assert respuesta.status_code == 201
     gasto = db.get(Gasto, respuesta.json()["id"])
+    assert gasto is not None
     assert (gasto.monto, gasto.iva) == (Decimal("24.00"), Decimal("2.70"))
-    assert gasto.clave_acceso == leer_factura(XML).clave_acceso
+
+    factura_xml = leer_factura(XML)
+    assert factura_xml is not None
+    assert gasto.clave_acceso == factura_xml.clave_acceso
     assert db.scalar(select(Proveedor.razon_social)) == "CAFETERÍA DEMO S.A."
     assert client.get("/api/expense-drafts", headers=con_token(admin_a)).json() == []
 

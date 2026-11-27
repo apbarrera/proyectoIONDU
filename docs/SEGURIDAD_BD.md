@@ -289,3 +289,83 @@ La auditoría declarativa actual no equivale a estas pruebas de comportamiento.
 ## 6. Mantenimiento del documento
 
 Los hallazgos describen el estado observado en la fecha de la auditoría; no son una garantía permanente. Después de cambiar políticas, privilegios, funciones o roles, actualizar este documento con la decisión, su motivo, la migración asociada y el resultado de las pruebas.
+
+
+---
+
+## 7. Respaldo, recuperación y continuidad operativa
+
+**Fecha de validación: 26/11/2026**
+
+### 7.1 Inventario de respaldos
+
+| Archivo | Tamaño | SHA-256 |
+|---|---:|---|
+| `iondu_pre_migraciones_20261126_172942.dump` | 138.197 bytes | `DE7DCFEB5D63C7407BD164A7431C82928A5ADAB49C639A10530A8F7F8611045F` |
+| `iondu_post_migraciones_20261126.dump` | 167.199 bytes | `6DC06D8A84185B58F60C4D830ACBD76E26D772CF58ABC1EEFD41B0C3D2B40130` |
+| `iondu_roles_20261126.sql` | 1.572 bytes | `F8BC78A88D7B95ED87ABCC96CA622E1E17F7C0C0004FB43504510D4EFA90F985` |
+
+Los respaldos PostgreSQL utilizan formato CUSTOM. El archivo de roles contiene definiciones globales sin contraseñas.
+
+### 7.2 Versiones y punto de recuperación
+
+- PostgreSQL y herramientas de respaldo: `17.11`.
+- Versión Alembic posterior a migraciones: `fd09a182da8d`.
+- Tamaño observado de la base: aproximadamente `9.606 kB`.
+- El respaldo anterior a migraciones recuperó `c4e6a8b0d215`.
+
+### 7.3 Pruebas de restauración
+
+Ambos respaldos fueron inspeccionados con `pg_restore --list` y restaurados correctamente en bases aisladas, con código de salida 0.
+
+La restauración posterior a migraciones coincidió con la base original en:
+
+- 25 tablas públicas y 1 tabla `auth`.
+- 23 tablas con RLS habilitado y forzado.
+- 42 políticas RLS públicas.
+- 129 restricciones y 74 índices.
+- 4 funciones públicas.
+- Privilegios efectivos de `iondu_app`, `iondu_auth`, `iondu_migrator` e `iondu_worker`.
+- Versión Alembic `fd09a182da8d`.
+
+Las pruebas no sobrescribieron la base operativa `iondu`. Las bases auxiliares de restauración se conservaron.
+
+### 7.4 Procedimiento de recuperación
+
+La restauración debe realizarse en una base nueva o expresamente designada. Nunca utilizar `iondu` como destino de pruebas destructivas.
+
+1. Verificar la existencia, integridad y SHA-256 del respaldo.
+2. En un clúster nuevo, revisar y recuperar los roles con un administrador. El archivo no contiene contraseñas:
+
+```powershell
+psql -U <ADMINISTRADOR> -d postgres -X -v ON_ERROR_STOP=1 -f backups/iondu_roles_20261126.sql
+```
+
+3. Crear una base independiente:
+
+```powershell
+createdb -U <ADMINISTRADOR> -T template0 -O iondu <BASE_NUEVA>
+```
+
+4. Restaurar el respaldo posterior a migraciones:
+
+```powershell
+pg_restore -U iondu -d <BASE_NUEVA> --single-transaction --exit-on-error backups/iondu_post_migraciones_20261126.dump
+```
+
+Para recuperar el estado anterior a las migraciones posteriores, utilizar `iondu_pre_migraciones_20261126_172942.dump` en el comando de restauración.
+
+Los marcadores entre < > deben sustituirse por valores válidos. Estos comandos documentan el procedimiento; no deben ejecutarse sobre la base operativa.
+
+5. Verificar tablas, restricciones, índices, funciones, triggers, políticas RLS, privilegios, versión Alembic y conectividad antes de habilitar la base recuperada.
+
+### 7.5 Protección y mantenimiento
+
+- Restringir el acceso a los archivos de respaldo.
+- No publicar respaldos ni credenciales en repositorios.
+- Restablecer las contraseñas por separado mediante configuración segura.
+- No documentar valores de `.env` ni claves de almacenamiento.
+- Mantener respaldos anteriores y posteriores a cambios importantes.
+- Repetir una restauración de validación después de cambios importantes de esquema o privilegios.
+- La restauración PostgreSQL no recupera automáticamente archivos externos ni credenciales.
+- Toda recuperación real requiere identificar el punto de restauración y autorizar la intervención sobre la base de destino.
